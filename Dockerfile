@@ -96,7 +96,7 @@ RUN if [ "$include_dagmc" = "true" ] ; \
     mkdir build ; \
     cd build ; \
     cmake .. -DCMAKE_INSTALL_PREFIX=.. \
-             -DMOAB_DIR=/usr/local \
+             -DMOAB_DIR=/usr/local ; \
     make -j"$compile_cores" ; \
     make -j"$compile_cores" install ; \
     fi
