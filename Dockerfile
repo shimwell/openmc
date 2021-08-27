@@ -61,18 +61,7 @@ RUN if [ "$include_dagmc" = "true" ] ; \
     apt-get --yes install libnetcdf-dev ; \
     apt-get --yes install libtbb-dev ; \
     apt-get --yes install libglfw3-dev ; \
-    fi
-
-# Clone and install Embree
-RUN if [ "$include_dagmc" = "true" ] ; \
-    then git clone --single-branch --branch v3.12.2 https://github.com/embree/embree.git ; \
-    cd embree ; \
-    mkdir build ; \
-    cd build ; \
-    cmake .. -DCMAKE_INSTALL_PREFIX=.. \
-             -DEMBREE_ISPC_SUPPORT=OFF ; \
-    make -j"$compile_cores" ; \
-    make -j"$compile_cores" install ; \
+    apt-get --yes install libembree-dev ; \
     fi
 
 # Clone and install MOAB
@@ -108,7 +97,6 @@ RUN if [ "$include_dagmc" = "true" ] ; \
     cd build ; \
     cmake .. -DCMAKE_INSTALL_PREFIX=.. \
              -DMOAB_DIR=/usr/local \
-             -DEMBREE_DIR=/embree ; \
     make -j"$compile_cores" ; \
     make -j"$compile_cores" install ; \
     fi
@@ -121,6 +109,7 @@ RUN if [ "$include_dagmc" = "true" ] ; \
     mkdir build ; \
     cd build ; \
     cmake ../DAGMC -DBUILD_TALLY=ON \
+                   -DDOUBLE_DOWN=ON \
                    -DCMAKE_INSTALL_PREFIX=/DAGMC/ \
                    -DMOAB_DIR=/usr/local \
                    -DBUILD_STATIC_LIBS=OFF \
