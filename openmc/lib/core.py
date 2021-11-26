@@ -90,11 +90,25 @@ _dll.openmc_simulation_finalize.errcheck = _error_handler
 _dll.openmc_statepoint_write.argtypes = [c_char_p, POINTER(c_bool)]
 _dll.openmc_statepoint_write.restype = c_int
 _dll.openmc_statepoint_write.errcheck = _error_handler
+_dll.openmc_sample_external_source.argtypes = c_int32
+_dll.openmc_sample_external_source.restype = c_int
+_dll.openmc_sample_external_source.errcheck = _error_handler
 _dll.openmc_global_bounding_box.argtypes = [POINTER(c_double),
                                             POINTER(c_double)]
 _dll.openmc_global_bounding_box.restype = c_int
 _dll.openmc_global_bounding_box.errcheck = _error_handler
 
+
+def openmc_sample_external_source(seed):
+    """Samples an openmc source
+
+    Parameters
+    ----------
+    seed : int
+        simulation seed to use.
+    """
+
+    _dll.openmc_sample_external_source(seed)
 
 def global_bounding_box():
     """Calculate a global bounding box for the model"""
