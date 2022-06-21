@@ -15,7 +15,7 @@
 
 # sudo docker run image_name:tag_name or ID with no tag sudo docker run ID number
 
-FROM debian:bullseye-slim
+FROM debian:bullseye-slim as dependencies
 
 # By default this Dockerfile builds OpenMC without DAGMC and LIBMESH support
 ARG build_dagmc=off
@@ -172,6 +172,11 @@ RUN if [ "$build_libmesh" = "on" ]; then \
         && rm -rf ${LIBMESH_INSTALL_DIR}/build ${LIBMESH_INSTALL_DIR}/libmesh ; \
     fi
 
+# Download cross sections (NNDC and WMP) and ENDF data needed by test suite
+RUN ${HOME}/OpenMC/openmc/tools/ci/download-xs.sh
+
+FROM dependencies as final
+
 # clone and install openmc
 RUN mkdir -p ${HOME}/OpenMC && cd ${HOME}/OpenMC \
     && git clone --shallow-submodules --recurse-submodules --single-branch -b ${openmc_branch} --depth=1 ${OPENMC_REPO} \
@@ -206,6 +211,3 @@ RUN mkdir -p ${HOME}/OpenMC && cd ${HOME}/OpenMC \
     make 2>/dev/null -j${compile_cores} install \
     && cd ../openmc && pip install .[test,depletion-mpi] \
     && python -c "import openmc"
-
-# Download cross sections (NNDC and WMP) and ENDF data needed by test suite
-RUN ${HOME}/OpenMC/openmc/tools/ci/download-xs.sh
