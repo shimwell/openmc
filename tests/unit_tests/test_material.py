@@ -422,3 +422,12 @@ def test_activity_of_tritium():
     m1.set_density('g/cm3', 1)
     m1.volume = 1
     assert pytest.approx(m1.activity) == 3.559778e14 
+
+
+def test_activity_of_metastable():
+    """Checks that metastable nuclides have an activity"""
+    m1 = openmc.Material()
+    m1.add_nuclide("Tc99_m1", 1)
+    m1.set_density('g/cm3', 1)
+    m1.volume = 98.9
+    assert pytest.approx(m1.activity) == 1.9e19

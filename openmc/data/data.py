@@ -301,10 +301,10 @@ def half_life(isotope):
         with open(half_life_filename, 'r') as f:
             _HALF_LIFE = json.load(f)
 
-    if isotope.title() not in _HALF_LIFE.keys():
+    if isotope.lower() not in _HALF_LIFE.keys():
         return None
 
-    return _HALF_LIFE[isotope.title()]
+    return _HALF_LIFE[isotope.lower()]
 
 def water_density(temperature, pressure=0.1013):
     """Return the density of liquid water at a given temperature and pressure.
