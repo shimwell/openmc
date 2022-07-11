@@ -615,6 +615,10 @@ class DAGMCUniverse(UniverseBase):
     auto_mat_ids : bool
         Set IDs automatically on initialization (True)  or report overlaps
         in ID space between OpenMC and UWUW materials (False)
+    auto_bound : bool
+        Sets a spherical CSG surface with a vacuum boundary type bounding the
+        DAGMC geometry. Intended to be used with DAGMC models that don't
+        already have a graveyard surface defined.
 
     Attributes
     ----------
@@ -630,6 +634,10 @@ class DAGMCUniverse(UniverseBase):
     auto_mat_ids : bool
         Set IDs automatically on initialization (True)  or report overlaps
         in ID space between OpenMC and UWUW materials (False)
+    auto_bound : bool
+        Sets a spherical CSG surface with a vacuum boundary type bounding the
+        DAGMC geometry. Intended to be used with DAGMC models that don't
+        already have a graveyard surface defined.
     """
 
     def __init__(self,
@@ -637,12 +645,14 @@ class DAGMCUniverse(UniverseBase):
                  universe_id=None,
                  name='',
                  auto_geom_ids=False,
-                 auto_mat_ids=False):
+                 auto_mat_ids=False,
+                 auto_bound=True):
         super().__init__(universe_id, name)
         # Initialize class attributes
         self.filename = filename
         self.auto_geom_ids = auto_geom_ids
         self.auto_mat_ids = auto_mat_ids
+        self.auto_bound = auto_bound
 
     def __repr__(self):
         string = super().__repr__()
@@ -677,6 +687,15 @@ class DAGMCUniverse(UniverseBase):
         cv.check_type('DAGMC automatic material ids', val, bool)
         self._auto_mat_ids = val
 
+    @property
+    def auto_bound(self):
+        return self._auto_bound
+
+    @auto_bound.setter
+    def auto_bound(self, val):
+        cv.check_type('DAGMC automatic bounding surface', val, bool)
+        self._auto_bound = val
+
     def get_all_cells(self, memo=None):
         return OrderedDict()
 
@@ -698,6 +717,8 @@ class DAGMCUniverse(UniverseBase):
             dagmc_element.set('auto_geom_ids', 'true')
         if self.auto_mat_ids:
             dagmc_element.set('auto_mat_ids', 'true')
+        if self.auto_bound:
+            dagmc_element.set('auto_bound', 'true')
         dagmc_element.set('filename', self.filename)
         xml_element.append(dagmc_element)
 
@@ -724,6 +745,7 @@ class DAGMCUniverse(UniverseBase):
 
         out.auto_geom_ids = bool(group.attrs['auto_geom_ids'])
         out.auto_mat_ids = bool(group.attrs['auto_mat_ids'])
+        out.auto_bound = bool(group.attrs['auto_bound'])
 
         return out
 
@@ -753,5 +775,6 @@ class DAGMCUniverse(UniverseBase):
 
         out.auto_geom_ids = bool(elem.get('auto_geom_ids'))
         out.auto_mat_ids = bool(elem.get('auto_mat_ids'))
+        out.auto_bound = bool(elem.get('auto_bound'))
 
         return out
