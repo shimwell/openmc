@@ -5,8 +5,10 @@ import re
 from warnings import warn
 
 import numpy as np
+import h5py
 from uncertainties import ufloat, UFloat
 
+from . import HDF5_VERSION
 import openmc.checkvalue as cv
 from openmc.mixin import EqualityMixin
 from .data import ATOMIC_SYMBOL, ATOMIC_NUMBER
@@ -477,6 +479,45 @@ class Decay(EqualityMixin):
             return energy['light'] + energy['electromagnetic'] + energy['heavy']
         else:
             return ufloat(0, 0)
+
+    def export_to_hdf5(self, path, mode='a', libver='earliest'):
+        """Export incident neutron data to an HDF5 file.
+
+        Parameters
+        ----------
+        path : str
+            Path to write HDF5 file to
+        mode : {'r+', 'w', 'x', 'a'}
+            Mode that is used to open the HDF5 file. This is the second argument
+            to the :class:`h5py.File` constructor.
+        libver : {'earliest', 'latest'}
+            Compatibility mode for the HDF5 file. 'latest' will produce files
+            that are less backwards compatible but have performance benefits.
+
+        """
+
+        # Open file and write version
+        with h5py.File(str(path), mode, libver=libver) as f:
+            f.attrs['filetype'] = np.string_('data_neutron')
+            f.attrs['version'] = np.array(HDF5_VERSION)
+
+        # Write basic data
+        g = f.create_group(self.nuclide['name'])
+        g.attrs['atomic_number'] = self.nuclide['atomic_number']
+        g.attrs['mass_number'] = self.nuclide['mass_number']
+        g.attrs['isomeric_state'] = self.nuclide['isomeric_state']
+        g.attrs['mass'] = self.nuclide['mass']
+        g.attrs['excited_state'] = self.nuclide['excited_state']
+        g.attrs['stable'] = self.nuclide['stable']
+        g.attrs['spin'] = self.nuclide['spin']
+        g.attrs['parity'] = self.nuclide['parity']
+
+        # create_group for each of these
+        # self.average_energies
+        # self.modes
+        # self.spectra
+        # self.nuclide
+        # self.half_life
 
     @classmethod
     def from_endf(cls, ev_or_filename):
