@@ -828,27 +828,27 @@ class Material(IDManagerMixin):
                 matching_nuclides.append(nuclide.name)
         return sorted(set(matching_nuclides))
 
-    def is_nuclide_natural_abundance(self, nuclide: str, abs_tol: float = 1e-9):
-        """Checks whether the balance of nuclide abundance in the material is
-        the same as the natural abundance.
+    def is_element_natural_abundance(self, element: str, abs_tol: float = 1e-9):
+        """Checks whether the composition of nuclide abundances in the material
+        is the same as the natural abundance.
 
         Parameters
         ----------
-        nuclide : str
-            Specifies the nuclide to check when searching through the nuclides
+        element : str
+            Specifies the element to match when searching through the nuclides
         abs_tol : float
             The absolute tolerance between the natural abundance nuclide ratios
             and the nuclide ratios in the material
 
         Returns
         -------
-        nuclides : boolean
-            whether the nuclide is natural (True) or not (False)
+        natural : boolean
+            whether the nuclide composition of the element is natural (True) or not (False)
 
         """
         ratios = []
         for key, value in NATURAL_ABUNDANCE.items():
-            if re.match(r'{}\d+'.format(nuclide), key):
+            if re.match(r'{}\d+'.format(element), key):
 
                 this_nuc = self.get_nuclide_atom_densities(nuclide=key)
                 ratios.append(this_nuc[key] / value)
