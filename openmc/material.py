@@ -1,12 +1,13 @@
-from collections import OrderedDict, defaultdict, namedtuple, Counter
-from collections.abc import Iterable
-from copy import deepcopy
-from numbers import Real
-from pathlib import Path
+import math
 import os
 import re
 import typing  # imported separately as py3.8 requires typing.Iterable
 import warnings
+from collections import Counter, OrderedDict, defaultdict, namedtuple
+from collections.abc import Iterable
+from copy import deepcopy
+from numbers import Real
+from pathlib import Path
 from typing import Optional, Union
 from xml.etree import ElementTree as ET
 
@@ -14,12 +15,12 @@ import h5py
 import numpy as np
 
 import openmc
+import openmc.checkvalue as cv
 import openmc.data
 from openmc.data import NATURAL_ABUNDANCE
-import openmc.checkvalue as cv
+
 from ._xml import clean_indentation, reorder_attributes
 from .mixin import IDManagerMixin
-
 
 # Units for density supported by OpenMC
 DENSITY_UNITS = ('g/cm3', 'g/cc', 'kg/m3', 'atom/b-cm', 'atom/cm3', 'sum',
@@ -807,13 +808,14 @@ class Material(IDManagerMixin):
         """
         return [x.name for x in self._nuclides]
 
-    def get_nuclides_of_element(self, element):
+    def get_nuclides_of_element(self, element: str):
         """Returns all nuclides in the material that match the element provided
 
         Parameters
         ----------
         element : str
             Specifies the element to match when searching through the nuclides
+
         Returns
         -------
         nuclides : list of str
@@ -824,31 +826,40 @@ class Material(IDManagerMixin):
         for nuclide in self.nuclides:
             if re.split(r'(\d+)', nuclide.name)[0] == element:
                 matching_nuclides.append(nuclide.name)
-        return sorted(matching_nuclides)
+        return sorted(set(matching_nuclides))
 
-    def is_element_natural_abundance(self, element):
+    def is_nuclide_natural_abundance(self, nuclide: str, abs_tol: float = 1e-9):
+        """Checks whether the balance of nuclide abundance in the material is
+        the same as the natural abundance.
 
-        nat_nuclides = []
-        # NATURAL_ABUNDANCE is sorted already, but sorting just to be sure
-        for k, v in sorted(NATURAL_ABUNDANCE.items()):
-            if re.match(r'{}\d+'.format(element), k):
-                nat_nuclide={}
-                nat_nuclide['nuclide'] = k
-                nat_nuclide['percent'] = v  # percentage in units of 'ao'
-                # nat_nuclide['percent_type'] = 'ao'
-                nat_nuclides.append(nat_nuclide)
+        Parameters
+        ----------
+        nuclide : str
+            Specifies the nuclide to check when searching through the nuclides
+        abs_tol : float
+            The absolute tolerance between the natural abundance nuclide ratios
+            and the nuclide ratios in the material
 
-        if len(self.get_nuclides_of_element(element)) != len(nat_nuclides):
-            return False
+        Returns
+        -------
+        nuclides : boolean
+            whether the nuclide is natural (True) or not (False)
 
+        """
         ratios = []
-        for this_nuc, nat_nuc in zip(self.get_nuclide_atom_densities(), nat_nuclides):
-            ratios.append(this_nuc.percent/ nat_nuc['percent'])
+        for key, value in NATURAL_ABUNDANCE.items():
+            if re.match(r'{}\d+'.format(nuclide), key):
 
-        if len(set(ratios)) == 1:
-            return True
-        else:
-            return False
+                this_nuc = self.get_nuclide_atom_densities(nuclide=key)
+                ratios.append(this_nuc[key] / value)
+
+        average_ratio = sum(ratios) / len(ratios)
+        for entry in ratios:
+            # a small difference is allowable
+            if not math.isclose(average_ratio, entry, abs_tol=abs_tol):
+                return False
+
+        return True
 
     def get_nuclide_densities(self):
         """Returns all nuclides in the material and their densities
@@ -907,7 +918,6 @@ class Material(IDManagerMixin):
         nuc_density_types = []
 
         for loop_nuclide in self.nuclides:
-            if nuclide==None or loop_nuclide.name == nuclide:
                 nucs.append(loop_nuclide.name)
                 nuc_densities.append(loop_nuclide.percent)
                 nuc_density_types.append(loop_nuclide.percent_type)
@@ -942,7 +952,8 @@ class Material(IDManagerMixin):
 
         nuclides = OrderedDict()
         for n, nuc in enumerate(nucs):
-            nuclides[nuc] = nuc_densities[n]
+            if nuclide is None or nuclide == nuc:
+                nuclides[nuc] = nuc_densities[n]
 
         return nuclides
 
@@ -1205,6 +1216,8 @@ class Material(IDManagerMixin):
         
         elements_present = self.get_elements()
 
+        get_nuclide_atom_densities
+
         for element in elements_present:
             nat_isotopes = []
             for k, v in sorted(NATURAL_ABUNDANCE.items()):
@@ -1214,23 +1227,13 @@ class Material(IDManagerMixin):
                     nat_isotope['percent'] = v
                     nat_isotope['percent_type'] = 'ao'
                     nat_isotopes.append(nat_isotope)
-                
-
 
             # the nuclide can't be natural abundance because there is a mismatch
             # in the number of nuclides in the material and in nature
             if self.get_nuclides_of_element() != len(nat_isotopes):
                 return False
 
-        # import re
-        
-        # elements_present = set([re.split('(\d+)', e[0])[0] for e in self.nuclides]
-        # print('elements_present', elements_present)
-        # grouped_nuclides = {}
 
-        # for nuclide in self.nuclides:
-        #     grouped_nuclides[]
-        # element = re.split('(\d+)', self.nuclides[0][''])[0]
         return elements_present
 
     @classmethod
