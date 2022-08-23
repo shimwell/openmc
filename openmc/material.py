@@ -15,6 +15,7 @@ import numpy as np
 
 import openmc
 import openmc.data
+from openmc.data import NATURAL_ABUNDANCE
 import openmc.checkvalue as cv
 from ._xml import clean_indentation, reorder_attributes
 from .mixin import IDManagerMixin
@@ -806,6 +807,49 @@ class Material(IDManagerMixin):
         """
         return [x.name for x in self._nuclides]
 
+    def get_nuclides_of_element(self, element):
+        """Returns all nuclides in the material that match the element provided
+
+        Parameters
+        ----------
+        element : str
+            Specifies the element to match when searching through the nuclides
+        Returns
+        -------
+        nuclides : list of str
+            List of nuclide names
+
+        """
+        matching_nuclides = []
+        for nuclide in self.nuclides:
+            if re.split(r'(\d+)', nuclide.name)[0] == element:
+                matching_nuclides.append(nuclide.name)
+        return sorted(matching_nuclides)
+
+    def is_element_natural_abundance(self, element):
+
+        nat_nuclides = []
+        # NATURAL_ABUNDANCE is sorted already, but sorting just to be sure
+        for k, v in sorted(NATURAL_ABUNDANCE.items()):
+            if re.match(r'{}\d+'.format(element), k):
+                nat_nuclide={}
+                nat_nuclide['nuclide'] = k
+                nat_nuclide['percent'] = v  # percentage in units of 'ao'
+                # nat_nuclide['percent_type'] = 'ao'
+                nat_nuclides.append(nat_nuclide)
+
+        if len(self.get_nuclides_of_element(element)) != len(nat_nuclides):
+            return False
+
+        ratios = []
+        for this_nuc, nat_nuc in zip(self.get_nuclide_atom_densities(), nat_nuclides):
+            ratios.append(this_nuc.percent/ nat_nuc['percent'])
+
+        if len(set(ratios)) == 1:
+            return True
+        else:
+            return False
+
     def get_nuclide_densities(self):
         """Returns all nuclides in the material and their densities
 
@@ -825,7 +869,7 @@ class Material(IDManagerMixin):
 
         return nuclides
 
-    def get_nuclide_atom_densities(self):
+    def get_nuclide_atom_densities(self, nuclide: Optional[str] = None):
         """Returns all nuclides in the material and their atomic densities in
         units of atom/b-cm
 
@@ -862,10 +906,11 @@ class Material(IDManagerMixin):
         nuc_densities = []
         nuc_density_types = []
 
-        for nuclide in self.nuclides:
-            nucs.append(nuclide.name)
-            nuc_densities.append(nuclide.percent)
-            nuc_density_types.append(nuclide.percent_type)
+        for loop_nuclide in self.nuclides:
+            if nuclide==None or loop_nuclide.name == nuclide:
+                nucs.append(loop_nuclide.name)
+                nuc_densities.append(loop_nuclide.percent)
+                nuc_density_types.append(loop_nuclide.percent_type)
 
         nucs = np.array(nucs)
         nuc_densities = np.array(nuc_densities)
@@ -1045,6 +1090,17 @@ class Material(IDManagerMixin):
 
         return memo[self]
 
+    def _get_element_xml(self, element: str):
+        xml_element = ET.Element("element")
+        xml_element.set("name", element.name)
+
+        if element.percent_type == 'ao':
+            xml_element.set("ao", str(element.percent))
+        else:
+            xml_element.set("wo", str(element.percent))
+
+        return xml_element
+
     def _get_nuclide_xml(self, nuclide: str):
         xml_element = ET.Element("nuclide")
         xml_element.set("name", nuclide.name)
@@ -1062,14 +1118,28 @@ class Material(IDManagerMixin):
 
         return xml_element
 
+    def _get_elements_xml(self, elements: typing.Iterable[str]):
+        xml_elements = []
+        for element in elements:
+            xml_elements.append(self._get_element_xml(element))
+        return xml_elements
+
     def _get_nuclides_xml(self, nuclides: typing.Iterable[str]):
         xml_elements = []
         for nuclide in nuclides:
             xml_elements.append(self._get_nuclide_xml(nuclide))
         return xml_elements
 
-    def to_xml_element(self):
+    def to_xml_element(self, compress_to_elements=False):
         """Return XML representation of the material
+
+        Parameters
+        ----------
+        compress_to_elements : boolean
+            whether the nuclides that appear in their natural abundance should
+            be combined into a single element. If set to True then nuclides
+            will be compressed to elements where possible. If set to False the
+            individual nuclides will be used.
 
         Returns
         -------
@@ -1079,25 +1149,25 @@ class Material(IDManagerMixin):
         """
 
         # Create Material XML element
-        element = ET.Element("material")
-        element.set("id", str(self._id))
+        xml_element = ET.Element("material")
+        xml_element.set("id", str(self._id))
 
         if len(self._name) > 0:
-            element.set("name", str(self._name))
+            xml_element.set("name", str(self._name))
 
         if self._depletable:
-            element.set("depletable", "true")
+            xml_element.set("depletable", "true")
 
         if self._volume:
-            element.set("volume", str(self._volume))
+            xml_element.set("volume", str(self._volume))
 
         # Create temperature XML subelement
         if self.temperature is not None:
-            element.set("temperature", str(self.temperature))
+            xml_element.set("temperature", str(self.temperature))
 
         # Create density XML subelement
         if self._density is not None or self._density_units == 'sum':
-            subelement = ET.SubElement(element, "density")
+            subelement = ET.SubElement(xml_element, "density")
             if self._density_units != 'sum':
                 subelement.set("value", str(self._density))
             subelement.set("units", self._density_units)
@@ -1106,27 +1176,62 @@ class Material(IDManagerMixin):
                              .format(self.id))
 
         if self._macroscopic is None:
-            # Create nuclide XML subelements
-            subelements = self._get_nuclides_xml(self._nuclides)
-            for subelement in subelements:
-                element.append(subelement)
+            if compress_to_elements is False:
+                self._nuclides
+            else:
+                # Create nuclide XML subelements
+                subelements = self._get_nuclides_xml(self._nuclides)
+                for subelement in subelements:
+                    xml_element.append(subelement)
         else:
             # Create macroscopic XML subelements
             subelement = self._get_macroscopic_xml(self._macroscopic)
-            element.append(subelement)
+            xml_element.append(subelement)
 
         if self._sab:
             for sab in self._sab:
-                subelement = ET.SubElement(element, "sab")
+                subelement = ET.SubElement(xml_element, "sab")
                 subelement.set("name", sab[0])
                 if sab[1] != 1.0:
                     subelement.set("fraction", str(sab[1]))
 
         if self._isotropic:
-            subelement = ET.SubElement(element, "isotropic")
+            subelement = ET.SubElement(xml_element, "isotropic")
             subelement.text = ' '.join(self._isotropic)
 
-        return element
+        return xml_element
+
+    def compress_nuclides_to_elements(self):
+        
+        elements_present = self.get_elements()
+
+        for element in elements_present:
+            nat_isotopes = []
+            for k, v in sorted(NATURAL_ABUNDANCE.items()):
+                if re.match(r'{}\d+'.format(element), k):
+                    nat_isotope={}
+                    nat_isotope['nuclide'] = k
+                    nat_isotope['percent'] = v
+                    nat_isotope['percent_type'] = 'ao'
+                    nat_isotopes.append(nat_isotope)
+                
+
+
+            # the nuclide can't be natural abundance because there is a mismatch
+            # in the number of nuclides in the material and in nature
+            if self.get_nuclides_of_element() != len(nat_isotopes):
+                return False
+
+        # import re
+        
+        # elements_present = set([re.split('(\d+)', e[0])[0] for e in self.nuclides]
+        # print('elements_present', elements_present)
+        # grouped_nuclides = {}
+
+        # for nuclide in self.nuclides:
+        #     grouped_nuclides[]
+        # element = re.split('(\d+)', self.nuclides[0][''])[0]
+        return elements_present
 
     @classmethod
     def mix_materials(cls, materials, fracs: typing.Iterable[float],
