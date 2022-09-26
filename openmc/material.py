@@ -1354,6 +1354,14 @@ class Materials(cv.CheckedList):
         if cross_sections is not None:
             self._cross_sections = Path(cross_sections)
 
+    def get_material_by_id(self, id: int):
+        for material in self:
+            if material.id == id:
+                return material
+
+        msg = f'Material with ID of {id} was not found. Available IDs are {[material.id for material in self]}'
+        raise ValueError(msg)
+
     def append(self, material):
         """Append material to collection
 
