@@ -35,7 +35,8 @@ setup(
         "uncertainties",
         "lxml",
         "pandas",
-        "h5py"],
+        "h5py",
+        "cython"],
     scripts=glob.glob('scripts/openmc-*'),
     package_data={
         'openmc.lib': ['libopenmc.{}'.format(suffix)],
