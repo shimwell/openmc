@@ -51,4 +51,4 @@ prune docs/source/pythonapi/generated/
 global-include openmc
 global-include *.so
 global-include *.dylib
-recursive-include numpy arrayobject.h
+recursive-include numpy *.h
