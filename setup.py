@@ -5,6 +5,7 @@ import sys
 
 from setuptools import find_packages
 
+import numpy as np
 from skbuild import setup
 from Cython.Build import cythonize
 
@@ -43,5 +44,6 @@ setup(
         'openmc.data': ['mass16.txt', 'BREMX.DAT', 'half_life.json', '*.h5'],
         'openmc.data.effective_dose': ['*.txt']
     },
-    ext_modules= cythonize('openmc/data/*.pyx')
+    ext_modules= cythonize('openmc/data/*.pyx'),
+    include_dirs=[np.get_include()]
 )
