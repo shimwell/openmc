@@ -50,5 +50,6 @@ prune docs/build
 prune docs/source/pythonapi/generated/
 global-include openmc
 global-include *.so
+recursive-include openmc *.so
 global-include *.dylib
 recursive-include numpy *.h
