@@ -44,6 +44,6 @@ setup(
         'openmc.data': ['mass16.txt', 'BREMX.DAT', 'half_life.json', '*.h5'],
         'openmc.data.effective_dose': ['*.txt']
     },
-    ext_modules= cythonize('openmc/data/*.pyx'),
+    ext_modules= cythonize('openmc/data/*.pyx', compiler_directives={'language_level' : "3"}),
     include_dirs=[np.get_include()]
 )
