@@ -6,6 +6,6 @@ requires = [
     "ninja",
     "wheel",
     "Cython",
-    "numpy",
+    "numpy<1.22",
 ]
 build-backend = "setuptools.build_meta"
