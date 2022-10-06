@@ -114,7 +114,10 @@ endif()
 # Cython Support
 #===============================================================================
 
-# if(SKBUILD)
+if(SKBUILD)
+
+  find_package(PythonExtensions REQUIRED)
+  find_package(Cython REQUIRED)
 #   message(STATUS "The project is built using scikit-build")
 #   option(BUILD_PYTHON_BINDINGS "Build Python bindings using cython" ON)
 #   find_package(Cython)
