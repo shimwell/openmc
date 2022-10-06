@@ -2,10 +2,10 @@
 
 import glob
 import sys
+import numpy as np
 
 from setuptools import find_packages
 
-import numpy as np
 from skbuild import setup
 from Cython.Build import cythonize
 
@@ -33,8 +33,8 @@ kwargs = {
         'openmc.data': ['mass16.txt', 'BREMX.DAT', 'half_life.json', '*.h5'],
         'openmc.data.effective_dose': ['*.txt']
     },
-    'include_package_data': True,
     'python_requires': '>=3.7',
+    'include_package_data': True,
     'install_requires': [
             'numpy>=1.9', 'h5py', 'scipy', 'ipython', 'matplotlib',
             'pandas', 'lxml', 'uncertainties'
