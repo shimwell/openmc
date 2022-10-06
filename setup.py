@@ -36,9 +36,9 @@ kwargs = {
     'python_requires': '>=3.7',
     'include_package_data': True,
     'install_requires': [
-            'numpy>=1.9', 'h5py', 'scipy', 'ipython', 'matplotlib',
-            'pandas', 'lxml', 'uncertainties'
-        ],
+        'numpy>=1.9', 'h5py', 'scipy', 'ipython', 'matplotlib',
+        'pandas', 'lxml', 'uncertainties', 'cython'
+    ],
     'ext_modules': cythonize('openmc/data/*.pyx', compiler_directives={'language_level' : "3"}),
     'include_dirs': [np.get_include()]
 }
