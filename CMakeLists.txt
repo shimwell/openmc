@@ -16,8 +16,6 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 # Set module path
 set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules)
 
-option(BUILD_PYTHON_BINDINGS "Build Python bindings using cython" ON)
-
 # Allow user to specify <project>_ROOT variables
 if (CMAKE_VERSION VERSION_GREATER_EQUAL 3.12)
   cmake_policy(SET CMP0074 NEW)
@@ -118,15 +116,18 @@ endif()
 
 if(SKBUILD)
   message(STATUS "The project is built using scikit-build")
+  option(BUILD_PYTHON_BINDINGS "Build Python bindings using cython" ON)
   find_package(Cython)
   add_cython_target(_endf.pyx openmc/data/)
-  # TODO
+  # TODO?
   # add_library(openmc/data/_endf.pyx MODULE ${_endf})
   # target_link_libraries(openmc/data/_endf.pyx)
   add_cython_target(reconstruct.pyx openmc/data/)
-  # TODO
+  # TODO?
   # add_library(openmc/data/reconstruct.pyx MODULE ${reconstruct})
   # target_link_libraries(reconstruct openmc/data/reconstruct.pyx)
+  #TODO?
+  #find numpy using https://github.com/scikit-build/scikit-build/blob/master/skbuild/resources/cmake/FindNumPy.cmake
 endif()
 
 
