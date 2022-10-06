@@ -21,29 +21,26 @@ else:
 with open('openmc/__init__.py', 'r') as f:
     version = f.readlines()[-1].split()[-1].strip("'")
 
-setup(
-    name="openmc",
-    version=version,
-    packages=find_packages(exclude=['tests*']),
-    include_package_data=True,
-    python_requires=">=3.7",
-    install_requires=[
-        "matplotlib",
-        "numpy",
-        "scipy",
-        "ipython",
-        "matplotlib",
-        "uncertainties",
-        "lxml",
-        "pandas",
-        "h5py",
-        "cython"],
-    scripts=glob.glob('scripts/openmc-*'),
-    package_data={
+kwargs = {
+    'name': 'openmc',
+    'version': version,
+    'packages': find_packages(exclude=['tests*']),
+    'scripts': glob.glob('scripts/openmc-*'),
+
+    # Data files and libraries
+    'package_data': {
         'openmc.lib': ['libopenmc.{}'.format(suffix)],
         'openmc.data': ['mass16.txt', 'BREMX.DAT', 'half_life.json', '*.h5'],
         'openmc.data.effective_dose': ['*.txt']
     },
-    ext_modules= cythonize('openmc/data/*.pyx', compiler_directives={'language_level' : "3"}),
-    include_dirs=[np.get_include()]
-)
+    'include_package_data': True,
+    'python_requires': '>=3.7',
+    'install_requires': [
+            'numpy>=1.9', 'h5py', 'scipy', 'ipython', 'matplotlib',
+            'pandas', 'lxml', 'uncertainties'
+        ],
+    'ext_modules': cythonize('openmc/data/*.pyx', compiler_directives={'language_level' : "3"}),
+    'include_dirs': [np.get_include()]
+}
+
+setup(**kwargs)
