@@ -30,7 +30,7 @@ kwargs = {
     # Data files and libraries
     'package_data': {
         'openmc.lib': ['libopenmc.{}'.format(suffix)],
-        'openmc.data': ['mass16.txt', 'BREMX.DAT', 'half_life.json', '*.h5'],
+        'openmc.data': ['*.pyx', '*.c', 'mass16.txt', 'BREMX.DAT', 'half_life.json', '*.h5'],
         'openmc.data.effective_dose': ['*.txt']
     },
     'python_requires': '>=3.7',
