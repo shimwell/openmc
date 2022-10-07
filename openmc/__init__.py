@@ -1,3 +1,10 @@
+from importlib.metadata import version 
+
+__version__ = version("openmc")
+
+__all__ = ["__version__"]
+
+
 from openmc.arithmetic import *
 from openmc.cell import *
 from openmc.checkvalue import *
@@ -36,6 +43,3 @@ from .config import *
 
 # Import a few names from the model module
 from openmc.model import rectangular_prism, hexagonal_prism, Model
-
-
-__version__ = '0.14.0-dev'

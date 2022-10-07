@@ -41,8 +41,8 @@ fi
 # Build and install OpenMC executable
 python tools/ci/gha-install.py
 
-# Install Python API in editable mode
-pip install -e .[test,vtk]
+# Install Python API
+pip install .[test,vtk]
 
 # For coverage testing of the C++ source files
 pip install cpp-coveralls
