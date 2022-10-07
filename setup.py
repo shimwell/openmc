@@ -34,7 +34,7 @@ kwargs = {
         'openmc.data.effective_dose': ['*.txt']
     },
     'python_requires': '>=3.7',
-    'include_package_data': True,
+    # 'include_package_data': True,
     'install_requires': [
         'numpy>=1.9', 'h5py', 'scipy', 'ipython', 'matplotlib',
         'pandas', 'lxml', 'uncertainties'
