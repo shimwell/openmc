@@ -14,11 +14,12 @@ import numpy as np
 
 from .data import gnd_name
 from .function import Tabulated1D
-try:
-    from ._endf import float_endf
-    _CYTHON = True
-except ImportError:
-    _CYTHON = False
+
+# try:
+from ._endf import float_endf
+_CYTHON = True
+# except ImportError:
+#     _CYTHON = False
 
 
 _LIBRARY = {0: 'ENDF/B', 1: 'ENDF/A', 2: 'JEFF', 3: 'EFF',
