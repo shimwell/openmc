@@ -49,7 +49,11 @@ include vendor/gsl-lite/include/gsl/gsl
 prune docs/build
 prune docs/source/pythonapi/generated/
 global-include openmc
+global-include *.c
+global-include *.pyx
 global-include *.so
+recursive-include openmc *.c
+recursive-include openmc *.pyx
 recursive-include openmc *.so
 global-include *.dylib
 recursive-include numpy *.h
