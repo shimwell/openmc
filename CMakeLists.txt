@@ -114,13 +114,14 @@ endif()
 # Cython Support
 #===============================================================================
 
-if(SKBUILD)
-
-  find_package(PythonExtensions REQUIRED)
-  find_package(Cython REQUIRED)
-  add_cython_target(_endf.pyx openmc/data/)
-  add_cython_target(reconstruct.pyx openmc/data/)
-endif()
+# if(SKBUILD)
+#   find_package(PythonExtensions REQUIRED)
+#   find_package(Cython REQUIRED)
+#   add_cython_target(_endf.pyx openmc/data/)
+#   # target_link_libraries(openmc/data/_endf.pyx)
+#   add_cython_target(reconstruct.pyx openmc/data/)
+#   # target_link_libraries(openmc/data/reconstruct.pyx)
+# endif()
 #   message(STATUS "The project is built using scikit-build")
 #   option(BUILD_PYTHON_BINDINGS "Build Python bindings using cython" ON)
 #   find_package(Cython)
