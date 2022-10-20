@@ -21,7 +21,7 @@ MDGXS_TYPES = (
     'delayed-nu-fission matrix'
 )
 
-# Maximum number of delayed groups, from src/constants.F90
+# Maximum number of delayed groups
 MAX_DELAYED_GROUPS = 8
 
 
