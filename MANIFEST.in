@@ -28,10 +28,10 @@ recursive-include include *.hh
 recursive-include man *.1
 recursive-include src/openmc *.pyx
 recursive-include src/openmc *.c
-recursive-include src *.cc
-recursive-include src *.cpp
-recursive-include src *.rnc
-recursive-include src *.rng
+recursive-include src_cpp *.cc
+recursive-include src_cpp *.cpp
+recursive-include src_cpp *.rnc
+recursive-include src_cpp *.rng
 recursive-include tests *.dat
 recursive-include tests *.h5
 recursive-include tests *.h5m
