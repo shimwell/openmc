@@ -498,7 +498,7 @@ endif()
 #===============================================================================
 # openmc executable
 #===============================================================================
-add_executable(openmc src/main.cpp)
+add_executable(openmc src_cpp/main.cpp)
 add_executable(OpenMC::openmc ALIAS openmc)
 target_compile_options(openmc PRIVATE ${cxxflags})
 target_include_directories(openmc PRIVATE ${CMAKE_BINARY_DIR}/include)
