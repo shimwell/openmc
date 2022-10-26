@@ -375,7 +375,8 @@ class Results(list):
     def export_to_materials(
         self,
         burnup_index: int,
-        nuc_with_data: Optional[Iterable[str]] = None
+        nuc_with_data: Optional[Iterable[str]] = None,
+        path = './'
     ) -> Materials:
         """Return openmc.Materials object based on results at a given step
 
@@ -407,7 +408,7 @@ class Results(list):
         # updated. If for some reason you have modified OpenMC to produce
         # new materials as depletion takes place, this method will not
         # work as expected and leave out that material.
-        mat_file = Materials.from_xml("materials.xml")
+        mat_file = Materials.from_xml(path + "materials.xml")
 
         # Only nuclides with valid transport data will be written to
         # the new materials XML file. The precedence of nuclides to select
