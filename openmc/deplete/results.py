@@ -4,6 +4,7 @@ import math
 import typing  # required to prevent typing.Union namespace overwriting Union
 from typing import Iterable, Optional, Tuple
 from warnings import warn
+from pathlib import Path
 
 import h5py
 import numpy as np
@@ -408,7 +409,7 @@ class Results(list):
         # updated. If for some reason you have modified OpenMC to produce
         # new materials as depletion takes place, this method will not
         # work as expected and leave out that material.
-        mat_file = Materials.from_xml(path + "materials.xml")
+        mat_file = Materials.from_xml(Path(path) / "materials.xml")
 
         # Only nuclides with valid transport data will be written to
         # the new materials XML file. The precedence of nuclides to select
