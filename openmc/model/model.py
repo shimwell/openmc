@@ -903,54 +903,68 @@ class Model:
 
 
 class R2SModel(Model):
-    """A Model container for an R2S calculation."""
+    """A Model container for an R2S calculation.
+
+    Parameters
+    ----------
+
+    Attributes
+    ----------
+    timesteps : iterable of times, units
+        Blah
+    source_rates : iterable of float
+        more blah
+    depletion_options : dict
+        dictionary with model.deplete kwargs
+    photon_timesteps : iterable of int
+        which depletion steps to do photon transport for
+    photon_settings : Settings object
+    photon_tallies : Tallies object
+    """
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.ntransport_path = 'neutron_transport'
-        self.depletion_path = 'depletion'
-        self.ptransport_path = 'photon_transport'
-        self.timesteps = [(10, 'd'), (1, 'h'), (1, 'd'), (9, 'd'), (90, 'd')]
-        self.source_rates = [1e10, 0, 0, 0, 0]
-        self.chain = '/home/peterson/xs_data/endfb71_hdf5/chain_endfb71_pwr.xml'
+        self.ntransport_path = Path('neutron_transport')
+        self.depletion_path = Path('depletion')
+        self.ptransport_path = Path('photon_transport')
+        depletion_options = {}
+        depletion_options['method'] = 'predictor'
+        depletion_options['final_step'] = False
+        operator_kwargs={
+            'normalization_mode': 'source-rate',
+            'dilute_initial': 0,
+            'reduce_chain': True,
+            'reduce_chain_level': 5
+        }
+        depletion_options['operator_kwargs'] = operator_kwargs
+        self.depletion_options = depletion_options
 
     def execute_run(self, **kwargs):
+        # Do neutron transport and depletion calcs
         self.export_to_xml(self.ntransport_path)
+        return
         #super().run(cwd=self.ntransport_path)
         self.deplete(self.timesteps,
                      directory=self.depletion_path,
                      source_rates=self.source_rates,
-                     method='predictor',
-                     final_step=False,
-                     operator_kwargs={
-                         'chain_file': self.chain,
-                         'normalization_mode': 'source-rate',
-                         'dilute_initial': 0,
-                         'reduce_chain': True,
-                         'reduce_chain_level': 5
-                     }
+                     **self.depletion_options
                      )
 
-        results = openmc.deplete.Results.from_hdf5(self.depletion_path + "/depletion_results.h5")
-        matlist = [results.export_to_materials(i, path=self.depletion_path+'/')
+        # Read in results and get new depleted materials
+        results = openmc.deplete.Results.from_hdf5(self.depletion_path / "depletion_results.h5")
+        matlist = [results.export_to_materials(i, path=self.depletion_path)
                    for i in range(len(self.timesteps))]
 
+        # Set up photon calculation
+        self.settings = self.photon_settings
         self.settings.photon_transport = True
-        mesh = openmc.RegularMesh()
-        mesh.dimension = (100, 1, 100)
-        mesh.lower_left = (-50, -2, -50)
-        mesh.upper_right = (50, 2, 50)
-        mesh_filt = openmc.MeshFilter(mesh)
-        part_filt = openmc.ParticleFilter(['photon'])
-        dose_func_filter = openmc.EnergyFunctionFilter(*openmc.data.dose_coefficients('photon'))
-        tally = openmc.Tally()
-        tally.filters = [part_filt, mesh_filt, dose_func_filter]
-        tally.scores = ['flux']
-        self.tallies = openmc.Tallies([tally])
+        self.tallies = self.photon_tallies
 
-        for tidx in range(len(self.timesteps)):
+        # Run photon transport for each desired timestep
+        for tidx in self.photon_timesteps:
             new_mats = matlist[tidx]
-            rundir = self.ptransport_path + f'/timestep_{tidx}'
+            rundir = self.ptransport_path / f'timestep_{tidx}'
 
+            # Collect all source energy distributions from model
             dist_map = {}
             for mat in new_mats:
                 pdist = mat.decay_photon_energy
@@ -960,6 +974,7 @@ class R2SModel(Model):
                     pdist.p = pdist.p[valid_energies]
                     dist_map[mat.id] = pdist
 
+            # Collect all spatial distributions of the sources from the model
             box_map = {}
             for cell in self.geometry.get_all_cells().values():
                 if cell.fill is None:
@@ -968,6 +983,7 @@ class R2SModel(Model):
                 box = openmc.stats.Box(lower_left, upper_right)
                 box_map[cell.fill.id] = box
 
+            # Create Source for every depleted region
             src_list = []
             for idx in dist_map.keys():
                 src = openmc.Source(energy=dist_map[idx], space=box_map[idx])
