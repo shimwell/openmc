@@ -941,7 +941,6 @@ class R2SModel(Model):
     def execute_run(self, **kwargs):
         # Do neutron transport and depletion calcs
         self.export_to_xml(self.ntransport_path)
-        return
         #super().run(cwd=self.ntransport_path)
         self.deplete(self.timesteps,
                      directory=self.depletion_path,
