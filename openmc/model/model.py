@@ -975,7 +975,7 @@ class R2SModel(Model):
 
             # Collect all spatial distributions of the sources from the model
             box_map = {}
-            for cell in self.geometry.get_all_cells().values():
+            for cell in self.geometry.get_all_material_cells().values():
                 if cell.fill is None:
                     continue
                 lower_left, upper_right = cell.region.bounding_box
