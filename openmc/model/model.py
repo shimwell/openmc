@@ -968,9 +968,6 @@ class R2SModel(Model):
             for mat in new_mats:
                 pdist = mat.decay_photon_energy
                 if pdist is not None:
-                    valid_energies = pdist.x > 1e3
-                    pdist.x = pdist.x[valid_energies]
-                    pdist.p = pdist.p[valid_energies]
                     dist_map[mat.id] = pdist
 
             # Collect all spatial distributions of the sources from the model
