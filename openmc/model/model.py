@@ -958,6 +958,7 @@ class R2SModel(Model):
         self.settings.photon_transport = True
         self.tallies = self.photon_tallies
 
+        statepoint_paths = []
         # Run photon transport for each desired timestep
         for tidx in self.photon_timesteps:
             new_mats = matlist[tidx]
@@ -989,4 +990,6 @@ class R2SModel(Model):
 
             self.settings.source = src_list
             self.export_to_xml(rundir)
-            self.run(cwd=rundir)
+            statepoint_path = self.run(cwd=rundir)
+            statepoint_paths.append(statepoint_path)
+        return statepoint_paths
