@@ -1,9 +1,10 @@
 from math import pi
+from pathlib import Path
 
+import numpy as np
 import openmc
 import openmc.lib
 import openmc.stats
-import numpy as np
 from pytest import approx
 
 
@@ -137,6 +138,10 @@ def test_rejection(run_in_tmpdir):
 
 
 def test_from_cell_with_material():
+
+    # Set chain file for testing
+    openmc.config['chain_file'] = Path(__file__).parents[1] / 'chain_simple.xml'
+
     mat = openmc.Material()
     mat.add_nuclide('Co60', 1)
     mat.volume = 1
