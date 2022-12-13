@@ -34,7 +34,6 @@ jobs:
 
       - name: Build sdist
         run: |
-          pip install --upgrade pip
           pipx run build --sdist
 
       - uses: actions/upload-artifact@v3
