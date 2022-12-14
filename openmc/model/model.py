@@ -963,28 +963,12 @@ class R2SModel(Model):
             new_mats = matlist[tidx]
             rundir = self.ptransport_path / f'timestep_{tidx}'
 
-            # Collect all source energy distributions from model
-            dist_map = {}
-            for mat in new_mats:
-                pdist = mat.decay_photon_energy
-                if pdist is not None:
-                    dist_map[mat.id] = pdist
-
-            # Collect all spatial distributions of the sources from the model
-            box_map = {}
+            # Create Source for every depleted region
+            src_list = []
             for cell in self.geometry.get_all_cells().values():
                 if cell.fill is None:
                     continue
-                lower_left, upper_right = cell.region.bounding_box
-                box = openmc.stats.Box(lower_left, upper_right)
-                box_map[cell.fill.id] = box
-
-            # Create Source for every depleted region
-            src_list = []
-            for idx in dist_map.keys():
-                src = openmc.Source(energy=dist_map[idx], space=box_map[idx])
-                src.strength = dist_map[idx].integral()
-                src.particle = 'photon'
+                src = openmc.Source.from_cell_with_material(cell)
                 src_list.append(src)
 
             self.settings.source = src_list
