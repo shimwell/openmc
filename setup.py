@@ -25,6 +25,7 @@ kwargs = {
     'version': version,
     'packages': find_packages(where='src'),
     'package_dir': {'':'src'},
+    'cmake_install_dir'='src/openmc',
     'scripts': glob.glob('scripts/openmc-*'),
 
     # Data files and libraries
