@@ -8,7 +8,6 @@ requires = [
     "cmake>=3.10.0",
     "ninja",
     "setuptools_scm[toml]>=7.0.5",
-    "h5py"
 ]
 build-backend = "setuptools.build_meta"
 
@@ -17,3 +16,4 @@ skip = ["cp36-*"]
 
 [tool.cibuildwheel.linux]
 skip = ["cp36-*"]
+before-all = "yum install hdf5-devel -y"
