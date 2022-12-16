@@ -13,7 +13,7 @@ build-backend = "setuptools.build_meta"
 
 [tool.cibuildwheel.macos]
 skip = ["cp36-*"]
-before-all = "yum install hdf5-devel -y"
+before-all = "brew install homebrew/science/hdf5 --enable-cxx"
 
 [tool.cibuildwheel.linux]
 skip = ["cp36-*"]
