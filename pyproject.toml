@@ -13,7 +13,7 @@ build-backend = "setuptools.build_meta"
 
 [tool.cibuildwheel.macos]
 skip = ["cp36-*"]
-before-all = "brew install homebrew/science/hdf5 --enable-cxx"
+before-all = "brew install homebrew/core/hdf5 --enable-cxx"
 
 [tool.cibuildwheel.linux]
 skip = ["cp36-*"]
