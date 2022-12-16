@@ -13,6 +13,7 @@ build-backend = "setuptools.build_meta"
 
 [tool.cibuildwheel.macos]
 skip = ["cp36-*"]
+before-all = "yum install hdf5-devel -y"
 
 [tool.cibuildwheel.linux]
 skip = ["cp36-*"]
