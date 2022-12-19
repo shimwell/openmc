@@ -20,17 +20,20 @@ else:
 with open('src/openmc/__init__.py', 'r') as f:
     version = f.readlines()[-1].split()[-1].strip("'")
 
+# Ensure we only bundle what is really needed in the python package.
+# For more info See skbuild docs.
+def filter_install_files(cmake_manifest):
+    return list(filter(lambda f: f.endswith(".so") or f.endswith("bin/openmc"), cmake_manifest))
+
 kwargs = {
     'name': 'openmc',
     'version': version,
     'packages': find_packages(where='src'),
     'package_dir': {'':'src'},
-    'cmake_install_dir': 'src/openmc',
-    'scripts': glob.glob('scripts/openmc-*') + ['bin/openmc'],
+    'scripts': glob.glob('scripts/openmc-*'),
 
     # Data files and libraries
     'package_data': {
-        'openmc.lib': ['libopenmc.{}'.format(suffix)],
         'openmc.data': ['mass16.txt', 'BREMX.DAT', 'half_life.json', '*.h5'],
         'openmc.data.effective_dose': ['*.txt']
     },
@@ -66,7 +69,7 @@ kwargs = {
     # Dependencies
     'python_requires': '>=3.7',
     'install_requires': [
-        'numpy>=1.9', 'h5py', 'scipy', 'ipython', 'matplotlib',
+        'numpy>=1.9', 'scipy', 'ipython', 'matplotlib',
         'pandas', 'lxml', 'uncertainties', 'cython'
     ],
     'extras_require': {
@@ -78,7 +81,8 @@ kwargs = {
     },
     # Cython is used to add resonance reconstruction and fast float_endf
     'ext_modules': cythonize('src/openmc/data/*.pyx'),
-    'include_dirs': [np.get_include()]
+    'include_dirs': [np.get_include()],
+    "cmake_process_manifest_hook": filter_install_files,
 }
 
 setup(**kwargs)
