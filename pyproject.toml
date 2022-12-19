@@ -12,7 +12,7 @@ requires = [
 build-backend = "setuptools.build_meta"
 
 [tool.cibuildwheel.macos]
-skip = ["cp36-*"]
+skip = ["cp36-*", "cp311-*"]
 before-all = "brew install homebrew/core/hdf5"
 
 [tool.cibuildwheel.linux]
