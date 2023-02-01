@@ -969,7 +969,8 @@ class R2SModel(Model):
                 if cell.fill is None:
                     continue
                 src = openmc.Source.from_cell_with_material(cell)
-                src_list.append(src)
+                if src is not None:  # materials may have no photon emission
+                    src_list.append(src)
 
             self.settings.source = src_list
             self.export_to_xml(rundir)
