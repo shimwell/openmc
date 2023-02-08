@@ -8,6 +8,12 @@ set(OPENMC_VERSION_RELEASE 3)
 set(OPENMC_VERSION ${OPENMC_VERSION_MAJOR}.${OPENMC_VERSION_MINOR}.${OPENMC_VERSION_RELEASE})
 configure_file(include/openmc/version.h.in "${CMAKE_BINARY_DIR}/include/openmc/version.h" @ONLY)
 
+set(CMAKE_TOOLCHAIN_FILE "${CMAKE_SOURCE_DIR}/emsdk/3.1.31/cmake/Modules/Platform/Emscripten.cmake")
+if(CMAKE_GENERATOR STREQUAL "Emscripten")
+  # Use emcmake instead of cmake to generate the Makefile
+  set(CMAKE_COMMAND emcmake)
+endif()
+
 # Setup output directories
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
