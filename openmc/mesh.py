@@ -1,15 +1,17 @@
+import typing
+import warnings
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
 from math import pi
-from numbers import Real, Integral
+from numbers import Integral, Real
 from pathlib import Path
-import warnings
 from xml.etree import ElementTree as ET
 
 import numpy as np
 
-import openmc.checkvalue as cv
 import openmc
+import openmc.checkvalue as cv
+
 from ._xml import get_text
 from .mixin import IDManagerMixin
 from .surface import _BOUNDARY_TYPES
@@ -559,6 +561,85 @@ class RegularMesh(StructuredMesh):
         mesh.lower_left = domain.bounding_box[0]
         mesh.upper_right = domain.bounding_box[1]
         mesh.dimension = dimension
+
+        return mesh
+
+    @classmethod
+    def from_slice_of_domain(
+        cls,
+        domain: typing.Union[openmc.Cell, openmc.Region, 'openmc.Universe', 'openmc.Geometry'],
+        axis_dimension: dict = {"x": 10, "y": 10},
+        slice_value: float = 0.0,
+        slice_width: float = 1.0,
+        mesh_id: typing.Optional[int] = None,
+        name: str = "",
+    ):
+        """Create mesh with a single voxel on one axis from an existing openmc
+        cell, region, universe or geometry by making use of the objects bounding
+        box property.
+
+        Parameters
+        ----------
+        domain : {openmc.Cell, openmc.Region, openmc.Universe, openmc.Geometry}
+            The object passed in will be used as a template for this mesh. The
+            bounding box of the property of the object passed will be used to
+            partly set the lower_left and upper_right of the mesh instance
+        axis_dimension : dict
+            Dictionary whose keys are the axis values ('x', 'y', 'z') and values
+            are integers that are used when setting the RegularMesh.dimension.
+            Should contain two keys for axis as the unspecified axis is used as
+            the slice axis.
+        slice_value: float
+            The location of the center of the mesh voxels on the slice axis
+        slice_width: float
+            The length of the mesh voxel edge on the slice axis
+        mesh_id : int
+            Unique identifier for the mesh
+        name : str
+            Name of the mesh
+
+        Returns
+        -------
+        openmc.RegularMesh
+            RegularMesh instance
+        """
+        cv.check_type(
+            "domain",
+            domain,
+            (openmc.Cell, openmc.Region, openmc.Universe, openmc.Geometry),
+        )
+        cv.check_type("axis_dimension", axis_dimension, dict)
+        if len(axis_dimension.keys()) != 2 or len(set(axis_dimension.keys())) != 2:
+            msg = 'axis_dimension should contain two different keys. Options are "x", "y", "z".'
+            raise ValueError(msg)
+        if not set(axis_dimension.keys()).issubset(["x", "y", "z"]):
+            msg = 'Acceptable keys for axis_dimension are "x", "y", "z".'
+            raise ValueError(msg)
+
+        for axis in ["x", "y", "z"]:
+            if axis not in axis_dimension.keys():
+                axis_dimension[axis] = 1
+                single_voxel_axis = axis
+
+        bb = domain.bounding_box
+
+        # a dictionary that relates the single_voxel_axis to mesh corners
+        lower_left_lookup = {
+            "x": (slice_value - 0.5 * slice_width, bb[0][1], bb[0][2]),
+            "y": (bb[0][0], slice_value - 0.5 * slice_width, bb[0][2]),
+            "z": (bb[0][0], bb[0][1], slice_value - 0.5 * slice_width),
+        }
+        upper_right_lookup = {
+            "x": (slice_value + 0.5 * slice_width, bb[1][1], bb[1][2]),
+            "y": (bb[1][0], slice_value + 0.5 * slice_width, bb[1][2]),
+            "z": (bb[1][0], bb[1][1], slice_value + 0.5 * slice_width),
+        }
+
+        mesh = cls(mesh_id, name)
+        mesh.lower_left = lower_left_lookup[single_voxel_axis]
+        mesh.upper_right = upper_right_lookup[single_voxel_axis]
+
+        mesh.dimension = [axis_dimension["x"], axis_dimension["y"], axis_dimension["z"]]
 
         return mesh
 
