@@ -53,10 +53,9 @@ _MIN_E = 1.e-5
 _MAX_E = 20.e6
 
 
-def plot_xs(this, types, divisor_types=None, temperature=294., data_type=None,
-            axis=None, sab_name=None, ce_cross_sections=None,
-            mg_cross_sections=None, enrichment=None, plot_CE=True, orders=None,
-            divisor_orders=None, **kwargs):
+def plot_xs(this, types, divisor_types=None, temperature=294., axis=None,
+            sab_name=None, ce_cross_sections=None, mg_cross_sections=None,
+            enrichment=None, plot_CE=True, orders=None, divisor_orders=None):
     """Creates a figure of continuous-energy cross sections for this item.
 
     Parameters
@@ -101,9 +100,6 @@ def plot_xs(this, types, divisor_types=None, temperature=294., data_type=None,
         multi-group data.
     divisor_orders : Iterable of Integral, optional
         Same as orders, but for divisor_types
-    **kwargs
-        All keyword arguments are passed to
-        :func:`matplotlib.pyplot.figure`.
 
     Returns
     -------
@@ -117,23 +113,7 @@ def plot_xs(this, types, divisor_types=None, temperature=294., data_type=None,
     import matplotlib.pyplot as plt
 
     cv.check_type("plot_CE", plot_CE, bool)
-
-    if data_type is None:
-        if isinstance(this, openmc.Nuclide):
-            data_type = 'nuclide'
-        elif isinstance(this, openmc.Element):
-            data_type = 'element'
-        elif isinstance(this, openmc.Material):
-            data_type = 'material'
-        elif isinstance(this, openmc.Macroscopic):
-            data_type = 'macroscopic'
-        elif isinstance(this, str):
-            if this[-1] in string.digits:
-                data_type = 'nuclide'
-            else:
-                data_type = 'element'
-        else:
-            raise TypeError("Invalid type for plotting")
+    cv.check_type("this", this, (str, openmc.Nuclide, openmc.Element, openmc.Material))
 
     if plot_CE:
         # Calculate for the CE cross sections
@@ -160,13 +140,13 @@ def plot_xs(this, types, divisor_types=None, temperature=294., data_type=None,
             data = data_new
     else:
         # Calculate for MG cross sections
-        E, data = calculate_mgxs(this, data_type, types, orders, temperature,
+        E, data = calculate_mgxs(this, types, orders, temperature,
                                  mg_cross_sections, ce_cross_sections,
                                  enrichment)
 
         if divisor_types:
             cv.check_length('divisor types', divisor_types, len(types))
-            Ediv, data_div = calculate_mgxs(this, data_type, divisor_types,
+            Ediv, data_div = calculate_mgxs(this, divisor_types,
                                             divisor_orders, temperature,
                                             mg_cross_sections,
                                             ce_cross_sections, enrichment)
@@ -201,23 +181,35 @@ def plot_xs(this, types, divisor_types=None, temperature=294., data_type=None,
         ax.set_xlim(_MIN_E, _MAX_E)
     else:
         ax.set_xlim(E[-1], E[0])
+
+    if isinstance(this, str):
+        # first entry in ELEMENT_SYMBOL is a neutron, the 1 removes this entry
+        if this in list(openmc.data.ELEMENT_SYMBOL.values())[1:]:
+            this = openmc.Element(this)
+        else:
+            this = openmc.Nuclide(this)
+        
     if divisor_types:
-        if data_type == 'nuclide':
+        if isinstance(this, openmc.Nuclide):
             ylabel = 'Nuclidic Microscopic Data'
-        elif data_type == 'element':
+        elif isinstance(this, openmc.Element):
             ylabel = 'Elemental Microscopic Data'
-        elif data_type == 'material' or data_type == 'macroscopic':
+        elif isinstance(this, openmc.Material):
             ylabel = 'Macroscopic Data'
+        else:
+            raise TypeError("Invalid type for plotting")
     else:
-        if data_type == 'nuclide':
+        if isinstance(this, openmc.Nuclide):
             ylabel = 'Microscopic Cross Section [b]'
-        elif data_type == 'element':
+        elif isinstance(this, openmc.Element):
             ylabel = 'Elemental Cross Section [b]'
-        elif data_type == 'material' or data_type == 'macroscopic':
+        elif isinstance(this, openmc.Material):
             ylabel = 'Macroscopic Cross Section [1/cm]'
+        else:
+            raise TypeError("Invalid type for plotting")
     ax.set_ylabel(ylabel)
     ax.legend(loc='best')
-    name = this.name if data_type == 'material' else this
+    name = this.name if isinstance(this, openmc.Material) else this
     if len(types) > 1:
         ax.set_title('Cross Sections for ' + name)
     else:
@@ -270,8 +262,7 @@ def calculate_cexs(this, types, temperature=294., sab_name=None,
     # this is a nuclide or element if it is a string
     if isinstance(this, str):
         # first entry in ELEMENT_SYMBOL is a neutron, the 1 removes this entry
-        elements = list(openmc.data.ELEMENT_SYMBOL.values())[1:]
-        if this in elements:
+        if this in list(openmc.data.ELEMENT_SYMBOL.values())[1:]:
             this = openmc.Element(this)
         else:
             this = openmc.Nuclide(this)
