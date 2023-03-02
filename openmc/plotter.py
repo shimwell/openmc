@@ -137,7 +137,7 @@ def plot_xs(this, types, divisor_types=None, temperature=294., data_type=None,
 
     if plot_CE:
         # Calculate for the CE cross sections
-        E, data = calculate_cexs(this, data_type, types, temperature, sab_name,
+        E, data = calculate_cexs(this, types, temperature, sab_name,
                                  ce_cross_sections, enrichment)
         if divisor_types:
             cv.check_length('divisor types', divisor_types, len(types))
@@ -226,7 +226,7 @@ def plot_xs(this, types, divisor_types=None, temperature=294., data_type=None,
     return fig
 
 
-def calculate_cexs(this, data_type, types, temperature=294., sab_name=None,
+def calculate_cexs(this, types, temperature=294., sab_name=None,
                    cross_sections=None, enrichment=None):
     """Calculates continuous-energy cross sections of a requested type.
 
@@ -234,8 +234,6 @@ def calculate_cexs(this, data_type, types, temperature=294., sab_name=None,
     ----------
     this : {str, openmc.Nuclide, openmc.Element, openmc.Material}
         Object to source data from
-    data_type : {'nuclide', 'element', 'material'}
-        Type of object to plot
     types : Iterable of values of PLOT_TYPES
         The type of cross sections to calculate
     temperature : float, optional
@@ -262,39 +260,48 @@ def calculate_cexs(this, data_type, types, temperature=294., sab_name=None,
     """
 
     # Check types
+    cv.check_type('this', this, (str, openmc.Nuclide, openmc.Element, openmc.Material))
     cv.check_type('temperature', temperature, Real)
     if sab_name:
         cv.check_type('sab_name', sab_name, str)
     if enrichment:
         cv.check_type('enrichment', enrichment, Real)
 
-    if data_type == 'nuclide':
-        if isinstance(this, str):
-            nuc = openmc.Nuclide(this)
+    # this is a nuclide or element if it is a string
+    if isinstance(this, str):
+        # first entry in ELEMENT_SYMBOL is a neutron, the 1 removes this entry
+        elements = list(openmc.data.ELEMENT_SYMBOL.values())[1:]
+        if this in elements:
+            this = openmc.Element(this)
         else:
-            nuc = this
-        energy_grid, xs = _calculate_cexs_nuclide(nuc, types, temperature,
+            this = openmc.Nuclide(this)
+
+    if isinstance(this, openmc.Nuclide):
+        energy_grid, xs = _calculate_cexs_nuclide(this, types, temperature,
                                                   sab_name, cross_sections)
+
         # Convert xs (Iterable of Callable) to a grid of cross section values
         # calculated on the points in energy_grid for consistency with the
         # element and material functions.
         data = np.zeros((len(types), len(energy_grid)))
         for line in range(len(types)):
             data[line, :] = xs[line](energy_grid)
-    elif data_type == 'element':
-        if isinstance(this, str):
-            elem = openmc.Element(this)
-        else:
-            elem = this
-        energy_grid, data = _calculate_cexs_elem_mat(elem, types, temperature,
+
+    elif isinstance(this, openmc.Element):
+        energy_grid, data = _calculate_cexs_elem_mat(this, types, temperature,
                                                      cross_sections, sab_name,
                                                      enrichment)
-    elif data_type == 'material':
-        cv.check_type('this', this, openmc.Material)
+        
+
+    elif isinstance(this, openmc.Material):
         energy_grid, data = _calculate_cexs_elem_mat(this, types, temperature,
                                                      cross_sections)
     else:
-        raise TypeError("Invalid type")
+        msg = (
+            f"{this} is an invalid type, acceptable types are str, "
+            "openmc.Nuclide, openmc.Element, openmc.Material."
+        )
+        raise TypeError(msg)
 
     return energy_grid, data
 
@@ -583,8 +590,7 @@ def _calculate_cexs_elem_mat(this, types, temperature=294.,
         name = nuclide[0]
         nuc = nuclide[1]
         sab_tab = sabs[name]
-        temp_E, temp_xs = calculate_cexs(nuc, 'nuclide', types, T, sab_tab,
-                                         cross_sections)
+        temp_E, temp_xs = calculate_cexs(nuc, types, T, sab_tab, cross_sections)
         E.append(temp_E)
         # Since the energy grids are different, store the cross sections as
         # a tabulated function so they can be calculated on any grid needed.
