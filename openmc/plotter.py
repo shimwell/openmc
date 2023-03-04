@@ -60,8 +60,8 @@ def plot_xs(this, types, divisor_types=None, temperature=294., axis=None,
 
     Parameters
     ----------
-    this : str or openmc.Material
-        Object to source data from
+    this : {str, openmc.Nuclide, openmc.Element, openmc.Macroscopic, openmc.Material}
+        Object to source data from. Nuclides and Elements can be input as a str
     types : Iterable of values of PLOT_TYPES
         The type of cross sections to include in the plot.
     divisor_types : Iterable of values of PLOT_TYPES, optional
@@ -200,7 +200,7 @@ def plot_xs(this, types, divisor_types=None, temperature=294., axis=None,
             ylabel = 'Microscopic Cross Section [b]'
         elif isinstance(this, openmc.Element):
             ylabel = 'Elemental Cross Section [b]'
-        elif isinstance(this, openmc.Material):
+        elif isinstance(this, openmc.Material or isinstance(this, openmc.Macroscopic):
             ylabel = 'Macroscopic Cross Section [1/cm]'
         else:
             raise TypeError("Invalid type for plotting")
@@ -616,8 +616,8 @@ def calculate_mgxs(this, types, orders=None, temperature=294.,
 
     Parameters
     ----------
-    this : str or openmc.Material
-        Object to source data from
+    this : {str, openmc.Nuclide, openmc.Element, openmc.Macroscopic, openmc.Material}
+        Object to source data from. Nuclides and Elements can be input as a str
     types : Iterable of values of PLOT_TYPES_MGXS
         The type of cross sections to calculate
     orders : Iterable of Integral, optional
