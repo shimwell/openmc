@@ -200,7 +200,7 @@ def plot_xs(this, types, divisor_types=None, temperature=294., axis=None,
             ylabel = 'Microscopic Cross Section [b]'
         elif isinstance(this, openmc.Element):
             ylabel = 'Elemental Cross Section [b]'
-        elif isinstance(this, openmc.Material or isinstance(this, openmc.Macroscopic):
+        elif isinstance(this, openmc.Material) or isinstance(this, openmc.Macroscopic):
             ylabel = 'Macroscopic Cross Section [1/cm]'
         else:
             raise TypeError("Invalid type for plotting")
