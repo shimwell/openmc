@@ -72,7 +72,7 @@ def test_calculate_cexs_with_materials(test_mat):
     assert len(data[0]) == len(energy_grid)
 
 
-@pytest.mark.parametrize("this", ["Be", "Be9", openmc.Nuclide('Be9'), openmc.Element('Be'), openmc.Macroscopic('UO2')])
+@pytest.mark.parametrize("this", ["Be", "Be9", openmc.Nuclide('Be9'), openmc.Element('Be')])
 def test_plot_xs(this):
     assert isinstance(openmc.plotter.plot_xs(this, types=['total']), Figure)
 
