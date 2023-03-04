@@ -222,7 +222,7 @@ def calculate_cexs(this, types, temperature=294., sab_name=None,
     Parameters
     ----------
     this : {str, openmc.Nuclide, openmc.Element, openmc.Material}
-        Object to source data from
+        Object to source data from. Nuclides and Elements can be input as a str
     types : Iterable of values of PLOT_TYPES
         The type of cross sections to calculate
     temperature : float, optional
