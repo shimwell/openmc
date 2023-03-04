@@ -73,9 +73,6 @@ def plot_xs(this, types, divisor_types=None, temperature=294., axis=None,
         temperature of 294K will be plotted. Note that the nearest
         temperature in the library for each nuclide will be used as opposed
         to using any interpolation.
-    data_type : {'nuclide', 'element', 'material', 'macroscopic'}, optional
-        Type of object to plot. If not specified, a guess is made based on the
-        `this` argument.
     axis : matplotlib.axes, optional
         A previously generated axis to use for plotting. If not specified,
         a new axis and figure will be generated.
@@ -194,7 +191,7 @@ def plot_xs(this, types, divisor_types=None, temperature=294., axis=None,
             ylabel = 'Nuclidic Microscopic Data'
         elif isinstance(this, openmc.Element):
             ylabel = 'Elemental Microscopic Data'
-        elif isinstance(this, openmc.Material):
+        elif isinstance(this, openmc.Material) or isinstance(this, openmc.Macroscopic):
             ylabel = 'Macroscopic Data'
         else:
             raise TypeError("Invalid type for plotting")
@@ -608,7 +605,7 @@ def _calculate_cexs_elem_mat(this, types, temperature=294.,
     return energy_grid, data
 
 
-def calculate_mgxs(this, data_type, types, orders=None, temperature=294.,
+def calculate_mgxs(this, types, orders=None, temperature=294.,
                    cross_sections=None, ce_cross_sections=None,
                    enrichment=None):
     """Calculates multi-group cross sections of a requested type.
@@ -621,8 +618,6 @@ def calculate_mgxs(this, data_type, types, orders=None, temperature=294.,
     ----------
     this : str or openmc.Material
         Object to source data from
-    data_type : {'nuclide', 'element', 'material', 'macroscopic'}
-        Type of object to plot
     types : Iterable of values of PLOT_TYPES_MGXS
         The type of cross sections to calculate
     orders : Iterable of Integral, optional
@@ -662,10 +657,18 @@ def calculate_mgxs(this, data_type, types, orders=None, temperature=294.,
     cv.check_type("cross_sections", cross_sections, str)
     library = openmc.MGXSLibrary.from_hdf5(cross_sections)
 
-    if data_type in ('nuclide', 'macroscopic'):
+    # this is a nuclide or element if it is a string
+    if isinstance(this, str):
+        # first entry in ELEMENT_SYMBOL is a neutron, the 1 removes this entry
+        if this in list(openmc.data.ELEMENT_SYMBOL.values())[1:]:
+            this = openmc.Element(this)
+        else:
+            this = openmc.Nuclide(this)
+
+    if isinstance(this, openmc.Nuclide) or isinstance(this, openmc.Macroscopic):
         mgxs = _calculate_mgxs_nuc_macro(this, types, library, orders,
                                          temperature)
-    elif data_type in ('element', 'material'):
+    elif isinstance(this, openmc.Element) or isinstance(this, openmc.Material):
         mgxs = _calculate_mgxs_elem_mat(this, types, library, orders,
                                         temperature, ce_cross_sections,
                                         enrichment)
