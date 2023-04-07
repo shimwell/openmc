@@ -9,3 +9,11 @@ requires = [
     "h5py",
 ]
 build-backend = "setuptools.build_meta"
+
+[tool.cibuildwheel.macos]
+skip = ["cp36-*", "cp311-*"]
+before-all = "brew install homebrew/core/hdf5"
+
+[tool.cibuildwheel.linux]
+skip = ["cp36-*"]
+manylinux-x86_64-image = "ghcr.io/h5py/manylinux2014_x86_64-hdf5"
