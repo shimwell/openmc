@@ -2,7 +2,7 @@ from typing import Iterable
 
 import numpy as np
 
-from .checkvalue import check_length
+from .checkvalue import check_length, check_value
 
 
 class BoundingBox(tuple):
@@ -55,3 +55,28 @@ class BoundingBox(tuple):
     @property
     def volume(self) -> float:
         return np.abs(np.prod(self[1] - self[0]))
+
+    def extent(self, basis: str) -> tuple:
+        """Finds the extent (left, right, bottom, top) of the bounding box with
+        respect to the basis. Intended use to find the extent for Matplotlib
+        plots.
+
+        Parameters
+        ----------
+        basis : {'xy', 'yz', 'xz'}
+            The width of the specified axis
+
+        Returns
+        -------
+        width : float
+            width of axis
+        """
+
+        check_value('basis', basis, ('xy', 'yz', 'xz'))
+
+        # if basis == 'xy':
+        #     return self[1][]
+        # elif basis == 'yz': 
+        #     return self[1][]
+        # elif basis == 'xz':
+        #     return self[1][]
