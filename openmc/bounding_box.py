@@ -84,6 +84,7 @@ class BoundingBox(tuple):
             ),
         }
 
+    @property
     def width(self):
         return abs(self.lower_left - self.upper_right)
 
