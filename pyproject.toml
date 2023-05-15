@@ -4,7 +4,7 @@ requires = [
     "wheel",
     "numpy",
     "cython",
-    "scikit-build>=0.17.1",
+    "scikit-build>=0.17.5",
     "cmake>=3.10.0",
     "h5py",
 ]
