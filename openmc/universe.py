@@ -430,11 +430,8 @@ class Universe(UniverseBase):
             # Run OpenMC in geometry plotting mode
             model.plot_geometry(False, cwd=tmpdir, openmc_exec=openmc_exec)
 
-            # Read image from file
             img_path = Path(tmpdir) / f'plot_{plot.id}.png'
-            if not img_path.is_file():
-                img_path = img_path.with_suffix('.ppm')
-            img = mpimg.imread(str(img_path))
+            img = self._read_plot_image(img_path)
 
             # Create a figure sized such that the size of the axes within
             # exactly matches the number of pixels specified
@@ -448,21 +445,8 @@ class Universe(UniverseBase):
                 height = pixels[0]*px/(params.top - params.bottom)
                 fig.set_size_inches(width, height)
 
-            if outline:
-                # Combine R, G, B values into a single int
-                rgb = (img * 256).astype(int)
-                image_value = (rgb[..., 0] << 16) + \
-                    (rgb[..., 1] << 8) + (rgb[..., 2])
-
-                axes.contour(
-                    image_value,
-                    origin="upper",
-                    colors="k",
-                    linestyles="solid",
-                    linewidths=1,
-                    levels=np.unique(image_value),
-                    extent=(x_min, x_max, y_min, y_max),
-                )
+            if outline():
+                axis = self.plot_outline(axis, img)
 
             # add legend showing which colors represent which material
             # or cell if that was requested
@@ -507,6 +491,32 @@ class Universe(UniverseBase):
 
             # Plot image and return the axes
             return axes.imshow(img, extent=(x_min, x_max, y_min, y_max), **kwargs)
+
+    def plot_outline(self, axis=None, img=None):
+        
+        if not img:
+            img = self._read_plot_image(img_path)
+
+        # Combine R, G, B values into a single int
+        rgb = (img * 256).astype(int)
+        image_value = (rgb[..., 0] << 16) + \
+            (rgb[..., 1] << 8) + (rgb[..., 2])
+
+        axes.contour(
+            image_value,
+            origin="upper",
+            colors="k",
+            linestyles="solid",
+            linewidths=1,
+            levels=np.unique(image_value),
+            extent=(x_min, x_max, y_min, y_max),
+        )
+
+    def _read_plot_image(img_path):
+        # Read image from file
+        if not img_path.is_file():
+            img_path = img_path.with_suffix('.ppm')
+        img = mpimg.imread(str(img_path))
 
     def add_cell(self, cell):
         """Add a cell to the universe.
