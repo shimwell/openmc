@@ -374,20 +374,14 @@ class Universe(UniverseBase):
         import matplotlib.patches as mpatches
         import matplotlib.pyplot as plt
 
-        # Determine extents of plot
-        if basis == 'xy':
-            x, y = 0, 1
-            xlabel, ylabel = 'x [cm]', 'y [cm]'
-        elif basis == 'yz':
-            x, y = 1, 2
-            xlabel, ylabel = 'y [cm]', 'z [cm]'
-        elif basis == 'xz':
-            x, y = 0, 2
-            xlabel, ylabel = 'x [cm]', 'z [cm]'
+        x = {'xy': 0, 'yz': 1, 'xz': 0}[basis]
+        y = {'xy': 1, 'yz': 2, 'xz': 2}[basis]
+        xlabel = {'xy': 'x [cm]', 'yz': 'y [cm]', 'xz': 'x [cm]'}[basis]
+        ylabel = {'xy': 'y [cm]', 'yz': 'z [cm]', 'xz': 'z [cm]'}[basis]
 
         bb = self.bounding_box
         # checks to see if bounding box contains -inf or inf values
-        if np.isinf([bb[0][x], bb[1][x], bb[0][y], bb[1][y]]).any():
+        if np.isinf([bb.extent[basis]]).any():
             if origin is None:
                 origin = (0, 0, 0)
             if width is None:
@@ -518,9 +512,8 @@ class Universe(UniverseBase):
             # Plot image and return the axes
             return axes.imshow(img, extent=(x_min, x_max, y_min, y_max), **kwargs)
 
-    def plot_outline(self, origin=None, width=None, pixels=40000,
-             basis='xy', color_by='cell', seed=None,
-             openmc_exec='openmc', axes=None, **kwargs):
+    def plot_outline(self, origin=None, width=None, pixels=40000, basis='xy',
+        color_by='cell', seed=None, openmc_exec='openmc', axes=None, **kwargs):
         """Display a slice plot of the universe.
 
         Parameters
@@ -563,20 +556,14 @@ class Universe(UniverseBase):
         import matplotlib.image as mpimg
         import matplotlib.pyplot as plt
 
-        # Determine extents of plot
-        if basis == 'xy':
-            x, y = 0, 1
-            xlabel, ylabel = 'x [cm]', 'y [cm]'
-        elif basis == 'yz':
-            x, y = 1, 2
-            xlabel, ylabel = 'y [cm]', 'z [cm]'
-        elif basis == 'xz':
-            x, y = 0, 2
-            xlabel, ylabel = 'x [cm]', 'z [cm]'
+        x = {'xy': 0, 'yz': 1, 'xz': 0}[basis]
+        y = {'xy': 1, 'yz': 2, 'xz': 2}[basis]
+        xlabel = {'xy': 'x [cm]', 'yz': 'y [cm]', 'xz': 'x [cm]'}[basis]
+        ylabel = {'xy': 'y [cm]', 'yz': 'z [cm]', 'xz': 'z [cm]'}[basis]
 
         bb = self.bounding_box
         # checks to see if bounding box contains -inf or inf values
-        if np.isinf([bb[0][x], bb[1][x], bb[0][y], bb[1][y]]).any():
+        if np.isinf([bb.extent[basis]]).any():
             if origin is None:
                 origin = (0, 0, 0)
             if width is None:
@@ -650,7 +637,8 @@ class Universe(UniverseBase):
             image_value = (rgb[..., 0] << 16) + \
                 (rgb[..., 1] << 8) + (rgb[..., 2])
 
-            axes.contour(
+            # Plot image and return the axes
+            return axes.contour(
                 image_value,
                 origin="upper",
                 colors="k",
@@ -660,9 +648,6 @@ class Universe(UniverseBase):
                 extent=(x_min, x_max, y_min, y_max),
                 **kwargs
             )
-
-            # Plot image and return the axes
-            return axes
 
     def add_cell(self, cell):
         """Add a cell to the universe.
