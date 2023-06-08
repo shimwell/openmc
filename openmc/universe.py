@@ -407,30 +407,30 @@ class Universe(UniverseBase):
         y_min = origin[y] - 0.5*width[1]
         y_max = origin[y] + 0.5*width[1]
 
+        model = openmc.Model()
+        model.geometry = openmc.Geometry(self)
+        if seed is not None:
+            model.settings.seed = seed
+
+        # Determine whether any materials contains macroscopic data and if
+        # so, set energy mode accordingly
+        for mat in self.get_all_materials().values():
+            if mat._macroscopic is not None:
+                model.settings.energy_mode = 'multi-group'
+                break
+
+        # Create plot object matching passed arguments
+        plot = openmc.Plot()
+        plot.origin = origin
+        plot.width = width
+        plot.pixels = pixels
+        plot.basis = basis
+        plot.color_by = color_by
+        if colors is not None:
+            plot.colors = colors
+        model.plots.append(plot)
+
         with TemporaryDirectory() as tmpdir:
-            model = openmc.Model()
-            model.geometry = openmc.Geometry(self)
-            if seed is not None:
-                model.settings.seed = seed
-
-            # Determine whether any materials contains macroscopic data and if
-            # so, set energy mode accordingly
-            for mat in self.get_all_materials().values():
-                if mat._macroscopic is not None:
-                    model.settings.energy_mode = 'multi-group'
-                    break
-
-            # Create plot object matching passed arguments
-            plot = openmc.Plot()
-            plot.origin = origin
-            plot.width = width
-            plot.pixels = pixels
-            plot.basis = basis
-            plot.color_by = color_by
-            if colors is not None:
-                plot.colors = colors
-            model.plots.append(plot)
-
             # Run OpenMC in geometry plotting mode
             model.plot_geometry(False, cwd=tmpdir, openmc_exec=openmc_exec)
 
@@ -440,80 +440,79 @@ class Universe(UniverseBase):
                 img_path = img_path.with_suffix('.ppm')
             img = mpimg.imread(str(img_path))
 
-            # Create a figure sized such that the size of the axes within
-            # exactly matches the number of pixels specified
-            if axes is None:
-                px = 1/plt.rcParams['figure.dpi']
-                fig, axes = plt.subplots()
-                axes.set_xlabel(xlabel)
-                axes.set_ylabel(ylabel)
-                params = fig.subplotpars
-                width = pixels[0]*px/(params.right - params.left)
-                height = pixels[1]*px/(params.top - params.bottom)
-                fig.set_size_inches(width, height)
+        # Create a figure sized such that the size of the axes within
+        # exactly matches the number of pixels specified
+        if axes is None:
+            px = 1/plt.rcParams['figure.dpi']
+            fig, axes = plt.subplots()
+            axes.set_xlabel(xlabel)
+            axes.set_ylabel(ylabel)
+            params = fig.subplotpars
+            width = pixels[0]*px/(params.right - params.left)
+            height = pixels[1]*px/(params.top - params.bottom)
+            fig.set_size_inches(width, height)
 
-            if outline:
-                # Combine R, G, B values into a single int
-                rgb = (img * 256).astype(int)
-                image_value = (rgb[..., 0] << 16) + \
-                    (rgb[..., 1] << 8) + (rgb[..., 2])
+        if outline:
+            # Combine R, G, B values into a single int
+            rgb = (img * 256).astype(int)
+            image_value = (rgb[..., 0] << 16) + \
+                (rgb[..., 1] << 8) + (rgb[..., 2])
 
-                axes.contour(
-                    image_value,
-                    origin="upper",
-                    colors="k",
-                    linestyles="solid",
-                    linewidths=1,
-                    levels=np.unique(image_value),
-                    extent=(x_min, x_max, y_min, y_max),
-                )
+            axes.contour(
+                image_value,
+                origin="upper",
+                colors="k",
+                linestyles="solid",
+                linewidths=1,
+                levels=np.unique(image_value),
+                extent=(x_min, x_max, y_min, y_max),
+            )
 
-            # add legend showing which colors represent which material
-            # or cell if that was requested
-            if legend:
-                if plot.colors is None:
-                    raise ValueError("Must pass 'colors' dictionary if you "
-                                     "are adding a legend via legend=True.")
+        # add legend showing which colors represent which material
+        # or cell if that was requested
+        if legend:
+            if plot.colors is None:
+                raise ValueError("Must pass 'colors' dictionary if you are "
+                                 "adding a legend via legend=True.")
 
-                if color_by == "cell":
-                    expected_key_type = openmc.Cell
+            if color_by == "cell":
+                expected_key_type = openmc.Cell
+            else:
+                expected_key_type = openmc.Material
+
+            patches = []
+            for key, color in plot.colors.items():
+
+                if isinstance(key, int):
+                    raise TypeError(
+                        "Cannot use IDs in colors dict for auto legend.")
+                elif not isinstance(key, expected_key_type):
+                    raise TypeError(
+                        "Color dict key type does not match color_by")
+
+                # this works whether we're doing cells or materials
+                label = key.name if key.name != '' else key.id
+
+                # matplotlib takes RGB on 0-1 scale rather than 0-255. at this
+                # point PlotBase has already checked that 3-tuple based colors
+                # are already valid, so if the length is three then we know it
+                # just needs to be converted to the 0-1 format.
+                if len(color) == 3 and not isinstance(color, str):
+                    scaled_color = (color[0]/255, color[1]/255, color[2]/255)
                 else:
-                    expected_key_type = openmc.Material
+                    scaled_color = color
 
-                patches = []
-                for key, color in plot.colors.items():
+                key_patch = mpatches.Patch(color=scaled_color, label=label)
+                patches.append(key_patch)
 
-                    if isinstance(key, int):
-                        raise TypeError(
-                            "Cannot use IDs in colors dict for auto legend.")
-                    elif not isinstance(key, expected_key_type):
-                        raise TypeError(
-                            "Color dict key type does not match color_by")
+            axes.legend(handles=patches, **legend_kwargs)
 
-                    # this works whether we're doing cells or materials
-                    label = key.name if key.name != '' else key.id
-
-                    # matplotlib takes RGB on 0-1 scale rather than 0-255. at
-                    # this point PlotBase has already checked that 3-tuple
-                    # based colors are already valid, so if the length is three
-                    # then we know it just needs to be converted to the 0-1
-                    # format.
-                    if len(color) == 3 and not isinstance(color, str):
-                        scaled_color = (
-                            color[0]/255, color[1]/255, color[2]/255)
-                    else:
-                        scaled_color = color
-
-                    key_patch = mpatches.Patch(color=scaled_color, label=label)
-                    patches.append(key_patch)
-
-                axes.legend(handles=patches, **legend_kwargs)
-
-            # Plot image and return the axes
-            return axes.imshow(img, extent=(x_min, x_max, y_min, y_max), **kwargs)
+        # Plot image and return the axes
+        return axes.imshow(img, extent=(x_min, x_max, y_min, y_max), **kwargs)
 
     def plot_outline(self, origin=None, width=None, pixels=40000, basis='xy',
-        color_by='cell', seed=None, openmc_exec='openmc', axes=None, **kwargs):
+                     color_by='cell', seed=None, openmc_exec='openmc', axes=None,
+                     **kwargs):
         """Display a slice plot of the universe.
 
         Parameters
@@ -589,28 +588,28 @@ class Universe(UniverseBase):
         y_min = origin[y] - 0.5*width[1]
         y_max = origin[y] + 0.5*width[1]
 
+        model = openmc.Model()
+        model.geometry = openmc.Geometry(self)
+        if seed is not None:
+            model.settings.seed = seed
+
+        # Determine whether any materials contains macroscopic data and if so,
+        # set energy mode accordingly
+        for mat in self.get_all_materials().values():
+            if mat._macroscopic is not None:
+                model.settings.energy_mode = 'multi-group'
+                break
+
+        # Create plot object matching passed arguments
+        plot = openmc.Plot()
+        plot.origin = origin
+        plot.width = width
+        plot.pixels = pixels
+        plot.basis = basis
+        plot.color_by = color_by
+        model.plots.append(plot)
+
         with TemporaryDirectory() as tmpdir:
-            model = openmc.Model()
-            model.geometry = openmc.Geometry(self)
-            if seed is not None:
-                model.settings.seed = seed
-
-            # Determine whether any materials contains macroscopic data and if
-            # so, set energy mode accordingly
-            for mat in self.get_all_materials().values():
-                if mat._macroscopic is not None:
-                    model.settings.energy_mode = 'multi-group'
-                    break
-
-            # Create plot object matching passed arguments
-            plot = openmc.Plot()
-            plot.origin = origin
-            plot.width = width
-            plot.pixels = pixels
-            plot.basis = basis
-            plot.color_by = color_by
-            model.plots.append(plot)
-
             # Run OpenMC in geometry plotting mode
             model.plot_geometry(False, cwd=tmpdir, openmc_exec=openmc_exec)
 
@@ -620,34 +619,34 @@ class Universe(UniverseBase):
                 img_path = img_path.with_suffix('.ppm')
             img = mpimg.imread(str(img_path))
 
-            # Create a figure sized such that the size of the axes within
-            # exactly matches the number of pixels specified
-            if axes is None:
-                px = 1/plt.rcParams['figure.dpi']
-                fig, axes = plt.subplots()
-                axes.set_xlabel(xlabel)
-                axes.set_ylabel(ylabel)
-                params = fig.subplotpars
-                width = pixels[0]*px/(params.right - params.left)
-                height = pixels[1]*px/(params.top - params.bottom)
-                fig.set_size_inches(width, height)
+        # Create a figure sized such that the size of the axes within exactly
+        # matches the number of pixels specified
+        if axes is None:
+            px = 1/plt.rcParams['figure.dpi']
+            fig, axes = plt.subplots()
+            axes.set_xlabel(xlabel)
+            axes.set_ylabel(ylabel)
+            params = fig.subplotpars
+            width = pixels[0]*px/(params.right - params.left)
+            height = pixels[1]*px/(params.top - params.bottom)
+            fig.set_size_inches(width, height)
 
-            # Combine R, G, B values into a single int
-            rgb = (img * 256).astype(int)
-            image_value = (rgb[..., 0] << 16) + \
-                (rgb[..., 1] << 8) + (rgb[..., 2])
+        # Combine R, G, B values into a single int
+        rgb = (img * 256).astype(int)
+        image_value = (rgb[..., 0] << 16) + \
+            (rgb[..., 1] << 8) + (rgb[..., 2])
 
-            # Plot image and return the axes
-            return axes.contour(
-                image_value,
-                origin="upper",
-                colors="k",
-                linestyles="solid",
-                linewidths=1,
-                levels=np.unique(image_value),
-                extent=(x_min, x_max, y_min, y_max),
-                **kwargs
-            )
+        # Plot image and return the axes
+        return axes.contour(
+            image_value,
+            origin="upper",
+            colors="k",
+            linestyles="solid",
+            linewidths=1,
+            levels=np.unique(image_value),
+            extent=(x_min, x_max, y_min, y_max),
+            **kwargs
+        )
 
     def add_cell(self, cell):
         """Add a cell to the universe.
