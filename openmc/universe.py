@@ -518,6 +518,152 @@ class Universe(UniverseBase):
             # Plot image and return the axes
             return axes.imshow(img, extent=(x_min, x_max, y_min, y_max), **kwargs)
 
+    def plot_outline(self, origin=None, width=None, pixels=40000,
+             basis='xy', color_by='cell', seed=None,
+             openmc_exec='openmc', axes=None, **kwargs):
+        """Display a slice plot of the universe.
+
+        Parameters
+        ----------
+        origin : iterable of float
+            Coordinates at the origin of the plot, if left as None then the
+            universe.bounding_box.center will be used to attempt to
+            ascertain the origin. Defaults to (0, 0, 0) if the bounding_box
+            contains inf values
+        width : iterable of float
+            Width of the plot in each basis direction. If left as none then the
+            universe.bounding_box.width() will be used to attempt to
+            ascertain the plot width.  Defaults to (10, 10) if the bounding_box
+            contains inf values
+        pixels : Iterable of int or int
+            If iterable of ints provided then this directly sets the number of
+            pixels to use in each basis direction. If int provided then this
+            sets the total number of pixels in the plot and the number of
+            pixels in each basis direction is calculated from this total and
+            the image aspect ratio.
+        basis : {'xy', 'xz', 'yz'}
+            The basis directions for the plot
+        color_by : {'cell', 'material'}
+            Indicate whether the plot should be colored by cell or by material
+        seed : int
+            Seed for the random number generator
+        openmc_exec : str
+            Path to OpenMC executable.
+        axes : matplotlib.Axes
+            Axes to draw to
+        **kwargs
+            Keyword arguments passed to :func:`matplotlib.pyplot.contour`
+
+        Returns
+        -------
+        matplotlib.image.AxesImage
+            Resulting image
+
+        """
+        import matplotlib.image as mpimg
+        import matplotlib.pyplot as plt
+
+        # Determine extents of plot
+        if basis == 'xy':
+            x, y = 0, 1
+            xlabel, ylabel = 'x [cm]', 'y [cm]'
+        elif basis == 'yz':
+            x, y = 1, 2
+            xlabel, ylabel = 'y [cm]', 'z [cm]'
+        elif basis == 'xz':
+            x, y = 0, 2
+            xlabel, ylabel = 'x [cm]', 'z [cm]'
+
+        bb = self.bounding_box
+        # checks to see if bounding box contains -inf or inf values
+        if np.isinf([bb[0][x], bb[1][x], bb[0][y], bb[1][y]]).any():
+            if origin is None:
+                origin = (0, 0, 0)
+            if width is None:
+                width = (10, 10)
+        else:
+            if origin is None:
+                # if nan values in the bb.center they get replaced with 0.0
+                # this happens when the bounding_box contains inf values
+                origin = np.nan_to_num(bb.center)
+            if width is None:
+                bb_width = bb.width
+                x_width = bb_width['xyz'.index(basis[0])]
+                y_width = bb_width['xyz'.index(basis[1])]
+                width = (x_width, y_width)
+
+        if isinstance(pixels, int):
+            aspect_ratio = width[0] / width[1]
+            pixels_y = math.sqrt(pixels / aspect_ratio)
+            pixels = (int(pixels / pixels_y), int(pixels_y))
+
+        x_min = origin[x] - 0.5*width[0]
+        x_max = origin[x] + 0.5*width[0]
+        y_min = origin[y] - 0.5*width[1]
+        y_max = origin[y] + 0.5*width[1]
+
+        with TemporaryDirectory() as tmpdir:
+            model = openmc.Model()
+            model.geometry = openmc.Geometry(self)
+            if seed is not None:
+                model.settings.seed = seed
+
+            # Determine whether any materials contains macroscopic data and if
+            # so, set energy mode accordingly
+            for mat in self.get_all_materials().values():
+                if mat._macroscopic is not None:
+                    model.settings.energy_mode = 'multi-group'
+                    break
+
+            # Create plot object matching passed arguments
+            plot = openmc.Plot()
+            plot.origin = origin
+            plot.width = width
+            plot.pixels = pixels
+            plot.basis = basis
+            plot.color_by = color_by
+            model.plots.append(plot)
+
+            # Run OpenMC in geometry plotting mode
+            model.plot_geometry(False, cwd=tmpdir, openmc_exec=openmc_exec)
+
+            # Read image from file
+            img_path = Path(tmpdir) / f'plot_{plot.id}.png'
+            if not img_path.is_file():
+                img_path = img_path.with_suffix('.ppm')
+            img = mpimg.imread(str(img_path))
+
+            # Create a figure sized such that the size of the axes within
+            # exactly matches the number of pixels specified
+            if axes is None:
+                px = 1/plt.rcParams['figure.dpi']
+                fig, axes = plt.subplots()
+                axes.set_xlabel(xlabel)
+                axes.set_ylabel(ylabel)
+                params = fig.subplotpars
+                width = pixels[0]*px/(params.right - params.left)
+                height = pixels[1]*px/(params.top - params.bottom)
+                fig.set_size_inches(width, height)
+
+            # Combine R, G, B values into a single int
+            rgb = (img * 256).astype(int)
+            image_value = (rgb[..., 0] << 16) + \
+                (rgb[..., 1] << 8) + (rgb[..., 2])
+
+            axes.contour(
+                image_value,
+                origin="upper",
+                colors="k",
+                linestyles="solid",
+                linewidths=1,
+                levels=np.unique(image_value),
+                extent=(x_min, x_max, y_min, y_max),
+                **kwargs
+            )
+
+            # Plot image and return the axes
+            return axes
+
     def add_cell(self, cell):
         """Add a cell to the universe.
 
