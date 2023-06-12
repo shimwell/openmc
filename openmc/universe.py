@@ -508,10 +508,11 @@ class Universe(UniverseBase):
             axes.legend(handles=patches, **legend_kwargs)
 
         # Plot image and return the axes
-        return axes.imshow(img, extent=(x_min, x_max, y_min, y_max), **kwargs)
+        axes.imshow(img, extent=(x_min, x_max, y_min, y_max), **kwargs)
+        return axes
 
     def plot_outline(self, origin=None, width=None, pixels=40000, basis='xy',
-                     color_by='cell', seed=None, openmc_exec='openmc', axes=None,
+                     outline_by='cell', seed=None, openmc_exec='openmc', axes=None,
                      **kwargs):
         """Display a slice plot of the universe.
 
@@ -535,8 +536,8 @@ class Universe(UniverseBase):
             the image aspect ratio.
         basis : {'xy', 'xz', 'yz'}
             The basis directions for the plot
-        color_by : {'cell', 'material'}
-            Indicate whether the plot should be colored by cell or by material
+        outline_by : {'cell', 'material'}
+            Indicate whether the plot should be outlined by cell or by material
         seed : int
             Seed for the random number generator
         openmc_exec : str
@@ -606,7 +607,7 @@ class Universe(UniverseBase):
         plot.width = width
         plot.pixels = pixels
         plot.basis = basis
-        plot.color_by = color_by
+        plot.color_by = outline_by
         model.plots.append(plot)
 
         with TemporaryDirectory() as tmpdir:
@@ -637,7 +638,7 @@ class Universe(UniverseBase):
             (rgb[..., 1] << 8) + (rgb[..., 2])
 
         # Plot image and return the axes
-        return axes.contour(
+        axes.contour(
             image_value,
             origin="upper",
             colors="k",
@@ -647,6 +648,7 @@ class Universe(UniverseBase):
             extent=(x_min, x_max, y_min, y_max),
             **kwargs
         )
+        return axes
 
     def add_cell(self, cell):
         """Add a cell to the universe.

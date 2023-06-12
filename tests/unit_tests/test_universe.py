@@ -69,6 +69,12 @@ def test_plot(run_in_tmpdir, sphere_model):
             basis=basis,
             outline=True
         )
+        pincell.geometry.root_universe.plot_outline(
+            pixels=100, basis=basis, outline_by='cell'
+        )
+        pincell.geometry.root_universe.plot_outline(
+            pixels=100, basis=basis, outline_by='material'
+        )
 
     # model with no inf values in bounding box
     m = sphere_model.materials[0]
@@ -85,6 +91,8 @@ def test_plot(run_in_tmpdir, sphere_model):
             basis=basis,
             outline=False
         )
+        univ.plot_outline(pixels=100, basis=basis, outline_by='cell')
+        univ.plot_outline(pixels=100, basis=basis, outline_by='material')
 
 
 def test_get_nuclides(uo2):
