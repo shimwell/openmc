@@ -1,8 +1,9 @@
+import math
 from typing import Iterable
 
 import numpy as np
 
-from .checkvalue import check_length
+from .checkvalue import check_length, check_value
 
 
 class BoundingBox(tuple):
@@ -87,3 +88,19 @@ class BoundingBox(tuple):
     @property
     def width(self):
         return self.upper_right - self.lower_left
+
+    def dimension(self, length: float):
+        """Gets the number of lengths (rounding up) that fit into each width.
+
+        Parameters
+        ----------
+        length : float
+            The length to divide each width by
+
+        Returns
+        -------
+        list of int
+            The number of lengths (rounded up) in x, y and z axis
+
+        """
+        return [math.ceil(width/length) for width in self.width]

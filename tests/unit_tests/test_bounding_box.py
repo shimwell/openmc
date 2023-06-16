@@ -81,3 +81,9 @@ def test_bounding_box_extents():
     assert test_bb_1.extent['xy'] == (-10., 1., -20., 2.)
     assert test_bb_1.extent['xz'] == (-10., 1., -30., 3.)
     assert test_bb_1.extent['yz'] == (-20., 2., -30., 3.)
+
+
+def test_bounding_box_dimension():
+    assert test_bb_1.dimension(length=1)== [11, 22, 33]
+    assert test_bb_2.dimension(length=5.1)== [2, 4, 6]
+    assert test_bb_3.dimension(length=20)== [1, 1, 2]
