@@ -52,8 +52,8 @@ class _Config(MutableMapping):
     def __len__(self):
         return len(self._mapping)
 
-    def __repr__(self):
-        return repr(self._mapping)
+    def __str__(self):
+        return str(self._mapping)
 
     def _set_path(self, key, value):
         self._mapping[key] = p = Path(value)

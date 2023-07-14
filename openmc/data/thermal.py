@@ -437,7 +437,7 @@ class ThermalScattering(EqualityMixin):
         self.inelastic = None
         self.nuclides = []
 
-    def __repr__(self):
+    def __str__(self):
         if hasattr(self, 'name'):
             return "<Thermal Scattering Data: {}>".format(self.name)
         else:

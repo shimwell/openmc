@@ -135,7 +135,7 @@ class Material(IDManagerMixin):
         # If specified, a list of table names
         self._sab = []
 
-    def __repr__(self) -> str:
+    def __str__(self) -> str:
         string = 'Material\n'
         string += '{: <16}=\t{}\n'.format('\tID', self._id)
         string += '{: <16}=\t{}\n'.format('\tName', self._name)

@@ -539,7 +539,7 @@ class _FilterMapping(Mapping):
     def __len__(self):
         return _dll.tally_filters_size()
 
-    def __repr__(self):
+    def __str__(self):
         return repr(dict(self))
 
 filters = _FilterMapping()

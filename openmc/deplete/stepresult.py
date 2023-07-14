@@ -76,7 +76,7 @@ class StepResult:
 
         self.data = None
 
-    def __repr__(self):
+    def __str__(self):
         t = self.time[0]
         dt = self.time[1] - self.time[0]
         return f"<StepResult: t={t}, dt={dt}, source={self.source_rate}>"

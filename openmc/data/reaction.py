@@ -845,7 +845,7 @@ class Reaction(EqualityMixin):
 
         self.mt = mt
 
-    def __repr__(self):
+    def __str__(self):
         if self.mt in REACTION_NAME:
             return "<Reaction: MT={} {}>".format(self.mt, REACTION_NAME[self.mt])
         else:

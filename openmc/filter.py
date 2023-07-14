@@ -143,7 +143,7 @@ class Filter(IDManagerMixin, metaclass=FilterMeta):
         string += '{: <16}=\t{}\n'.format('\tBins', self.bins)
         return hash(string)
 
-    def __repr__(self):
+    def __str__(self):
         string = type(self).__name__ + '\n'
         string += '{: <16}=\t{}\n'.format('\tBins', self.bins)
         string += '{: <16}=\t{}\n'.format('\tID', self.id)
@@ -801,7 +801,7 @@ class MeshFilter(Filter):
         string += '{: <16}=\t{}\n'.format('\tMesh ID', self.mesh.id)
         return hash(string)
 
-    def __repr__(self):
+    def __str__(self):
         string = type(self).__name__ + '\n'
         string += '{: <16}=\t{}\n'.format('\tMesh ID', self.mesh.id)
         string += '{: <16}=\t{}\n'.format('\tID', self.id)
@@ -1143,7 +1143,7 @@ class RealFilter(Filter):
         else:
             return super().__gt__(other)
 
-    def __repr__(self):
+    def __str__(self):
         string = type(self).__name__ + '\n'
         string += '{: <16}=\t{}\n'.format('\tValues', self.values)
         string += '{: <16}=\t{}\n'.format('\tID', self.id)
@@ -2003,7 +2003,7 @@ class EnergyFunctionFilter(Filter):
         string += '{: <16}=\t{}\n'.format('\tInterpolation', self.interpolation)
         return hash(string)
 
-    def __repr__(self):
+    def __str__(self):
         string = type(self).__name__ + '\n'
         string += '{: <16}=\t{}\n'.format('\tEnergy', self.energy)
         string += '{: <16}=\t{}\n'.format('\tInterpolant', self.y)
@@ -2191,7 +2191,7 @@ class EnergyFunctionFilter(Filter):
 
         # There is no clean way of sticking all the energy, y data into a
         # DataFrame so instead we'll just make a column with the filter name
-        # and fill it with a hash of the __repr__.  We want a hash that is
+        # and fill it with a hash of the __str__.  We want a hash that is
         # reproducible after restarting the interpreter so we'll use hashlib.md5
         # rather than the intrinsic hash().
         hash_fun = hashlib.md5()

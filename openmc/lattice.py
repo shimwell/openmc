@@ -402,7 +402,7 @@ class RectLattice(Lattice):
         # Initialize Lattice class attributes
         self._lower_left = None
 
-    def __repr__(self):
+    def __str__(self):
         string = 'RectLattice\n'
         string += '{: <16}=\t{}\n'.format('\tID', self._id)
         string += '{: <16}=\t{}\n'.format('\tName', self._name)
@@ -1090,7 +1090,7 @@ class HexLattice(Lattice):
         self._center = None
         self._orientation = 'y'
 
-    def __repr__(self):
+    def __str__(self):
         string = 'HexLattice\n'
         string += '{0: <16}{1}{2}\n'.format('\tID', '=\t', self._id)
         string += '{0: <16}{1}{2}\n'.format('\tName', '=\t', self._name)

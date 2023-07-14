@@ -13,8 +13,8 @@ def test_time_filter_basics():
     np.testing.assert_allclose(f.bins[-1], [5.0, 9.0])
     assert len(f.bins) == 3
 
-    # Make sure __repr__ works
-    repr(f)
+    # Make sure __str__ works
+    str(f)
 
     # to_xml_element()
     elem = f.to_xml_element()

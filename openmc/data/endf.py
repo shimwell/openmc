@@ -447,7 +447,7 @@ class Evaluation:
 
         self._read_header()
 
-    def __repr__(self):
+    def __str__(self):
         name = self.target['zsymam'].replace(' ', '')
         return '<{} for {} {}>'.format(self.info['sublibrary'], name,
                                        self.info['library'])

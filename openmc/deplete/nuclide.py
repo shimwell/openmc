@@ -127,7 +127,7 @@ class Nuclide:
         # Neutron fission yields, if present
         self._yield_data = None
 
-    def __repr__(self):
+    def __str__(self):
         n_modes, n_rx = self.n_decay_modes, self.n_reaction_paths
         return f"<Nuclide: {self.name} ({n_modes} modes, {n_rx} reactions)>"
 
@@ -509,7 +509,7 @@ class FissionYieldDistribution(Mapping):
     def __iter__(self):
         return iter(self.energies)
 
-    def __repr__(self):
+    def __str__(self):
         return "<{} with {} products at {} energies>".format(
             self.__class__.__name__, self.yield_matrix.shape[1],
             len(self.energies))
@@ -694,7 +694,7 @@ class FissionYield(Mapping):
     def __rmul__(self, scalar):
         return self * scalar
 
-    def __repr__(self):
+    def __str__(self):
         return "<{} containing {} products and yields>".format(
             self.__class__.__name__, len(self))
 

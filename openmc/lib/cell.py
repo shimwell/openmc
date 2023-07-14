@@ -311,7 +311,7 @@ class _CellMapping(Mapping):
     def __len__(self):
         return _dll.cells_size()
 
-    def __repr__(self):
+    def __str__(self):
         return repr(dict(self))
 
 cells = _CellMapping()

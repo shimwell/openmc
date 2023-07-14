@@ -289,7 +289,7 @@ class _MaterialMapping(Mapping):
     def __len__(self):
         return _dll.n_materials()
 
-    def __repr__(self):
+    def __str__(self):
         return repr(dict(self))
 
 materials = _MaterialMapping()

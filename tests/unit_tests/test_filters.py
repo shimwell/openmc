@@ -26,8 +26,8 @@ def test_cell_instance():
     c2 = openmc.Cell()
     f = openmc.CellInstanceFilter([(c1, 0), (c1, 1), (c1, 2), (c2, 0), (c2, 1)])
 
-    # Make sure __repr__ works
-    repr(f)
+    # Make sure __str__ works
+    str(f)
 
     # to_xml_element()
     elem = f.to_xml_element()
@@ -57,8 +57,8 @@ def test_collision():
     assert f.bins[-1] == 8
     assert len(f.bins) == 5
 
-    # Make sure __repr__ works
-    repr(f)
+    # Make sure __str__ works
+    str(f)
 
     # to_xml_element()
     elem = f.to_xml_element()
@@ -79,8 +79,8 @@ def test_legendre():
     assert f.bins[-1] == 'P5'
     assert len(f.bins) == n + 1
 
-    # Make sure __repr__ works
-    repr(f)
+    # Make sure __str__ works
+    str(f)
 
     # to_xml_element()
     elem = f.to_xml_element()
@@ -106,8 +106,8 @@ def test_spatial_legendre():
     assert f.bins[-1] == 'P5'
     assert len(f.bins) == n + 1
 
-    # Make sure __repr__ works
-    repr(f)
+    # Make sure __str__ works
+    str(f)
 
     # to_xml_element()
     elem = f.to_xml_element()
@@ -132,8 +132,8 @@ def test_spherical_harmonics():
     assert f.bins[-1] == 'Y{0},{0}'.format(n)
     assert len(f.bins) == (n + 1)**2
 
-    # Make sure __repr__ works
-    repr(f)
+    # Make sure __str__ works
+    str(f)
 
     # to_xml_element()
     elem = f.to_xml_element()
@@ -157,8 +157,8 @@ def test_zernike():
     assert f.bins[-1] == 'Z{0},{0}'.format(n)
     assert len(f.bins) == (n + 1)*(n + 2)//2
 
-    # Make sure __repr__ works
-    repr(f)
+    # Make sure __str__ works
+    str(f)
 
     # to_xml_element()
     elem = f.to_xml_element()
@@ -180,8 +180,8 @@ def test_zernike_radial():
     assert f.bins[-1] == 'Z{},0'.format(n)
     assert len(f.bins) == n//2 + 1
 
-    # Make sure __repr__ works
-    repr(f)
+    # Make sure __str__ works
+    str(f)
 
     # to_xml_element()
     elem = f.to_xml_element()

@@ -55,7 +55,7 @@ class MeshBase(IDManagerMixin, ABC):
         else:
             self._name = ''
 
-    def __repr__(self):
+    def __str__(self):
         string = type(self).__name__ + '\n'
         string += '{0: <16}{1}{2}\n'.format('\tID', '=\t', self._id)
         string += '{0: <16}{1}{2}\n'.format('\tName', '=\t', self._name)
@@ -664,8 +664,8 @@ class RegularMesh(StructuredMesh):
             np.array(self.lower_left), np.array(self.upper_right)
         )
 
-    def __repr__(self):
-        string = super().__repr__()
+    def __str__(self):
+        string = super().__str__()
         string += '{0: <16}{1}{2}\n'.format('\tDimensions', '=\t', self.n_dimension)
         string += '{0: <16}{1}{2}\n'.format('\tVoxels', '=\t', self._dimension)
         string += '{0: <16}{1}{2}\n'.format('\tLower left', '=\t', self._lower_left)
@@ -1084,9 +1084,9 @@ class RectilinearMesh(StructuredMesh):
                 for y in range(1, ny + 1)
                 for x in range(1, nx + 1))
 
-    def __repr__(self):
+    def __str__(self):
         fmt = '{0: <16}{1}{2}\n'
-        string = super().__repr__()
+        string = super().__str__()
         string += fmt.format('\tDimensions', '=\t', self.n_dimension)
         x_grid_str = str(self._x_grid) if self._x_grid is None else len(self._x_grid)
         string += fmt.format('\tN X pnts:', '=\t', x_grid_str)
@@ -1272,9 +1272,9 @@ class CylindricalMesh(StructuredMesh):
                 for p in range(1, np + 1)
                 for r in range(1, nr + 1))
 
-    def __repr__(self):
+    def __str__(self):
         fmt = '{0: <16}{1}{2}\n'
-        string = super().__repr__()
+        string = super().__str__()
         string += fmt.format('\tDimensions', '=\t', self.n_dimension)
         string += fmt.format('\tOrigin', '=\t', self.origin)
         r_grid_str = str(self._r_grid) if self._r_grid is None else len(self._r_grid)
@@ -1572,9 +1572,9 @@ class SphericalMesh(StructuredMesh):
                 for t in range(1, nt + 1)
                 for r in range(1, nr + 1))
 
-    def __repr__(self):
+    def __str__(self):
         fmt = '{0: <16}{1}{2}\n'
-        string = super().__repr__()
+        string = super().__str__()
         string += fmt.format('\tDimensions', '=\t', self.n_dimension)
         string += fmt.format('\tOrigin', '=\t', self.origin)
         r_grid_str = str(self._r_grid) if self._r_grid is None else len(self._r_grid)
@@ -1874,8 +1874,8 @@ class UnstructuredMesh(MeshBase):
     def n_dimension(self):
         return 3
 
-    def __repr__(self):
-        string = super().__repr__()
+    def __str__(self):
+        string = super().__str__()
         string += '{: <16}=\t{}\n'.format('\tFilename', self.filename)
         string += '{: <16}=\t{}\n'.format('\tMesh Library', self.library)
         if self.length_multiplier != 1.0:

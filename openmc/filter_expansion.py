@@ -82,7 +82,7 @@ class LegendreFilter(ExpansionFilter):
         string += '{: <16}=\t{}\n'.format('\tOrder', self.order)
         return hash(string)
 
-    def __repr__(self):
+    def __str__(self):
         string = type(self).__name__ + '\n'
         string += '{: <16}=\t{}\n'.format('\tOrder', self.order)
         string += '{: <16}=\t{}\n'.format('\tID', self.id)
@@ -158,7 +158,7 @@ class SpatialLegendreFilter(ExpansionFilter):
         string += '{: <16}=\t{}\n'.format('\tMax', self.maximum)
         return hash(string)
 
-    def __repr__(self):
+    def __str__(self):
         string = type(self).__name__ + '\n'
         string += '{: <16}=\t{}\n'.format('\tOrder', self.order)
         string += '{: <16}=\t{}\n'.format('\tAxis', self.axis)
@@ -280,7 +280,7 @@ class SphericalHarmonicsFilter(ExpansionFilter):
         string += '{: <16}=\t{}\n'.format('\tCosine', self.cosine)
         return hash(string)
 
-    def __repr__(self):
+    def __str__(self):
         string = type(self).__name__ + '\n'
         string += '{: <16}=\t{}\n'.format('\tOrder', self.order)
         string += '{: <16}=\t{}\n'.format('\tCosine', self.cosine)
@@ -415,7 +415,7 @@ class ZernikeFilter(ExpansionFilter):
         string += '{: <16}=\t{}\n'.format('\tR', self.r)
         return hash(string)
 
-    def __repr__(self):
+    def __str__(self):
         string = type(self).__name__ + '\n'
         string += '{: <16}=\t{}\n'.format('\tOrder', self.order)
         string += '{: <16}=\t{}\n'.format('\tID', self.id)

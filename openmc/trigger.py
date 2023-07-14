@@ -34,7 +34,7 @@ class Trigger(EqualityMixin):
         self.threshold = threshold
         self._scores = []
 
-    def __repr__(self):
+    def __str__(self):
         string = 'Trigger\n'
         string += '{: <16}=\t{}\n'.format('\tType', self._trigger_type)
         string += '{: <16}=\t{}\n'.format('\tThreshold', self._threshold)

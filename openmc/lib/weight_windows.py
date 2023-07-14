@@ -314,7 +314,7 @@ class _WeightWindowsMapping(Mapping):
     def __len__(self):
         return _dll.openmc_weight_windows_size()
 
-    def __repr__(self):
+    def __str__(self):
         return repr(dict(self))
 
     def __delitem__(self):

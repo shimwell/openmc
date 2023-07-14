@@ -46,7 +46,7 @@ class TallyDerivative(EqualityMixin, IDManagerMixin):
         self.material = material
         self.nuclide = nuclide
 
-    def __repr__(self):
+    def __str__(self):
         string = 'Tally Derivative\n'
         string += '{: <16}=\t{}\n'.format('\tID', self.id)
         string += '{: <16}=\t{}\n'.format('\tVariable', self.variable)

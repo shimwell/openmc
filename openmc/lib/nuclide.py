@@ -125,7 +125,8 @@ class _NuclideMapping(Mapping):
     def __len__(self):
         return _dll.nuclides_size()
 
-    def __repr__(self):
+    def __str__(self):
         return repr(dict(self))
+
 
 nuclides = _NuclideMapping()

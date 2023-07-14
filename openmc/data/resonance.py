@@ -899,7 +899,7 @@ class SpinGroup:
         self.channels = channels
         self.parameters = parameters
 
-    def __repr__(self):
+    def __str__(self):
         return '<SpinGroup: Jpi={}{}>'.format(self.spin, self.parity)
 
 

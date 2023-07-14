@@ -120,7 +120,7 @@ class CMFDMesh:
         self._mesh_type = 'regular'
         self._grid = None
 
-    def __repr__(self):
+    def __str__(self):
         outstr = type(self).__name__ + '\n'
         if self._mesh_type == 'regular':
             outstr += (self._get_repr(self._lower_left, "Lower left") + "\n" +

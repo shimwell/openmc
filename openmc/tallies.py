@@ -131,7 +131,7 @@ class Tally(IDManagerMixin):
         self._sp_filename = None
         self._results_read = False
 
-    def __repr__(self):
+    def __str__(self):
         parts = ['Tally']
         parts.append('{: <15}=\t{}'.format('ID', self.id))
         parts.append('{: <15}=\t{}'.format('Name', self.name))

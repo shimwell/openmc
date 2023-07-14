@@ -65,7 +65,7 @@ class EnergyGroups:
     def __hash__(self):
         return hash(tuple(self.group_edges))
 
-    def __repr__(self):
+    def __str__(self):
         if hasattr(self, '_name'):
             return f"<EnergyGroups: {self.num_groups} groups ({self._name})>"
         else:

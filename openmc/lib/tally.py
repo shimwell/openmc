@@ -449,7 +449,7 @@ class _TallyMapping(Mapping):
     def __len__(self):
         return _dll.tallies_size()
 
-    def __repr__(self):
+    def __str__(self):
         return repr(dict(self))
 
     def __delitem__(self, key):

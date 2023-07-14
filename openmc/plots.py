@@ -651,7 +651,7 @@ class Plot(PlotBase):
 
         self._meshlines = meshlines
 
-    def __repr__(self):
+    def __str__(self):
         string = 'Plot\n'
         string += '{: <16}=\t{}\n'.format('\tID', self._id)
         string += '{: <16}=\t{}\n'.format('\tName', self._name)
@@ -1221,7 +1221,7 @@ class ProjectionPlot(PlotBase):
 
         return element
 
-    def __repr__(self):
+    def __str__(self):
         string = 'Projection Plot\n'
         string += '{: <16}=\t{}\n'.format('\tID', self._id)
         string += '{: <16}=\t{}\n'.format('\tName', self._name)

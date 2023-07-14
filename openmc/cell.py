@@ -121,7 +121,7 @@ class Cell(IDManagerMixin):
         else:
             return point in self.region
 
-    def __repr__(self):
+    def __str__(self):
         string = 'Cell\n'
         string += '{: <16}=\t{}\n'.format('\tID', self.id)
         string += '{: <16}=\t{}\n'.format('\tName', self.name)

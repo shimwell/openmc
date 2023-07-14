@@ -26,7 +26,7 @@ states : numpy.ndarray
 """
 def _particle_track_repr(self):
     return f"<ParticleTrack: {self.particle}, {len(self.states)} states>"
-ParticleTrack.__repr__ = _particle_track_repr
+ParticleTrack.__str__ = _particle_track_repr
 
 
 _VERSION_TRACK = 3
@@ -78,7 +78,7 @@ class Track(Sequence):
             tracks_list.append(ParticleTrack(ptype, tracks[start:end]))
         self.particle_tracks = tracks_list
 
-    def __repr__(self):
+    def __str__(self):
         return f'<Track {self.identifier}: {len(self.particle_tracks)} particles>'
 
     def __getitem__(self, index):

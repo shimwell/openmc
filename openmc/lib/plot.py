@@ -43,7 +43,7 @@ class _Position(Structure):
         else:
             raise IndexError("{} index is invalid for _Position".format(idx))
 
-    def __repr__(self):
+    def __str__(self):
         return "({}, {}, {})".format(self.x, self.y, self.z)
 
 
@@ -195,7 +195,7 @@ class _PlotBase(Structure):
     def color_overlaps(self, val):
         self.color_overlaps_ = val
 
-    def __repr__(self):
+    def __str__(self):
         out_str = ["-----",
                    "Plot:",
                    "-----",

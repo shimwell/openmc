@@ -610,7 +610,7 @@ class _DLLGlobal:
 
 
 class _FortranObject:
-    def __repr__(self):
+    def __str__(self):
         return "{}[{}]".format(type(self).__name__, self._index)
 
 

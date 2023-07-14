@@ -125,7 +125,7 @@ class IncidentNeutron(EqualityMixin):
             else:
                 raise KeyError('No reaction with MT={}.'.format(mt))
 
-    def __repr__(self):
+    def __str__(self):
         return "<IncidentNeutron: {}>".format(self.name)
 
     def __iter__(self):

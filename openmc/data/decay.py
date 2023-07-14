@@ -219,7 +219,7 @@ class DecayMode(EqualityMixin):
         self.energy = energy
         self.branching_ratio = branching_ratio
 
-    def __repr__(self):
+    def __str__(self):
         return ('<DecayMode: ({}), {} -> {}, {}>'.format(
             ','.join(self.modes), self.parent, self.daughter,
             self.branching_ratio))

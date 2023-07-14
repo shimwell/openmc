@@ -41,7 +41,7 @@ class BoundingBox(tuple):
         upper_right = np.array(upper_right, dtype=float)
         return tuple.__new__(cls, (lower_left, upper_right))
 
-    def __repr__(self) -> str:
+    def __str__(self) -> str:
         return "BoundingBox(lower_left={}, upper_right={})".format(
             tuple(self.lower_left), tuple(self.upper_right))
 

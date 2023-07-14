@@ -454,7 +454,7 @@ class IncidentPhoton(EqualityMixin):
         else:
             raise KeyError('No reaction with MT={}.'.format(mt))
 
-    def __repr__(self):
+    def __str__(self):
         return "<IncidentPhoton: {}>".format(self.name)
 
     def __iter__(self):
@@ -923,7 +923,7 @@ class PhotonReaction(EqualityMixin):
         self._anomalous_real = None
         self._anomalous_imag = None
 
-    def __repr__(self):
+    def __str__(self):
         if self.mt in _REACTION_NAME:
             return "<Photon Reaction: MT={} {}>".format(
                 self.mt, _REACTION_NAME[self.mt][0])

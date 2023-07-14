@@ -613,7 +613,7 @@ class ParticleType(IntEnum):
         except KeyError:
             raise ValueError(f"Invalid string for creation of {cls.__name__}: {value}")
 
-    def __repr__(self) -> str:
+    def __str__(self) -> str:
         """
         Returns a string representation of the ParticleType instance.
 
@@ -624,7 +624,7 @@ class ParticleType(IntEnum):
 
     # needed for < Python 3.11
     def __str__(self) -> str:
-        return self.__repr__()
+        return self.__str__()
 
     # needed for <= 3.7, IntEnum will use the mixed-in type's `__format__` method otherwise
     # this forces it to default to the standard object format, relying on __str__ under the hood
@@ -679,7 +679,7 @@ class SourceParticle:
         self.surf_id = surf_id
         self.particle = particle
 
-    def __repr__(self):
+    def __str__(self):
         name = self.particle.name.lower()
         return f'<SourceParticle: {name} at E={self.E:.6e} eV>'
 

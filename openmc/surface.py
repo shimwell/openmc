@@ -164,7 +164,7 @@ class Surface(IDManagerMixin, ABC):
     def __pos__(self):
         return Halfspace(self, '+')
 
-    def __repr__(self):
+    def __str__(self):
         string = 'Surface\n'
         string += '{0: <16}{1}{2}\n'.format('\tID', '=\t', self._id)
         string += '{0: <16}{1}{2}\n'.format('\tName', '=\t', self._name)

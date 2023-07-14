@@ -48,7 +48,7 @@ class UniverseBase(ABC, IDManagerMixin):
         # Values - Cells
         self._cells = OrderedDict()
 
-    def __repr__(self):
+    def __str__(self):
         string = 'Universe\n'
         string += '{: <16}=\t{}\n'.format('\tID', self._id)
         string += '{: <16}=\t{}\n'.format('\tName', self._name)
@@ -218,8 +218,8 @@ class Universe(UniverseBase):
         if cells is not None:
             self.add_cells(cells)
 
-    def __repr__(self):
-        string = super().__repr__()
+    def __str__(self):
+        string = super().__str__()
         string += '{: <16}=\t{}\n'.format('\tGeom', 'CSG')
         string += '{: <16}=\t{}\n'.format('\tCells', list(self._cells.keys()))
         return string
@@ -824,8 +824,8 @@ class DAGMCUniverse(UniverseBase):
         self.auto_geom_ids = auto_geom_ids
         self.auto_mat_ids = auto_mat_ids
 
-    def __repr__(self):
-        string = super().__repr__()
+    def __str__(self):
+        string = super().__str__()
         string += '{: <16}=\t{}\n'.format('\tGeom', 'DAGMC')
         string += '{: <16}=\t{}\n'.format('\tFile', self.filename)
         return string

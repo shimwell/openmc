@@ -41,7 +41,7 @@ class CompositeSurface(ABC):
             if name != 'plane':
                 getattr(self, name).boundary_type = boundary_type
 
-    def __repr__(self):
+    def __str__(self):
         return "<{} at 0x{:x}>".format(type(self).__name__, id(self))
 
     @property

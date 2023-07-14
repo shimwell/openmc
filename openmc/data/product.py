@@ -45,7 +45,7 @@ class Product(EqualityMixin):
         self.particle = particle
         self.yield_ = Polynomial((1,))  # 0-order polynomial, i.e., a constant
 
-    def __repr__(self):
+    def __str__(self):
         if isinstance(self.yield_, Tabulated1D):
             if np.all(self.yield_.y == self.yield_.y[0]):
                 return "<Product: {}, emission={}, yield={}>".format(

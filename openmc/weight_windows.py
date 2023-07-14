@@ -160,7 +160,7 @@ class WeightWindows(IDManagerMixin):
         self.max_split = max_split
         self.weight_cutoff = weight_cutoff
 
-    def __repr__(self) -> str:
+    def __str__(self) -> str:
         string = type(self).__name__ + '\n'
         string += '{: <16}=\t{}\n'.format('\tID', self._id)
         string += '{: <16}=\t{}\n'.format('\tMesh', self.mesh)
@@ -698,8 +698,7 @@ class WeightWindowGenerator:
         self.update_interval = 1
         self.on_the_fly = True
 
-
-    def __repr__(self):
+    def __str__(self):
         string = type(self).__name__ + '\n'
         string += f'\t{"Mesh":<20}=\t{self.mesh.id}\n'
         string += f'\t{"Particle:":<20}=\t{self.particle_type}\n'

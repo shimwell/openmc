@@ -53,7 +53,7 @@ class CrossScore:
     def __eq__(self, other):
         return str(other) == str(self)
 
-    def __repr__(self):
+    def __str__(self):
         return '({} {} {})'.format(self.left_score, self.binary_op,
                                    self.right_score)
 
@@ -125,7 +125,7 @@ class CrossNuclide:
     def __eq__(self, other):
         return str(other) == str(self)
 
-    def __repr__(self):
+    def __str__(self):
         return self.name
 
     @property
@@ -226,7 +226,7 @@ class CrossFilter:
     def __eq__(self, other):
         return str(other) == str(self)
 
-    def __repr__(self):
+    def __str__(self):
         filter_bins = '({} {} {})'.format(self.left_filter.bins,
                                           self.binary_op,
                                           self.right_filter.bins)
@@ -403,7 +403,7 @@ class AggregateScore:
     def __eq__(self, other):
         return str(other) == str(self)
 
-    def __repr__(self):
+    def __str__(self):
         string = ', '.join(map(str, self.scores))
         string = f'{self.aggregate_op}({string})'
         return string
@@ -473,7 +473,7 @@ class AggregateNuclide:
     def __eq__(self, other):
         return str(other) == str(self)
 
-    def __repr__(self):
+    def __str__(self):
 
         # Append each nuclide in the aggregate to the string
         string = f'{self.aggregate_op}('
@@ -576,7 +576,7 @@ class AggregateFilter:
     def __lt__(self, other):
         return not self > other
 
-    def __repr__(self):
+    def __str__(self):
         parts = [
             'AggregateFilter',
             '{: <16}=\t{}'.format('\tType', self.type),

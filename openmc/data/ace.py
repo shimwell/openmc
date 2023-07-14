@@ -507,7 +507,7 @@ class Table(EqualityMixin):
         xs = self.name.split('.')[1]
         return TableType.from_suffix(xs[-1])
 
-    def __repr__(self):
+    def __str__(self):
         return "<ACE Table: {}>".format(self.name)
 
 
