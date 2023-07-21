@@ -205,7 +205,7 @@ class StructuredMesh(MeshBase):
         # generate a set of edge midpoints for each dimension
         midpoint_grids = []
         # generate the element edge midpoints in order s.t.
-        # the epxected element ordering is preserved with respect to the corner vertices
+        # the expected element ordering is preserved with respect to the corner vertices
 
         # each grid is comprised of the mid points for one dimension and the
         # corner vertices of the other two
