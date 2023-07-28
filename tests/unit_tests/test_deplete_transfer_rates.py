@@ -1,16 +1,16 @@
 """ Tests for TransferRates class """
 
-from pathlib import Path
 from math import exp
+from pathlib import Path
 
-import pytest
 import numpy as np
+import pytest
 
 import openmc
 from openmc.deplete import CoupledOperator
+from openmc.deplete.abc import (_SECONDS_PER_DAY, _SECONDS_PER_HOUR,
+                                _SECONDS_PER_JULIAN_YEAR, _SECONDS_PER_MINUTE)
 from openmc.deplete.transfer_rates import TransferRates
-from openmc.deplete.abc import (_SECONDS_PER_MINUTE, _SECONDS_PER_HOUR,
-                                _SECONDS_PER_DAY, _SECONDS_PER_JULIAN_YEAR)
 
 CHAIN_PATH = Path(__file__).parents[1] / "chain_simple.xml"
 

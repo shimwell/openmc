@@ -1,7 +1,8 @@
-from ctypes import c_int, c_char
+from ctypes import c_char, c_int
 from warnings import warn
 
 import openmc.exceptions as exc
+
 from . import _dll
 
 

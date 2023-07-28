@@ -1,31 +1,32 @@
-from collections.abc import Iterable
-from collections import namedtuple
-from difflib import get_close_matches
-from numbers import Real
-from io import StringIO
 import itertools
 import os
 import re
 import tempfile
+from collections import namedtuple
+from collections.abc import Iterable
+from difflib import get_close_matches
+from io import StringIO
+from numbers import Real
 from warnings import warn
 
-import numpy as np
 import h5py
+import numpy as np
 
 import openmc.checkvalue as cv
 from openmc.mixin import EqualityMixin
 from openmc.stats import Discrete, Tabular
+
 from . import HDF5_VERSION, HDF5_VERSION_MAJOR, endf
-from .data import K_BOLTZMANN, ATOMIC_SYMBOL, EV_PER_MEV, isotopes
-from .ace import Table, get_table, Library
+from .ace import Library, Table, get_table
 from .angle_energy import AngleEnergy
-from .function import Tabulated1D, Function1D, Sum
+from .data import ATOMIC_SYMBOL, EV_PER_MEV, K_BOLTZMANN, isotopes
+from .function import Function1D, Sum, Tabulated1D
 from .njoy import make_ace_thermal
 from .thermal_angle_energy import (CoherentElasticAE, IncoherentElasticAE,
                                    IncoherentElasticAEDiscrete,
+                                   IncoherentInelasticAE,
                                    IncoherentInelasticAEDiscrete,
-                                   IncoherentInelasticAE, MixedElasticAE)
-
+                                   MixedElasticAE)
 
 _THERMAL_NAMES = {
     'c_Al27': ('al', 'al27', 'al-27', '13-al- 27'),

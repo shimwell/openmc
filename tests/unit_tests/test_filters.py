@@ -1,6 +1,7 @@
 import numpy as np
+from pytest import approx, fixture
+
 import openmc
-from pytest import fixture, approx
 
 
 @fixture(scope='module')

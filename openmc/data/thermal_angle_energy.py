@@ -1,8 +1,9 @@
 import numpy as np
 
+import openmc.data
+
 from .angle_energy import AngleEnergy
 from .correlated import CorrelatedAngleEnergy
-import openmc.data
 
 
 class CoherentElasticAE(AngleEnergy):

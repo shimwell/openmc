@@ -1,6 +1,7 @@
 from random import uniform
 
 import pytest
+
 import openmc
 
 

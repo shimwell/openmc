@@ -1,13 +1,11 @@
 import lxml.etree as ET
-
 import numpy as np
-from uncertainties import ufloat
-import openmc
 import pytest
+from uncertainties import ufloat
 
-
+import openmc
+from openmc.data import AVOGADRO, atomic_mass
 from tests.unit_tests import assert_unbounded
-from openmc.data import atomic_mass, AVOGADRO
 
 
 def test_contains():

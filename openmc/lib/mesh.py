@@ -1,5 +1,5 @@
 from collections.abc import Mapping
-from ctypes import (c_int, c_int32, c_char_p, c_double, POINTER,
+from ctypes import (POINTER, c_char_p, c_double, c_int, c_int32,
                     create_string_buffer)
 from weakref import WeakValueDictionary
 

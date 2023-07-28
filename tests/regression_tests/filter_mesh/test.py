@@ -1,9 +1,9 @@
-import numpy as np
 from math import pi
 
-import openmc
+import numpy as np
 import pytest
 
+import openmc
 from tests.testing_harness import HashedPyAPITestHarness
 
 

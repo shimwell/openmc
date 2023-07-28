@@ -1,8 +1,8 @@
-from datetime import datetime
 import glob
-import re
 import os
+import re
 import warnings
+from datetime import datetime
 
 import h5py
 import numpy as np

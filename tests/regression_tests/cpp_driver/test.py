@@ -1,13 +1,13 @@
-from pathlib import Path
 import os
 import shutil
 import subprocess
 import textwrap
+from pathlib import Path
 
-from numpy.testing import assert_allclose
-import openmc
 import pytest
+from numpy.testing import assert_allclose
 
+import openmc
 from tests.regression_tests import config
 from tests.testing_harness import PyAPITestHarness
 

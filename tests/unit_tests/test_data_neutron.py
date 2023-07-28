@@ -1,9 +1,10 @@
-from collections.abc import Mapping, Callable
 import os
+from collections.abc import Callable, Mapping
 
 import numpy as np
 import pandas as pd
 import pytest
+
 import openmc.data
 
 from . import needs_njoy

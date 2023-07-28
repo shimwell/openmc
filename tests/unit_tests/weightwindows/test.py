@@ -8,7 +8,6 @@ from uncertainties import ufloat
 import openmc
 import openmc.lib
 from openmc.stats import Discrete, Point
-
 from tests import cdtemp
 
 

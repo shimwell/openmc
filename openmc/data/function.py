@@ -1,15 +1,16 @@
 from abc import ABC, abstractmethod
-from collections.abc import Iterable, Callable
+from collections.abc import Callable, Iterable
 from functools import reduce
 from itertools import zip_longest
 from math import exp, log
-from numbers import Real, Integral
+from numbers import Integral, Real
 
 import numpy as np
 
 import openmc.checkvalue as cv
 import openmc.data
 from openmc.mixin import EqualityMixin
+
 from .data import EV_PER_MEV
 
 INTERPOLATION_SCHEME = {1: 'histogram', 2: 'linear-linear', 3: 'linear-log',

@@ -1,10 +1,10 @@
 import os
 
-import openmc
-import openmc.model
 import pytest
 
-from tests.testing_harness import TestHarness, PyAPITestHarness
+import openmc
+import openmc.model
+from tests.testing_harness import PyAPITestHarness, TestHarness
 
 
 def make_model():

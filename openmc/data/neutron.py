@@ -1,32 +1,32 @@
+import os
+import tempfile
 from collections import OrderedDict
 from collections.abc import Mapping, MutableMapping
 from io import StringIO
 from math import log10
 from numbers import Integral, Real
-import os
-import tempfile
 from warnings import warn
 
-import numpy as np
 import h5py
+import numpy as np
 
-from . import HDF5_VERSION, HDF5_VERSION_MAJOR
-from .ace import Library, Table, get_table, get_metadata
-from .data import ATOMIC_SYMBOL, K_BOLTZMANN, EV_PER_MEV
-from .endf import (
-    Evaluation, SUM_RULES, get_head_record, get_tab1_record, get_evaluations)
-from .fission_energy import FissionEnergyRelease
-from .function import Tabulated1D, Sum, ResonancesWithBackground
-from .grid import linearize, thin
-from .njoy import make_ace
-from .product import Product
-from .reaction import Reaction, _get_photon_products_ace, FISSION_MTS
-from . import resonance as res
-from . import resonance_covariance as res_cov
-from .urr import ProbabilityTables
 import openmc.checkvalue as cv
 from openmc.mixin import EqualityMixin
 
+from . import HDF5_VERSION, HDF5_VERSION_MAJOR
+from . import resonance as res
+from . import resonance_covariance as res_cov
+from .ace import Library, Table, get_metadata, get_table
+from .data import ATOMIC_SYMBOL, EV_PER_MEV, K_BOLTZMANN
+from .endf import (SUM_RULES, Evaluation, get_evaluations, get_head_record,
+                   get_tab1_record)
+from .fission_energy import FissionEnergyRelease
+from .function import ResonancesWithBackground, Sum, Tabulated1D
+from .grid import linearize, thin
+from .njoy import make_ace
+from .product import Product
+from .reaction import FISSION_MTS, Reaction, _get_photon_products_ace
+from .urr import ProbabilityTables
 
 # Fractions of resonance widths used for reconstructing resonances
 _RESONANCE_ENERGY_GRID = np.logspace(-3, 3, 61)

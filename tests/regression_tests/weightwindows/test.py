@@ -1,10 +1,10 @@
 from copy import deepcopy
-import pytest
+
 import numpy as np
+import pytest
 
 import openmc
 from openmc.stats import Discrete, Point
-
 from tests.testing_harness import HashedPyAPITestHarness
 
 

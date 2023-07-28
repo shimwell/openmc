@@ -1,16 +1,16 @@
-from collections import OrderedDict
 import copy
 import itertools
-from numbers import Integral
 import os
+from collections import OrderedDict
+from numbers import Integral
 
 import numpy as np
 
 import openmc
 import openmc.checkvalue as cv
 from openmc.mgxs import MGXS
-from .mgxs import _DOMAIN_TO_FILTER
 
+from .mgxs import _DOMAIN_TO_FILTER
 
 # Supported cross section types
 MDGXS_TYPES = (

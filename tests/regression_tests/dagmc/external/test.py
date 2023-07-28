@@ -1,13 +1,13 @@
-from pathlib import Path
 import os
 import shutil
 import subprocess
 import textwrap
+from pathlib import Path
+
+import pytest
 
 import openmc
 import openmc.lib
-import pytest
-
 from tests.regression_tests import config
 from tests.testing_harness import PyAPITestHarness
 

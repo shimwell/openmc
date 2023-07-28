@@ -5,7 +5,6 @@ import os
 
 from tests.testing_harness import *
 
-
 settings1="""<?xml version="1.0"?>
 <settings>
   <state_point batches="10" />

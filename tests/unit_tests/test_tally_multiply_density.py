@@ -1,6 +1,7 @@
 import numpy as np
-import openmc
 import pytest
+
+import openmc
 
 
 def test_micro_macro_compare():

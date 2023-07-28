@@ -1,13 +1,14 @@
 from itertools import product
+from pathlib import Path
 
 import numpy as np
-from pathlib import Path
 import pytest
 
 vtk = pytest.importorskip("vtk")
 from vtk.util import numpy_support as nps
 
 import openmc
+
 
 @pytest.fixture
 def model():

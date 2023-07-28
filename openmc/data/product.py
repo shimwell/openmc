@@ -5,8 +5,9 @@ import numpy as np
 
 import openmc.checkvalue as cv
 from openmc.mixin import EqualityMixin
+
 from .angle_energy import AngleEnergy
-from .function import Tabulated1D, Polynomial, Function1D
+from .function import Function1D, Polynomial, Tabulated1D
 
 
 class Product(EqualityMixin):

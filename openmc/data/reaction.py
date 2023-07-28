@@ -1,4 +1,4 @@
-from collections.abc import Iterable, Callable, MutableMapping
+from collections.abc import Callable, Iterable, MutableMapping
 from copy import deepcopy
 from io import StringIO
 from numbers import Real
@@ -8,22 +8,22 @@ import numpy as np
 
 import openmc.checkvalue as cv
 from openmc.mixin import EqualityMixin
-from openmc.stats import Uniform, Tabular, Legendre
+from openmc.stats import Legendre, Tabular, Uniform
+
 from .angle_distribution import AngleDistribution
 from .angle_energy import AngleEnergy
 from .correlated import CorrelatedAngleEnergy
-from .data import ATOMIC_SYMBOL, K_BOLTZMANN, EV_PER_MEV
-from .endf import get_head_record, get_tab1_record, get_list_record, \
-    get_tab2_record, get_cont_record
-from .energy_distribution import EnergyDistribution, LevelInelastic, \
-    DiscretePhoton
-from .function import Tabulated1D, Polynomial
+from .data import ATOMIC_SYMBOL, EV_PER_MEV, K_BOLTZMANN
+from .endf import (get_cont_record, get_head_record, get_list_record,
+                   get_tab1_record, get_tab2_record)
+from .energy_distribution import (DiscretePhoton, EnergyDistribution,
+                                  LevelInelastic)
+from .function import Polynomial, Tabulated1D
 from .kalbach_mann import KalbachMann
 from .laboratory import LaboratoryAngleEnergy
 from .nbody import NBodyPhaseSpace
 from .product import Product
 from .uncorrelated import UncorrelatedAngleEnergy
-
 
 REACTION_NAME = {1: '(n,total)', 2: '(n,elastic)', 4: '(n,level)',
                  5: '(n,misc)', 11: '(n,2nd)', 16: '(n,2n)', 17: '(n,3n)',

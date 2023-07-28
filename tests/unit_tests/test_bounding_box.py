@@ -1,7 +1,7 @@
 import numpy as np
-import openmc
 import pytest
 
+import openmc
 
 test_bb_1 = openmc.BoundingBox((-10.0, -20.0, -30.0), (1.0, 2.0, 3.0))
 test_bb_2 = openmc.BoundingBox((1.0, 2.0, 3.0), (11.0, 22.0, 33.0))

@@ -1,10 +1,11 @@
 """Tests the Results class"""
 
-from pathlib import Path
 from math import inf
+from pathlib import Path
 
 import numpy as np
 import pytest
+
 import openmc.deplete
 
 

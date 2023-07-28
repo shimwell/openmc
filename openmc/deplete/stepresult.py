@@ -13,8 +13,9 @@ import h5py
 import numpy as np
 
 import openmc
-from openmc.mpi import comm, MPI
 from openmc.checkvalue import PathLike
+from openmc.mpi import MPI, comm
+
 from .reaction_rates import ReactionRates
 
 VERSION_RESULTS = (1, 1)

@@ -1,8 +1,9 @@
-from collections.abc import Mapping
 import os
+from collections.abc import Mapping
+
+import pytest
 
 import openmc
-import pytest
 
 
 @pytest.fixture(autouse=True, scope='module')

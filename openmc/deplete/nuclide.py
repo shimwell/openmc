@@ -4,12 +4,12 @@ Contains the per-nuclide components of a depletion chain.
 """
 
 import bisect
+from collections import defaultdict, namedtuple
 from collections.abc import Mapping
-from collections import namedtuple, defaultdict
-from warnings import warn
 from numbers import Real
-import lxml.etree as ET
+from warnings import warn
 
+import lxml.etree as ET
 import numpy as np
 
 from openmc.checkvalue import check_type

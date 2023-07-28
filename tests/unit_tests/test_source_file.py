@@ -2,8 +2,9 @@ from random import random
 
 import h5py
 import numpy as np
-import openmc
 import pytest
+
+import openmc
 
 
 def test_source_file(run_in_tmpdir):

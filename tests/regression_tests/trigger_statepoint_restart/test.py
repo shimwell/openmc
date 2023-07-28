@@ -1,11 +1,11 @@
 import glob
 import os
 
-import openmc
 import pytest
 
-from tests.testing_harness import PyAPITestHarness
+import openmc
 from tests.regression_tests import config
+from tests.testing_harness import PyAPITestHarness
 
 
 @pytest.fixture

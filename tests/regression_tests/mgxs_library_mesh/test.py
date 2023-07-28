@@ -1,9 +1,9 @@
 import hashlib
 
-import openmc
-import openmc.mgxs
 import pytest
 
+import openmc
+import openmc.mgxs
 from tests.testing_harness import PyAPITestHarness
 
 

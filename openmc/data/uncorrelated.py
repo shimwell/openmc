@@ -1,9 +1,10 @@
 import numpy as np
 
 import openmc.checkvalue as cv
+
+from .angle_distribution import AngleDistribution
 from .angle_energy import AngleEnergy
 from .energy_distribution import EnergyDistribution
-from .angle_distribution import AngleDistribution
 
 
 class UncorrelatedAngleEnergy(AngleEnergy):

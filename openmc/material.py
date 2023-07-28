@@ -1,26 +1,27 @@
 from __future__ import annotations
-from collections import OrderedDict, defaultdict, namedtuple, Counter
+
+import re
+import typing  # imported separately as py3.8 requires typing.Iterable
+import warnings
+from collections import Counter, OrderedDict, defaultdict, namedtuple
 from collections.abc import Iterable
 from copy import deepcopy
 from numbers import Real
 from pathlib import Path
-import re
-import typing  # imported separately as py3.8 requires typing.Iterable
-import warnings
-from typing import Optional, List, Union, Dict
-import lxml.etree as ET
+from typing import Dict, List, Optional, Union
 
-import numpy as np
 import h5py
+import lxml.etree as ET
+import numpy as np
 
 import openmc
-import openmc.data
 import openmc.checkvalue as cv
-from ._xml import clean_indentation, reorder_attributes
-from .mixin import IDManagerMixin
+import openmc.data
 from openmc.checkvalue import PathLike
 from openmc.stats import Univariate
 
+from ._xml import clean_indentation, reorder_attributes
+from .mixin import IDManagerMixin
 
 # Units for density supported by OpenMC
 DENSITY_UNITS = ('g/cm3', 'g/cc', 'kg/m3', 'atom/b-cm', 'atom/cm3', 'sum',

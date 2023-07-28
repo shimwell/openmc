@@ -1,7 +1,8 @@
 import numpy as np
-import openmc
-from pkg_resources import parse_version
 import pytest
+from pkg_resources import parse_version
+
+import openmc
 
 
 @pytest.fixture(scope='module', autouse=True)

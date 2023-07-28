@@ -1,21 +1,21 @@
-from abc import ABC, abstractproperty, abstractmethod
+import copy
+import itertools
+import random
+import warnings
+from abc import ABC, abstractmethod, abstractproperty
 from collections import Counter, defaultdict
 from collections.abc import Iterable
-import copy
-from heapq import heappush, heappop
-import itertools
-from math import pi, sin, cos, floor, log10, sqrt
+from heapq import heappop, heappush
+from math import cos, floor, log10, pi, sin, sqrt
 from numbers import Real
-import random
-from random import uniform, gauss
-import warnings
+from random import gauss, uniform
 
 import numpy as np
 import scipy.spatial
 
 import openmc
-from ..checkvalue import check_type
 
+from ..checkvalue import check_type
 
 MAX_PF_RSP = 0.38  # maximum packing fraction for random sequential packing
 MAX_PF_CRP = 0.64  # maximum packing fraction for close random packing

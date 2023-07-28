@@ -1,6 +1,6 @@
-import openmc
 from pytest import approx, raises
 
+import openmc
 from openmc.data import NATURAL_ABUNDANCE, atomic_mass
 
 

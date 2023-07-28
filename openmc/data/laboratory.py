@@ -1,12 +1,13 @@
 from collections.abc import Iterable
-from numbers import Real, Integral
+from numbers import Integral, Real
 
 import numpy as np
 
 import openmc.checkvalue as cv
 from openmc.stats import Tabular, Univariate
+
 from .angle_energy import AngleEnergy
-from .endf import get_tab2_record, get_tab1_record
+from .endf import get_tab1_record, get_tab2_record
 
 
 class LaboratoryAngleEnergy(AngleEnergy):

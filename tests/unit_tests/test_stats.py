@@ -2,6 +2,7 @@ from math import pi
 
 import numpy as np
 import pytest
+
 import openmc
 import openmc.stats
 

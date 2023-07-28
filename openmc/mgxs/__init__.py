@@ -2,8 +2,8 @@ import numpy as np
 
 from openmc.mgxs.groups import EnergyGroups
 from openmc.mgxs.library import Library
-from openmc.mgxs.mgxs import *
 from openmc.mgxs.mdgxs import *
+from openmc.mgxs.mgxs import *
 
 GROUP_STRUCTURES = {}
 """Dictionary of commonly used energy group structures:

@@ -1,11 +1,13 @@
-from collections import OrderedDict
 import re
+from collections import OrderedDict
+
 import lxml.etree as ET
 
-import openmc.checkvalue as cv
 import openmc
-from openmc.data import NATURAL_ABUNDANCE, atomic_mass, zam, \
-    isotopes as natural_isotopes
+import openmc.checkvalue as cv
+from openmc.data import NATURAL_ABUNDANCE, atomic_mass
+from openmc.data import isotopes as natural_isotopes
+from openmc.data import zam
 
 
 class Element(str):

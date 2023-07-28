@@ -13,10 +13,11 @@ import numpy as np
 import openmc
 from openmc.exceptions import DataError
 from openmc.mpi import comm
-from .abc import TransportOperator, OperatorResult
+
+from .abc import OperatorResult, TransportOperator
 from .atom_number import AtomNumber
-from .reaction_rates import ReactionRates
 from .pool import _distribute
+from .reaction_rates import ReactionRates
 
 __all__ = ["OpenMCOperator", "OperatorResult"]
 

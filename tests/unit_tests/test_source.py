@@ -1,11 +1,12 @@
 from math import pi
 
-import openmc
-import openmc.lib
-import openmc.stats
 import numpy as np
 import pytest
 from pytest import approx
+
+import openmc
+import openmc.lib
+import openmc.stats
 
 
 def test_source():

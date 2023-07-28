@@ -14,12 +14,14 @@ from uncertainties import ufloat
 import openmc
 from openmc.checkvalue import check_type
 from openmc.mpi import comm
-from .abc import ReactionRateHelper, OperatorResult
+
+from .abc import OperatorResult, ReactionRateHelper
+from .helpers import (ChainFissionHelper, ConstantFissionYieldHelper,
+                      SourceRateHelper)
+from .microxs import MicroXS
 from .openmc_operator import OpenMCOperator
 from .pool import _distribute
-from .microxs import MicroXS
 from .results import Results
-from .helpers import ChainFissionHelper, ConstantFissionYieldHelper, SourceRateHelper
 
 
 class IndependentOperator(OpenMCOperator):

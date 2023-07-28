@@ -1,8 +1,8 @@
+import pytest
+
 import openmc
 import openmc.lib
 from openmc.stats import Box
-
-import pytest
 from tests.testing_harness import PyAPITestHarness
 
 pytestmark = pytest.mark.skipif(

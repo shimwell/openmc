@@ -1,12 +1,11 @@
 import shutil
+from pathlib import Path
 
 import numpy as np
-from pathlib import Path
 import pytest
 
 import openmc
 import openmc.lib
-
 from tests import cdtemp
 
 pytestmark = pytest.mark.skipif(

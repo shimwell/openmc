@@ -1,9 +1,10 @@
-import lxml.etree as ET
 from pathlib import Path
 
+import lxml.etree as ET
 import numpy as np
-import openmc
 import pytest
+
+import openmc
 
 
 def test_volume(run_in_tmpdir, uo2):

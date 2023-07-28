@@ -1,14 +1,14 @@
 import filecmp
 import glob
-from itertools import product
 import os
 import warnings
+from itertools import product
+
+import numpy as np
+import pytest
 
 import openmc
 import openmc.lib
-import numpy as np
-
-import pytest
 from tests.testing_harness import PyAPITestHarness
 
 

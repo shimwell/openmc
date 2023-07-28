@@ -7,10 +7,10 @@ from copy import deepcopy
 from numbers import Integral, Real
 from pathlib import Path
 from tempfile import TemporaryDirectory
-import lxml.etree as ET
 from warnings import warn
 
 import h5py
+import lxml.etree as ET
 import numpy as np
 
 import openmc

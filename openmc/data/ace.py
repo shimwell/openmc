@@ -15,16 +15,17 @@ generates ACE-format cross sections.
 
 """
 
-from collections import OrderedDict
 import enum
-from pathlib import Path
 import struct
+from collections import OrderedDict
+from pathlib import Path
 
 import numpy as np
 
 import openmc.checkvalue as cv
 from openmc.mixin import EqualityMixin
-from .data import ATOMIC_SYMBOL, gnds_name, EV_PER_MEV, K_BOLTZMANN
+
+from .data import ATOMIC_SYMBOL, EV_PER_MEV, K_BOLTZMANN, gnds_name
 from .endf import ENDF_FLOAT_RE
 
 

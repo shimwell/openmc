@@ -1,5 +1,6 @@
-from openmc.data import endf
 from pytest import approx
+
+from openmc.data import endf
 
 
 def test_float_endf():

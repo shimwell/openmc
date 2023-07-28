@@ -1,10 +1,11 @@
+import copy
 import glob
 import os
-import copy
 
-from tests.testing_harness import CMFDTestHarness
-from openmc import cmfd
 import numpy as np
+
+from openmc import cmfd
+from tests.testing_harness import CMFDTestHarness
 
 
 class CMFDRestartTestHarness(CMFDTestHarness):

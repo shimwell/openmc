@@ -1,6 +1,7 @@
 """Tests for the openmc.deplete.ReactionRates class."""
 
 import numpy as np
+
 from openmc.deplete import ReactionRates
 
 

@@ -4,7 +4,6 @@ from argparse import ArgumentParser
 
 import openmc
 
-
 if __name__ == "__main__":
     # Process command line arguments
     parser = ArgumentParser('Converts a voxel HDF5 file to a VTK file')

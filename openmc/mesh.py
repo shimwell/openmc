@@ -1,19 +1,20 @@
+import typing
+import warnings
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
 from math import pi
-from numbers import Real, Integral
+from numbers import Integral, Real
 from pathlib import Path
-import typing
-import warnings
-import lxml.etree as ET
 
 import h5py
+import lxml.etree as ET
 import numpy as np
 
-import openmc.checkvalue as cv
 import openmc
-from ._xml import get_text
+import openmc.checkvalue as cv
 from openmc.checkvalue import PathLike
+
+from ._xml import get_text
 from .mixin import IDManagerMixin
 from .surface import _BOUNDARY_TYPES
 

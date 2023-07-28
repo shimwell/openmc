@@ -1,11 +1,11 @@
 import difflib
 import filecmp
-import numpy as np
 from pathlib import Path
 
-import openmc
+import numpy as np
 import pytest
 
+import openmc
 from tests.regression_tests import config
 
 pytest.importorskip('vtk')

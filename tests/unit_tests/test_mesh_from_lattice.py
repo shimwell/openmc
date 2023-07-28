@@ -1,6 +1,7 @@
 import numpy as np
-import openmc
 import pytest
+
+import openmc
 
 
 @pytest.fixture(scope='module')

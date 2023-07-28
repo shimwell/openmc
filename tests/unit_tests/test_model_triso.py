@@ -3,12 +3,12 @@
 from math import pi
 
 import numpy as np
-from numpy.linalg import norm
-import openmc
-import openmc.model
 import pytest
 import scipy.spatial
+from numpy.linalg import norm
 
+import openmc
+import openmc.model
 
 _RADIUS = 0.1
 _PACKING_FRACTION = 0.35

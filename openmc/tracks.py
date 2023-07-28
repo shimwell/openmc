@@ -1,12 +1,11 @@
 from collections import namedtuple
 from collections.abc import Sequence
+from pathlib import Path
 
 import h5py
 
 from .checkvalue import check_filetype_version
-from .source import SourceParticle, ParticleType
-
-from pathlib import Path
+from .source import ParticleType, SourceParticle
 
 ParticleTrack = namedtuple('ParticleTrack', ['particle', 'states'])
 ParticleTrack.__doc__ = """\

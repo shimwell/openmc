@@ -7,11 +7,12 @@ import numpy as np
 
 import openmc.checkvalue as cv
 from openmc.mixin import EqualityMixin
-from openmc.stats import Univariate, Tabular, Uniform, Legendre
-from .function import INTERPOLATION_SCHEME
+from openmc.stats import Legendre, Tabular, Uniform, Univariate
+
 from .data import EV_PER_MEV
-from .endf import get_head_record, get_cont_record, get_tab1_record, \
-    get_list_record, get_tab2_record
+from .endf import (get_cont_record, get_head_record, get_list_record,
+                   get_tab1_record, get_tab2_record)
+from .function import INTERPOLATION_SCHEME
 
 
 class AngleDistribution(EqualityMixin):

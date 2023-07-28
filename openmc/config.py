@@ -1,7 +1,7 @@
-from collections.abc import MutableMapping
 import os
-from pathlib import Path
 import warnings
+from collections.abc import MutableMapping
+from pathlib import Path
 
 from openmc.data import DataLibrary
 from openmc.data.decay import _DECAY_PHOTON_ENERGY

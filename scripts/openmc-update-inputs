@@ -4,13 +4,12 @@
 """
 
 import argparse
+import xml.etree.ElementTree as ET
 from itertools import chain
 from random import randint
 from shutil import move
-import xml.etree.ElementTree as ET
 
 import openmc.data
-
 
 description = "Update OpenMC's input XML files to the latest format."
 epilog = """\

@@ -1,10 +1,11 @@
+import math
 from functools import partial
-from random import uniform, seed
+from random import seed, uniform
 
 import numpy as np
-import math
-import openmc
 import pytest
+
+import openmc
 
 
 def assert_infinite_bb(s):

@@ -1,5 +1,5 @@
-from tests.testing_harness import CMFDTestHarness
 from openmc import cmfd
+from tests.testing_harness import CMFDTestHarness
 
 
 def test_cmfd_feed_rolling_window():

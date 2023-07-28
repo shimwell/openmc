@@ -1,11 +1,10 @@
-import os
 import glob
+import os
 
 import numpy as np
 import pytest
 
 import openmc
-
 from tests.testing_harness import PyAPITestHarness
 
 

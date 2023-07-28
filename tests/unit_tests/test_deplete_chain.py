@@ -1,17 +1,17 @@
 """Tests for openmc.deplete.Chain class."""
 
+import os
 from collections.abc import Mapping
 from itertools import product
 from math import log
-import os
 from pathlib import Path
 
 import numpy as np
-from openmc.mpi import comm
-from openmc.deplete import Chain, reaction_rates, nuclide, cram, pool
-from openmc.stats import Discrete
 import pytest
 
+from openmc.deplete import Chain, cram, nuclide, pool, reaction_rates
+from openmc.mpi import comm
+from openmc.stats import Discrete
 from tests import cdtemp
 
 _TEST_CHAIN = """\

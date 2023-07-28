@@ -1,8 +1,9 @@
 from pathlib import Path
 
+import pytest
+
 import openmc
 import openmc.examples
-import pytest
 
 
 @pytest.fixture(scope='module')

@@ -5,12 +5,12 @@ import numpy as np
 import scipy.sparse as sp
 from uncertainties import ufloat
 
+from openmc.deplete import (CECMIntegrator, CELIIntegrator, CF4Integrator,
+                            EPCRK4Integrator, LEQIIntegrator,
+                            PredictorIntegrator, SICELIIntegrator,
+                            SILEQIIntegrator)
+from openmc.deplete.abc import OperatorResult, TransportOperator
 from openmc.deplete.reaction_rates import ReactionRates
-from openmc.deplete.abc import TransportOperator, OperatorResult
-from openmc.deplete import (
-    CECMIntegrator, PredictorIntegrator, CELIIntegrator, LEQIIntegrator,
-    EPCRK4Integrator, CF4Integrator, SICELIIntegrator, SILEQIIntegrator
-)
 
 # Bundle for nicely passing test data to depletion unit tests
 # solver should be a concrete subclass of openmc.deplete.abc.Integrator

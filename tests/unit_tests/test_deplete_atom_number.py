@@ -1,6 +1,7 @@
 """ Tests for the AtomNumber class """
 
 import numpy as np
+
 from openmc.deplete import atom_number
 
 

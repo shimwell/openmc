@@ -1,16 +1,17 @@
+import types
 from abc import ABC
 from collections import OrderedDict
 from collections.abc import Iterable
 from copy import deepcopy
-from math import sqrt, floor
+from math import floor, sqrt
 from numbers import Real
-import types
-import lxml.etree as ET
 
+import lxml.etree as ET
 import numpy as np
 
 import openmc
 import openmc.checkvalue as cv
+
 from ._xml import get_text
 from .mixin import IDManagerMixin
 

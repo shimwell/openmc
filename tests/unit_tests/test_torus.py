@@ -1,7 +1,9 @@
 from itertools import combinations
 from random import uniform
-import openmc
+
 import pytest
+
+import openmc
 
 
 def get_torus_keff(cls, R, r, center=(0, 0, 0)):

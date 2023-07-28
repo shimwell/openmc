@@ -1,12 +1,13 @@
 #!/usr/bin/env python
 
-from collections.abc import Mapping, Callable
 import os
+from collections.abc import Callable, Mapping
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import pytest
+
 import openmc.data
 
 

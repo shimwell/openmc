@@ -1,9 +1,8 @@
 import lxml.etree as ET
-
 import numpy as np
-import openmc
 import pytest
 
+import openmc
 from tests.unit_tests import assert_unbounded
 
 

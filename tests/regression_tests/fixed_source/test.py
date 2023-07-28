@@ -2,7 +2,6 @@ import numpy as np
 
 import openmc
 import openmc.stats
-
 from tests.testing_harness import PyAPITestHarness
 
 

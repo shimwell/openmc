@@ -1,9 +1,9 @@
 """Regression tests for openmc.deplete.Results.transfer_volumes method."""
 
 from pytest import approx
+
 import openmc
 from openmc.deplete import PredictorIntegrator, Results
-
 from tests import dummy_operator
 
 

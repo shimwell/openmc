@@ -1,10 +1,10 @@
+import os
 from collections import OrderedDict
-from collections.abc import Mapping, Callable
+from collections.abc import Callable, Mapping
 from copy import deepcopy
 from io import StringIO
 from math import pi
 from numbers import Integral, Real
-import os
 
 import h5py
 import numpy as np
@@ -13,12 +13,12 @@ from scipy.interpolate import CubicSpline
 
 import openmc.checkvalue as cv
 from openmc.mixin import EqualityMixin
+
 from . import HDF5_VERSION, HDF5_VERSION_MAJOR
 from .ace import Table, get_metadata, get_table
 from .data import ATOMIC_SYMBOL, EV_PER_MEV
-from .endf import Evaluation, get_head_record, get_tab1_record, get_list_record
+from .endf import Evaluation, get_head_record, get_list_record, get_tab1_record
 from .function import Tabulated1D
-
 
 # Constants
 MASS_ELECTRON_EV = 0.5109989461e6  # Electron mass energy
