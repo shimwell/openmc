@@ -3,9 +3,10 @@
 Compares a few Mathematica matrix exponentials to CRAM16/CRAM48.
 """
 
-from pytest import approx
 import numpy as np
 import scipy.sparse as sp
+from pytest import approx
+
 from openmc.deplete.cram import CRAM16, CRAM48
 
 

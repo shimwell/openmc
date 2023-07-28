@@ -1,7 +1,8 @@
 import os
+import shutil
+
 from tests.regression_tests.mg_temperature.build_2g import *
 from tests.testing_harness import *
-import shutil
 
 
 class MgTemperatureTestHarness(TestHarness):

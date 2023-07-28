@@ -1,7 +1,6 @@
+from openmc import RegularMesh, Tally
 from openmc.filter import *
 from openmc.filter_expansion import *
-from openmc import RegularMesh, Tally
-
 from tests.testing_harness import HashedPyAPITestHarness
 
 

@@ -1,17 +1,17 @@
 """ TransferRates depletion test suite """
 
-from pathlib import Path
 import shutil
 import sys
+from pathlib import Path
 
 import numpy as np
 import pytest
+
 import openmc
 import openmc.deplete
 from openmc.deplete import CoupledOperator
-
-from tests.regression_tests import config, assert_reaction_rates_equal, \
-    assert_atoms_equal
+from tests.regression_tests import (assert_atoms_equal,
+                                    assert_reaction_rates_equal, config)
 
 
 @pytest.fixture

@@ -1,5 +1,6 @@
-import openmc.deplete
 import pytest
+
+import openmc.deplete
 
 
 def test_deplete_decay_products(run_in_tmpdir):

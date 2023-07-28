@@ -4,7 +4,6 @@ An ndarray to store reaction rates with string, integer, or slice indexing.
 """
 import numpy as np
 
-
 __all__ = ["ReactionRates"]
 
 

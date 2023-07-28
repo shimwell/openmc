@@ -1,22 +1,22 @@
+import re
 from collections.abc import Iterable
 from io import StringIO
 from math import log
-import re
 from typing import Optional
 from warnings import warn
 
 import numpy as np
-from uncertainties import ufloat, UFloat
+from uncertainties import UFloat, ufloat
 
 import openmc
 import openmc.checkvalue as cv
 from openmc.exceptions import DataError
 from openmc.mixin import EqualityMixin
 from openmc.stats import Discrete, Tabular, Univariate, combine_distributions
-from .data import ATOMIC_SYMBOL, ATOMIC_NUMBER
-from .function import INTERPOLATION_SCHEME
-from .endf import Evaluation, get_head_record, get_list_record, get_tab1_record
 
+from .data import ATOMIC_NUMBER, ATOMIC_SYMBOL
+from .endf import Evaluation, get_head_record, get_list_record, get_tab1_record
+from .function import INTERPOLATION_SCHEME
 
 # Gives name and (change in A, change in Z) resulting from decay
 _DECAY_MODES = {

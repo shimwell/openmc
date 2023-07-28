@@ -1,10 +1,12 @@
 #!/usr/bin/env python
-import openmc.lib
-import pytest
 import glob
 import os
 
+import pytest
+
+import openmc.lib
 from tests.testing_harness import *
+
 pytestmark = pytest.mark.skipif(
     not openmc.lib._mcpl_enabled(),
     reason="MCPL is not enabled.")

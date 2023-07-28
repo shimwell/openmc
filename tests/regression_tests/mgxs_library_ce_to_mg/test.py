@@ -3,9 +3,8 @@ import os
 import openmc
 import openmc.mgxs
 from openmc.examples import pwr_pin_cell
-
-from tests.testing_harness import PyAPITestHarness
 from tests.regression_tests import config
+from tests.testing_harness import PyAPITestHarness
 
 
 class MGXSTestHarness(PyAPITestHarness):

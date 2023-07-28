@@ -1,9 +1,10 @@
-from collections.abc import Iterable
-from numbers import Integral
 import os
 import subprocess
+from collections.abc import Iterable
+from numbers import Integral
 
 import openmc
+
 from .plots import _get_plot_image
 
 

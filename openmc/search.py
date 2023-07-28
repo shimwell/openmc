@@ -4,9 +4,8 @@ from numbers import Real
 import scipy.optimize as sopt
 
 import openmc
-import openmc.model
 import openmc.checkvalue as cv
-
+import openmc.model
 
 _SCALAR_BRACKETED_METHODS = ['brentq', 'brenth', 'ridder', 'bisect']
 

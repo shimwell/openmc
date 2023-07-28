@@ -1,12 +1,12 @@
-from pathlib import Path
 import os
 import shutil
 import subprocess
 import textwrap
+from pathlib import Path
 
-import openmc
 import pytest
 
+import openmc
 from tests.testing_harness import PyAPITestHarness
 
 

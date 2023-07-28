@@ -1,6 +1,7 @@
 
 import openmc
 
+
 def test_tally_trigger(run_in_tmpdir):
     pincell = openmc.examples.pwr_pin_cell()
 

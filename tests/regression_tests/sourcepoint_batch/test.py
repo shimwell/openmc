@@ -1,7 +1,6 @@
 import glob
 
 from openmc import StatePoint
-
 from tests.testing_harness import TestHarness
 
 

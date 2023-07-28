@@ -1,8 +1,9 @@
 from math import pi
 
+import matplotlib.pyplot as plt
+
 import openmc
 import openmc.deplete
-import matplotlib.pyplot as plt
 
 ###############################################################################
 #                              Define materials

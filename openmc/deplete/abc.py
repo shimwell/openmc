@@ -3,29 +3,29 @@
 This module contains Abstract Base Classes for implementing operator, integrator, depletion system solver, and operator helper classes
 """
 
+import os
+import time
 from abc import ABC, abstractmethod
-from collections import namedtuple, defaultdict
-from collections.abc import Iterable, Callable
+from collections import defaultdict, namedtuple
+from collections.abc import Callable, Iterable
+from contextlib import contextmanager
 from copy import deepcopy
 from inspect import signature
-from numbers import Real, Integral
-from contextlib import contextmanager
-import os
+from numbers import Integral, Real
 from pathlib import Path
-import time
 from warnings import warn
 
-from numpy import nonzero, empty, asarray
+from numpy import asarray, empty, nonzero
 from uncertainties import ufloat
 
-from openmc.checkvalue import check_type, check_greater_than
+from openmc.checkvalue import check_greater_than, check_type
 from openmc.mpi import comm
-from .stepresult import StepResult
-from .chain import Chain
-from .results import Results
-from .pool import deplete
-from .transfer_rates import TransferRates
 
+from .chain import Chain
+from .pool import deplete
+from .results import Results
+from .stepresult import StepResult
+from .transfer_rates import TransferRates
 
 __all__ = [
     "OperatorResult", "TransportOperator",

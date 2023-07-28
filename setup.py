@@ -2,11 +2,10 @@
 
 import glob
 import sys
+
 import numpy as np
-
-from setuptools import setup, find_packages
 from Cython.Build import cythonize
-
+from setuptools import find_packages, setup
 
 # Determine shared library suffix
 if sys.platform == 'darwin':

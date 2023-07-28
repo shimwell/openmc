@@ -1,9 +1,10 @@
-from libc.stdlib cimport malloc, calloc, free
-from libc.math cimport cos, sin, sqrt, atan, M_PI
-
 cimport numpy as np
+from libc.math cimport M_PI, atan, cos, sin, sqrt
+from libc.stdlib cimport calloc, free, malloc
+
 import numpy as np
 from numpy.linalg import inv
+
 cimport cython
 
 

@@ -1,10 +1,10 @@
-from ctypes import (c_bool, c_int, c_size_t, c_int32,
-                    c_double, Structure, POINTER)
+from ctypes import (POINTER, Structure, c_bool, c_double, c_int, c_int32,
+                    c_size_t)
+
+import numpy as np
 
 from . import _dll
 from .error import _error_handler
-
-import numpy as np
 
 
 class _Position(Structure):

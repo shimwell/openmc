@@ -1,18 +1,19 @@
 from collections.abc import Mapping
-from ctypes import c_int, c_int32, c_size_t, c_double, c_char_p, c_bool, POINTER
+from ctypes import (POINTER, c_bool, c_char_p, c_double, c_int, c_int32,
+                    c_size_t)
 from weakref import WeakValueDictionary
 
 import numpy as np
-from numpy.ctypeslib import as_array
 import scipy.stats
+from numpy.ctypeslib import as_array
 
-from openmc.exceptions import AllocationError, InvalidIDError
 from openmc.data.reaction import REACTION_NAME
-from . import _dll, Nuclide
+from openmc.exceptions import AllocationError, InvalidIDError
+
+from . import Nuclide, _dll
 from .core import _FortranObjectWithID
 from .error import _error_handler
 from .filter import _get_filter
-
 
 __all__ = ['Tally', 'tallies', 'global_tallies', 'num_realizations']
 

@@ -1,18 +1,18 @@
-from collections import OrderedDict
 import copy
-from numbers import Integral
 import os
 import warnings
+from collections import OrderedDict
+from numbers import Integral
 
 import h5py
 import numpy as np
 
 import openmc
-from openmc.data import REACTION_MT, REACTION_NAME, FISSION_MTS
 import openmc.checkvalue as cv
+from openmc.data import FISSION_MTS, REACTION_MT, REACTION_NAME
+
 from ..tallies import ESTIMATOR_TYPES
 from . import EnergyGroups
-
 
 # Supported cross section types
 MGXS_TYPES = (

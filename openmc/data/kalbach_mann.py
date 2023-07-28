@@ -1,16 +1,17 @@
 from collections.abc import Iterable
-from numbers import Real, Integral
+from numbers import Integral, Real
 from warnings import warn
 
 import numpy as np
 
 import openmc.checkvalue as cv
 from openmc.mixin import EqualityMixin
-from openmc.stats import Tabular, Univariate, Discrete, Mixture
-from .function import Tabulated1D, INTERPOLATION_SCHEME
+from openmc.stats import Discrete, Mixture, Tabular, Univariate
+
 from .angle_energy import AngleEnergy
 from .data import EV_PER_MEV
 from .endf import get_list_record, get_tab2_record
+from .function import INTERPOLATION_SCHEME, Tabulated1D
 
 
 class _AtomicRepresentation(EqualityMixin):

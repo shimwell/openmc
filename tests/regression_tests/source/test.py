@@ -1,8 +1,8 @@
-from math import pi, cos
+from math import cos, pi
 
 import numpy as np
-import openmc
 
+import openmc
 from tests.testing_harness import PyAPITestHarness
 
 

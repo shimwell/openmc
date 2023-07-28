@@ -1,8 +1,9 @@
 import os
 
 import numpy as np
-import openmc
 import pytest
+
+import openmc
 
 
 def test_ww_generator(run_in_tmpdir):

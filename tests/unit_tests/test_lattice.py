@@ -1,8 +1,9 @@
 from math import sqrt
+
 import lxml.etree as ET
+import pytest
 
 import openmc
-import pytest
 
 
 @pytest.fixture(scope='module')

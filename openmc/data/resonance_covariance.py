@@ -1,13 +1,14 @@
-from collections.abc import MutableSequence
-import warnings
-import io
 import copy
+import io
+import warnings
+from collections.abc import MutableSequence
 
 import numpy as np
 import pandas as pd
 
-from . import endf
 import openmc.checkvalue as cv
+
+from . import endf
 from .resonance import Resonances
 
 

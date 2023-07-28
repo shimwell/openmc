@@ -1,18 +1,19 @@
 """ Full system test suite. """
 
-from math import floor
 import shutil
-from pathlib import Path
 from collections import defaultdict
-
 from difflib import unified_diff
+from math import floor
+from pathlib import Path
+
 import numpy as np
 import pytest
-import openmc
-from openmc.data import JOULE_PER_EV
-import openmc.deplete
 
-from tests.regression_tests import config, assert_atoms_equal
+import openmc
+import openmc.deplete
+from openmc.data import JOULE_PER_EV
+from tests.regression_tests import assert_atoms_equal, config
+
 from .example_geometry import generate_problem
 
 

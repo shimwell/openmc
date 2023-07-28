@@ -1,19 +1,18 @@
+import math
 from abc import ABC, abstractmethod
 from collections import OrderedDict
 from collections.abc import Iterable
 from copy import deepcopy
-import math
 from numbers import Real
-import lxml.etree as ET
-from warnings import warn, catch_warnings, simplefilter
+from warnings import catch_warnings, simplefilter, warn
 
+import lxml.etree as ET
 import numpy as np
 
-from .checkvalue import check_type, check_value, check_length
-from .mixin import IDManagerMixin, IDWarning
-from .region import Region, Intersection, Union
 from .bounding_box import BoundingBox
-
+from .checkvalue import check_length, check_type, check_value
+from .mixin import IDManagerMixin, IDWarning
+from .region import Intersection, Region, Union
 
 _BOUNDARY_TYPES = ['transmission', 'vacuum', 'reflective', 'periodic', 'white']
 

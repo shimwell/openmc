@@ -7,6 +7,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 from uncertainties import ufloat
+
 import openmc.data
 from openmc.exceptions import DataError
 

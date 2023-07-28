@@ -1,18 +1,19 @@
 """Test the FissionYieldHelpers"""
 
+import bisect
 import os
 from collections import namedtuple
 from unittest.mock import Mock
-import bisect
 
-import pytest
 import numpy as np
+import pytest
+
 import openmc
 from openmc import lib
-from openmc.deplete.nuclide import Nuclide, FissionYieldDistribution
-from openmc.deplete.helpers import (
-    FissionYieldCutoffHelper, ConstantFissionYieldHelper,
-    AveragedFissionYieldHelper)
+from openmc.deplete.helpers import (AveragedFissionYieldHelper,
+                                    ConstantFissionYieldHelper,
+                                    FissionYieldCutoffHelper)
+from openmc.deplete.nuclide import FissionYieldDistribution, Nuclide
 
 
 @pytest.fixture(scope="module")

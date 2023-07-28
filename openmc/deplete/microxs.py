@@ -6,14 +6,15 @@ nuclide names as row indices and reaction names as column indices.
 
 import tempfile
 
-from pandas import DataFrame, read_csv, Series
 import numpy as np
+from pandas import DataFrame, Series, read_csv
 
-from openmc.checkvalue import check_type, check_value, check_iterable_type
-from openmc.exceptions import DataError
-from openmc import StatePoint
 import openmc
-from .chain import Chain, REACTIONS
+from openmc import StatePoint
+from openmc.checkvalue import check_iterable_type, check_type, check_value
+from openmc.exceptions import DataError
+
+from .chain import REACTIONS, Chain
 from .coupled_operator import _find_cross_sections, _get_nuclides_with_data
 
 _valid_rxns = list(REACTIONS)

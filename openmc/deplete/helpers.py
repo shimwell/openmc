@@ -2,23 +2,23 @@
 Classes for collecting and calculating quantities for reaction rate operators
 """
 import bisect
+import sys
 from abc import abstractmethod
 from collections import defaultdict
 from copy import deepcopy
 from itertools import product
 from numbers import Real
-import sys
 
-from numpy import dot, zeros, newaxis, asarray
+from numpy import asarray, dot, newaxis, zeros
 
-from openmc.mpi import comm
-from openmc.checkvalue import check_type, check_greater_than
-from openmc.data import JOULE_PER_EV, REACTION_MT
-from openmc.lib import (
-    Tally, MaterialFilter, EnergyFilter, EnergyFunctionFilter, load_nuclide)
 import openmc.lib
-from .abc import (
-    ReactionRateHelper, NormalizationHelper, FissionYieldHelper)
+from openmc.checkvalue import check_greater_than, check_type
+from openmc.data import JOULE_PER_EV, REACTION_MT
+from openmc.lib import (EnergyFilter, EnergyFunctionFilter, MaterialFilter,
+                        Tally, load_nuclide)
+from openmc.mpi import comm
+
+from .abc import FissionYieldHelper, NormalizationHelper, ReactionRateHelper
 
 __all__ = (
     "DirectReactionRateHelper", "ChainFissionHelper", "EnergyScoreHelper"

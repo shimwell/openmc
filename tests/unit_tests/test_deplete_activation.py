@@ -1,11 +1,11 @@
-from math import pi, log, log10
-from random import uniform, normalvariate
+from math import log, log10, pi
+from random import normalvariate, uniform
 
 import numpy as np
-
-import openmc.deplete
-import openmc
 import pytest
+
+import openmc
+import openmc.deplete
 
 
 @pytest.fixture

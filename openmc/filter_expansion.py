@@ -1,7 +1,9 @@
 from numbers import Integral, Real
+
 import lxml.etree as ET
 
 import openmc.checkvalue as cv
+
 from . import Filter
 
 

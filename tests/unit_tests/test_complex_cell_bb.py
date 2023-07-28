@@ -1,6 +1,8 @@
 import numpy as np
-import openmc.lib
 import pytest
+
+import openmc.lib
+
 
 @pytest.fixture(autouse=True)
 def complex_cell(run_in_tmpdir, mpi_intracomm):

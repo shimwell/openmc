@@ -1,13 +1,13 @@
-from collections.abc import Iterable
 import copy
+from collections.abc import Iterable
 
 import numpy as np
 import pandas as pd
 
 import openmc
 import openmc.checkvalue as cv
-from .filter import _FILTER_TYPES
 
+from .filter import _FILTER_TYPES
 
 # Acceptable tally arithmetic binary operations
 _TALLY_ARITHMETIC_OPS = ['+', '-', '*', '/', '^']

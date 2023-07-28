@@ -1,22 +1,24 @@
 from __future__ import annotations
+
+import typing  # imported separately as py3.8 requires typing.Iterable
+import warnings
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
 from enum import IntEnum
 from numbers import Real
-import warnings
-import typing  # imported separately as py3.8 requires typing.Iterable
 # also required to prevent typing.Union namespace overwriting Union
 from typing import Optional, Sequence
-import lxml.etree as ET
 
-import numpy as np
 import h5py
+import lxml.etree as ET
+import numpy as np
 
 import openmc
 import openmc.checkvalue as cv
 from openmc.checkvalue import PathLike
-from openmc.stats.multivariate import UnitSphere, Spatial
+from openmc.stats.multivariate import Spatial, UnitSphere
 from openmc.stats.univariate import Univariate
+
 from ._xml import get_text
 from .mesh import MeshBase
 

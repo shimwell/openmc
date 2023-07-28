@@ -4,10 +4,11 @@ This particular example creates a 3x3 geometry, with 8 regular pins and one
 Gd-157 2 wt-percent enriched.  All pins are segmented.
 """
 
-from collections import OrderedDict
 import math
+from collections import OrderedDict
 
 import numpy as np
+
 import openmc
 
 

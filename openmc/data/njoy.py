@@ -1,15 +1,15 @@
-from collections import namedtuple
-from io import StringIO
 import os
 import shutil
-from subprocess import Popen, PIPE, STDOUT, CalledProcessError
 import tempfile
-from pathlib import Path
 import warnings
+from collections import namedtuple
+from io import StringIO
+from pathlib import Path
+from subprocess import PIPE, STDOUT, CalledProcessError, Popen
 
-from . import endf
 import openmc.data
 
+from . import endf
 
 # For a given material, give a name for the ACE table and a list of ZAID
 # identifiers.

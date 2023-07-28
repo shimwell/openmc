@@ -15,20 +15,20 @@ import numpy as np
 from uncertainties import ufloat
 
 import openmc
+import openmc.lib
 from openmc.checkvalue import check_value
 from openmc.data import DataLibrary
 from openmc.exceptions import DataError
-import openmc.lib
 from openmc.mpi import comm
+
 from .abc import OperatorResult
+from .helpers import (AveragedFissionYieldHelper, ChainFissionHelper,
+                      ConstantFissionYieldHelper, DirectReactionRateHelper,
+                      EnergyScoreHelper, FissionYieldCutoffHelper,
+                      FluxCollapseHelper, SourceRateHelper)
 from .openmc_operator import OpenMCOperator
 from .pool import _distribute
 from .results import Results
-from .helpers import (
-    DirectReactionRateHelper, ChainFissionHelper, ConstantFissionYieldHelper,
-    FissionYieldCutoffHelper, AveragedFissionYieldHelper, EnergyScoreHelper,
-    SourceRateHelper, FluxCollapseHelper)
-
 
 __all__ = ["CoupledOperator", "Operator", "OperatorResult"]
 

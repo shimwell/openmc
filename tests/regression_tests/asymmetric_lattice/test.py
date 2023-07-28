@@ -1,9 +1,8 @@
-import os
 import glob
 import hashlib
+import os
 
 import openmc
-
 from tests.testing_harness import PyAPITestHarness
 
 

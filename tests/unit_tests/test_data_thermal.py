@@ -1,10 +1,11 @@
-from collections.abc import Callable
-from math import exp
 import os
 import random
+from collections.abc import Callable
+from math import exp
 
 import numpy as np
 import pytest
+
 import openmc.data
 
 from . import needs_njoy

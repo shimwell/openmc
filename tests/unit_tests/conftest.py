@@ -1,6 +1,6 @@
-import openmc
 import pytest
 
+import openmc
 from tests.regression_tests import config
 
 

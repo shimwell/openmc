@@ -1,8 +1,9 @@
+from pathlib import Path
+
+import pytest
+
 import openmc
 import openmc.lib
-
-from pathlib import Path
-import pytest
 from tests.testing_harness import PyAPITestHarness
 
 pytestmark = pytest.mark.skipif(

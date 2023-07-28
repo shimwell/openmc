@@ -11,17 +11,16 @@ from random import uniform
 from unittest.mock import MagicMock
 
 import numpy as np
-from uncertainties import ufloat
 import pytest
+from uncertainties import ufloat
 
+from openmc.deplete import (CECMIntegrator, CELIIntegrator, CF4Integrator,
+                            EPCRK4Integrator, LEQIIntegrator, OperatorResult,
+                            PredictorIntegrator, ReactionRates, Results,
+                            SICELIIntegrator, SILEQIIntegrator, StepResult,
+                            cram)
 from openmc.mpi import comm
-from openmc.deplete import (
-    ReactionRates, StepResult, Results, OperatorResult, PredictorIntegrator,
-    CECMIntegrator, CF4Integrator, CELIIntegrator, EPCRK4Integrator,
-    LEQIIntegrator, SICELIIntegrator, SILEQIIntegrator, cram)
-
 from tests import dummy_operator
-
 
 INTEGRATORS = [
     PredictorIntegrator,

@@ -1,7 +1,9 @@
 from numbers import Integral
+
 import lxml.etree as ET
 
 import openmc.checkvalue as cv
+
 from .mixin import EqualityMixin, IDManagerMixin
 
 

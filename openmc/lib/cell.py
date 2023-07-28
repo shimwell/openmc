@@ -1,18 +1,17 @@
 import sys
-
-from collections.abc import Mapping, Iterable
-from ctypes import c_int, c_int32, c_double, c_char_p, POINTER, c_bool, c_size_t
+from collections.abc import Iterable, Mapping
+from ctypes import (POINTER, c_bool, c_char_p, c_double, c_int, c_int32,
+                    c_size_t)
 from weakref import WeakValueDictionary
 
 import numpy as np
 
+from ..bounding_box import BoundingBox
 from ..exceptions import AllocationError, InvalidIDError
 from . import _dll
 from .core import _FortranObjectWithID
 from .error import _error_handler
 from .material import Material
-from ..bounding_box import BoundingBox
-
 
 __all__ = ['Cell', 'cells']
 

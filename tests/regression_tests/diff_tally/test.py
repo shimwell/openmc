@@ -2,9 +2,9 @@ import glob
 import os
 
 import pandas as pd
-import openmc
 import pytest
 
+import openmc
 from tests.testing_harness import PyAPITestHarness
 
 

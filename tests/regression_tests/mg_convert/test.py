@@ -1,11 +1,11 @@
-import os
 import hashlib
+import os
 
 import numpy as np
-import openmc
 
-from tests.testing_harness import PyAPITestHarness
+import openmc
 from tests.regression_tests import config
+from tests.testing_harness import PyAPITestHarness
 
 # OpenMC simulation parameters
 batches = 10

@@ -1,6 +1,7 @@
-from tests.testing_harness import PyAPITestHarness
-import openmc
 import numpy as np
+
+import openmc
+from tests.testing_harness import PyAPITestHarness
 
 
 class HexLatticeOXTestHarness(PyAPITestHarness):

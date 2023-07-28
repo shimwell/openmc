@@ -1,23 +1,24 @@
 from __future__ import annotations
+
+import os
+import warnings
 from collections.abc import Iterable
 from contextlib import contextmanager
 from functools import lru_cache
-import os
-from pathlib import Path
 from numbers import Integral
+from pathlib import Path
 from tempfile import NamedTemporaryFile
-import warnings
-import lxml.etree as ET
-from typing import Optional, Dict
+from typing import Dict, Optional
 
 import h5py
+import lxml.etree as ET
 
 import openmc
 import openmc._xml as xml
+from openmc.checkvalue import PathLike, check_type, check_value
 from openmc.dummy_comm import DummyCommunicator
-from openmc.executor import _process_CLI_arguments
-from openmc.checkvalue import check_type, check_value, PathLike
 from openmc.exceptions import InvalidIDError
+from openmc.executor import _process_CLI_arguments
 
 
 @contextmanager

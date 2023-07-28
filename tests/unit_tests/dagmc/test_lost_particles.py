@@ -1,10 +1,10 @@
-import numpy as np
 from pathlib import Path
+
+import numpy as np
+import pytest
 
 import openmc
 import openmc.lib
-
-import pytest
 
 pytestmark = pytest.mark.skipif(
     not openmc.lib._dagmc_enabled(),

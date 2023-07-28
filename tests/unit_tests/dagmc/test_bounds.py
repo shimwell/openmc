@@ -1,6 +1,8 @@
-import openmc
-import pytest
 from pathlib import Path
+
+import pytest
+
+import openmc
 
 
 def test_bounding_box(request):

@@ -1,20 +1,21 @@
-import numbers
 import bisect
 import math
+import numbers
 import typing  # required to prevent typing.Union namespace overwriting Union
-from typing import Iterable, Optional, Tuple, List
+from typing import Iterable, List, Optional, Tuple
 from warnings import warn
 
 import h5py
 import numpy as np
 
-from .stepresult import StepResult, VERSION_RESULTS
 import openmc.checkvalue as cv
-from openmc.data import atomic_mass, AVOGADRO
-from openmc.data.library import DataLibrary
-from openmc.material import Material, Materials
-from openmc.exceptions import DataError
 from openmc.checkvalue import PathLike
+from openmc.data import AVOGADRO, atomic_mass
+from openmc.data.library import DataLibrary
+from openmc.exceptions import DataError
+from openmc.material import Material, Materials
+
+from .stepresult import VERSION_RESULTS, StepResult
 
 __all__ = ["Results", "ResultsList"]
 

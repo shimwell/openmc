@@ -1,7 +1,8 @@
-from tests.testing_harness import CMFDTestHarness
-from openmc import cmfd
 import numpy as np
 import scipy.sparse
+
+from openmc import cmfd
+from tests.testing_harness import CMFDTestHarness
 
 
 def test_cmfd_physical_adjoint():

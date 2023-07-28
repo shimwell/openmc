@@ -7,13 +7,14 @@ http://www-nds.iaea.org/ndspub/documents/endf/endf102/endf102.pdf
 
 """
 import io
-from pathlib import PurePath
 import re
+from pathlib import PurePath
 
 import numpy as np
 
 from .data import gnds_name
 from .function import Tabulated1D
+
 try:
     from ._endf import float_endf
     _CYTHON = True

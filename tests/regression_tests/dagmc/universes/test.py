@@ -1,9 +1,8 @@
 import numpy as np
+import pytest
 
 import openmc
 import openmc.lib
-
-import pytest
 from tests.testing_harness import PyAPITestHarness
 
 pytestmark = pytest.mark.skipif(

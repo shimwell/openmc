@@ -1,7 +1,7 @@
 import numpy as np
-import openmc
 import pandas as pd
 
+import openmc
 from tests.testing_harness import PyAPITestHarness
 
 

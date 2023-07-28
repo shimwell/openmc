@@ -1,11 +1,12 @@
 #!/usr/bin/env python
 
-from math import log
 import os
+from math import log
 from pathlib import Path
 
 import numpy as np
 import pytest
+
 import openmc.data
 
 

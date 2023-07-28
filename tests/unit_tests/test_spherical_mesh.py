@@ -1,9 +1,9 @@
-from itertools import product, permutations
+from itertools import permutations, product
+
+import numpy as np
+import pytest
 
 import openmc
-import numpy as np
-
-import pytest
 
 geom_size = 5
 

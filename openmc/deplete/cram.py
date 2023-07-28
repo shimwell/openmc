@@ -9,7 +9,8 @@ import numpy as np
 import scipy.sparse as sp
 import scipy.sparse.linalg as sla
 
-from openmc.checkvalue import check_type, check_length
+from openmc.checkvalue import check_length, check_type
+
 from .abc import DepSystemSolver
 
 __all__ = ["CRAM16", "CRAM48", "Cram16Solver", "Cram48Solver", "IPFCramSolver"]

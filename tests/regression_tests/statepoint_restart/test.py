@@ -1,11 +1,12 @@
 from pathlib import Path
 
-import openmc
 import pytest
 
-from tests.testing_harness import TestHarness
-from tests.regression_tests import config
+import openmc
 from tests import cdtemp
+from tests.regression_tests import config
+from tests.testing_harness import TestHarness
+
 
 class StatepointRestartTestHarness(TestHarness):
     def __init__(self, final_sp, restart_sp):

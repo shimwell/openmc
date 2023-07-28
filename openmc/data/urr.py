@@ -5,6 +5,7 @@ import numpy as np
 
 import openmc.checkvalue as cv
 from openmc.mixin import EqualityMixin
+
 from .data import EV_PER_MEV
 
 
