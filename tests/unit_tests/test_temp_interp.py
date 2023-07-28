@@ -1,12 +1,13 @@
-from math import isnan
 import os
+from math import isnan
 from pathlib import Path
 
 import numpy as np
+import pytest
+
 import openmc.data
 from openmc.data import K_BOLTZMANN
 from openmc.stats import Uniform
-import pytest
 
 
 def make_fake_cross_section():

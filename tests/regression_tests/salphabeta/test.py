@@ -1,6 +1,5 @@
 import openmc
 import openmc.model
-
 from tests.testing_harness import PyAPITestHarness
 
 

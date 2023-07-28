@@ -1,15 +1,15 @@
 from collections.abc import Mapping
-from ctypes import c_int, c_int32, c_double, c_char_p, POINTER, c_size_t
+from ctypes import POINTER, c_char_p, c_double, c_int, c_int32, c_size_t
 from weakref import WeakValueDictionary
 
 import numpy as np
 from numpy.ctypeslib import as_array
 
 from openmc.exceptions import AllocationError, InvalidIDError, OpenMCError
-from . import _dll, Nuclide
+
+from . import Nuclide, _dll
 from .core import _FortranObjectWithID
 from .error import _error_handler
-
 
 __all__ = ['Material', 'materials']
 

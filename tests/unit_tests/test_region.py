@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
-import openmc
 
+import openmc
 from tests.unit_tests import assert_unbounded
 
 

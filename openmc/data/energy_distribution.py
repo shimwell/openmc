@@ -7,10 +7,11 @@ import numpy as np
 
 import openmc.checkvalue as cv
 from openmc.mixin import EqualityMixin
-from openmc.stats.univariate import Univariate, Tabular, Discrete, Mixture
+from openmc.stats.univariate import Discrete, Mixture, Tabular, Univariate
+
 from .data import EV_PER_MEV
 from .endf import get_tab1_record, get_tab2_record
-from .function import Tabulated1D, INTERPOLATION_SCHEME
+from .function import INTERPOLATION_SCHEME, Tabulated1D
 
 
 class EnergyDistribution(EqualityMixin, ABC):

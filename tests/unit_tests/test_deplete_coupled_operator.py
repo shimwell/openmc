@@ -4,10 +4,11 @@
 
 from pathlib import Path
 
-import pytest
-from openmc.deplete import CoupledOperator
-import openmc
 import numpy as np
+import pytest
+
+import openmc
+from openmc.deplete import CoupledOperator
 
 CHAIN_PATH = Path(__file__).parents[1] / "chain_simple.xml"
 

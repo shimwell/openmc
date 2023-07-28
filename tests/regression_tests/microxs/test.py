@@ -3,9 +3,9 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+
 import openmc
 from openmc.deplete import MicroXS
-
 from tests.regression_tests import config
 
 CHAIN_FILE = Path(__file__).parents[2] / "chain_simple.xml"

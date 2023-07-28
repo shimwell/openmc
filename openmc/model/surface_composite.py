@@ -1,15 +1,16 @@
+import operator
+import warnings
 from abc import ABC, abstractmethod
 from copy import copy
-from math import sqrt, pi, sin, cos, isclose
-import warnings
-import operator
+from math import cos, isclose, pi, sin, sqrt
 
 import numpy as np
 from scipy.spatial import ConvexHull, Delaunay
 
 import openmc
-from openmc.checkvalue import (check_greater_than, check_value, check_less_than,
-                               check_iterable_type, check_length, check_type)
+from openmc.checkvalue import (check_greater_than, check_iterable_type,
+                               check_length, check_less_than, check_type,
+                               check_value)
 
 
 class CompositeSurface(ABC):

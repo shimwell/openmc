@@ -1,15 +1,14 @@
 from collections.abc import Mapping
-from ctypes import c_int, c_double, c_char_p, POINTER, c_size_t
+from ctypes import POINTER, c_char_p, c_double, c_int, c_size_t
 from weakref import WeakValueDictionary
 
-from numpy.ctypeslib import ndpointer
 import numpy as np
+from numpy.ctypeslib import ndpointer
 
-from ..exceptions import DataError, AllocationError
+from ..exceptions import AllocationError, DataError
 from . import _dll
 from .core import _FortranObject
 from .error import _error_handler
-
 
 __all__ = ['Nuclide', 'nuclides', 'load_nuclide']
 

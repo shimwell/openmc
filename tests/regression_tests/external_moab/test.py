@@ -1,17 +1,17 @@
-from pathlib import Path
+import glob
 import os
 import shutil
 import subprocess
-from subprocess import CalledProcessError
 import textwrap
-import glob
 from itertools import product
+from pathlib import Path
+from subprocess import CalledProcessError
 
-import openmc
-import openmc.lib
 import numpy as np
 import pytest
 
+import openmc
+import openmc.lib
 from tests.regression_tests import config
 from tests.testing_harness import PyAPITestHarness
 

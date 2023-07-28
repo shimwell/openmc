@@ -1,23 +1,23 @@
-from collections.abc import Iterable, MutableSequence
 import copy
+import operator
+from collections.abc import Iterable, MutableSequence
 from functools import partial, reduce
 from itertools import product
 from numbers import Integral, Real
-import operator
 from pathlib import Path
-import lxml.etree as ET
 
 import h5py
+import lxml.etree as ET
 import numpy as np
 import pandas as pd
 import scipy.sparse as sps
 
 import openmc
 import openmc.checkvalue as cv
-from ._xml import clean_indentation, reorder_attributes, get_text
-from .mixin import IDManagerMixin
-from .mesh import MeshBase
 
+from ._xml import clean_indentation, get_text, reorder_attributes
+from .mesh import MeshBase
+from .mixin import IDManagerMixin
 
 # The tally arithmetic product types. The tensor product performs the full
 # cross product of the data in two tallies with respect to a specified axis

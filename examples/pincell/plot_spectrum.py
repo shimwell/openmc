@@ -1,6 +1,6 @@
 import matplotlib.pyplot as plt
-import openmc
 
+import openmc
 
 # Get results from statepoint
 with openmc.StatePoint('statepoint.100.h5') as sp:

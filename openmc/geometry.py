@@ -1,18 +1,21 @@
 from __future__ import annotations
+
 import os
 import typing
-from collections import OrderedDict, defaultdict
-from copy import deepcopy
-from collections.abc import Iterable
-from pathlib import Path
 import warnings
-import lxml.etree as ET
+from collections import OrderedDict, defaultdict
+from collections.abc import Iterable
+from copy import deepcopy
+from pathlib import Path
 
+import lxml.etree as ET
 import numpy as np
 
 import openmc
 import openmc._xml as xml
-from .checkvalue import check_type, check_less_than, check_greater_than, PathLike
+
+from .checkvalue import (PathLike, check_greater_than, check_less_than,
+                         check_type)
 
 
 class Geometry:

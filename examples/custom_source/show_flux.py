@@ -1,4 +1,5 @@
 import matplotlib.pyplot as plt
+
 import openmc
 
 # Get the flux from the statepoint

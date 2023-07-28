@@ -1,12 +1,12 @@
-from collections.abc import Mapping
 import os
+from collections.abc import Mapping
 
 import numpy as np
 import pytest
+
 import openmc
 import openmc.exceptions as exc
 import openmc.lib
-
 from tests import cdtemp
 
 

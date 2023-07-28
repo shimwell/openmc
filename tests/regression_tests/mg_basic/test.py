@@ -4,7 +4,6 @@ import numpy as np
 
 import openmc
 from openmc.examples import slab_mg
-
 from tests.testing_harness import PyAPITestHarness
 
 

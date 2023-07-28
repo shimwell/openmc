@@ -1,6 +1,5 @@
 import openmc
-
-from tests.testing_harness import TestHarness, PyAPITestHarness
+from tests.testing_harness import PyAPITestHarness, TestHarness
 
 
 class DistribmatTestHarness(PyAPITestHarness):

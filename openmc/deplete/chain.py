@@ -4,28 +4,27 @@ This module contains information about a depletion chain.  A depletion chain is
 loaded from an .xml file and all the nuclides are linked together.
 """
 
-from io import StringIO
-from itertools import chain
 import math
 import os
 import re
 from collections import OrderedDict, defaultdict, namedtuple
-from collections.abc import Mapping, Iterable
-from numbers import Real, Integral
+from collections.abc import Iterable, Mapping
+from io import StringIO
+from itertools import chain
+from numbers import Integral, Real
 from warnings import warn
-
-from openmc.checkvalue import check_type, check_greater_than
-from openmc.data import gnds_name, zam, DataLibrary
-from openmc.exceptions import DataError
-from .nuclide import FissionYieldDistribution
 
 import lxml.etree as ET
 import scipy.sparse as sp
 
 import openmc.data
 from openmc._xml import clean_indentation
-from .nuclide import Nuclide, DecayTuple, ReactionTuple
+from openmc.checkvalue import check_greater_than, check_type
+from openmc.data import DataLibrary, gnds_name, zam
+from openmc.exceptions import DataError
 
+from .nuclide import (DecayTuple, FissionYieldDistribution, Nuclide,
+                      ReactionTuple)
 
 # tuple of (possible MT values, (dA, dZ), secondaries) where dA is the change in
 # the mass number and dZ is the change in the atomic number

@@ -3,14 +3,12 @@ retrieved from ENDF files."""
 
 import os
 from pathlib import Path
-import pytest
 
 import numpy as np
+import pytest
 
-from openmc.data import IncidentNeutron
-from openmc.data.kalbach_mann import _separation_energy, _AtomicRepresentation
-from openmc.data import kalbach_slope
-from openmc.data import KalbachMann
+from openmc.data import IncidentNeutron, KalbachMann, kalbach_slope
+from openmc.data.kalbach_mann import _AtomicRepresentation, _separation_energy
 
 from . import needs_njoy
 

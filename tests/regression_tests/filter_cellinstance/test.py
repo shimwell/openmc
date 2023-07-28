@@ -1,8 +1,8 @@
+import pytest
 from numpy.testing import assert_array_almost_equal
+
 import openmc
 import openmc.model
-import pytest
-
 from tests.testing_harness import PyAPITestHarness
 
 

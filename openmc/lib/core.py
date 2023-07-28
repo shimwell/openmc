@@ -1,19 +1,20 @@
-from contextlib import contextmanager
-from ctypes import (c_bool, c_int, c_int32, c_int64, c_double, c_char_p,
-                    c_char, POINTER, Structure, c_void_p, create_string_buffer,
-                    c_uint64, c_size_t)
-import sys
 import os
+import sys
+from contextlib import contextmanager
+from ctypes import (POINTER, Structure, c_bool, c_char, c_char_p, c_double,
+                    c_int, c_int32, c_int64, c_size_t, c_uint64, c_void_p,
+                    create_string_buffer)
 from random import getrandbits
 
 import numpy as np
 from numpy.ctypeslib import as_array
 
+import openmc
+import openmc.lib
+from openmc.checkvalue import PathLike
+
 from . import _dll
 from .error import _error_handler
-from openmc.checkvalue import PathLike
-import openmc.lib
-import openmc
 
 
 class _SourceSite(Structure):

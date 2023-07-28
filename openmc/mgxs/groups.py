@@ -1,5 +1,5 @@
-from collections.abc import Iterable
 import copy
+from collections.abc import Iterable
 from numbers import Real
 
 import numpy as np

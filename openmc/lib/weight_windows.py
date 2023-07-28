@@ -1,5 +1,5 @@
 from collections.abc import Mapping
-from ctypes import c_double, c_int, c_int32, c_char_p, c_size_t, POINTER
+from ctypes import POINTER, c_char_p, c_double, c_int, c_int32, c_size_t
 from weakref import WeakValueDictionary
 
 import numpy as np
@@ -7,13 +7,12 @@ from numpy.ctypeslib import as_array
 
 from openmc import ParticleType
 from openmc.exceptions import AllocationError, InvalidIDError
+
 from . import _dll
 from .core import _FortranObjectWithID
 from .error import _error_handler
 from .filter import EnergyFilter, MeshFilter, ParticleFilter
-from .mesh import _get_mesh
-from .mesh import meshes
-
+from .mesh import _get_mesh, meshes
 
 __all__ = ['WeightWindows', 'weight_windows']
 

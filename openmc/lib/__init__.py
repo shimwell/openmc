@@ -12,12 +12,11 @@ functions or objects in :mod:`openmc.lib`, for example:
 
 """
 
-from ctypes import CDLL, c_bool, c_int
 import os
 import sys
+from ctypes import CDLL, c_bool, c_int
 
 import pkg_resources
-
 
 # Determine shared-library suffix
 if sys.platform == 'darwin':
@@ -55,17 +54,17 @@ def _mcpl_enabled():
     return c_bool.in_dll(_dll, "MCPL_ENABLED").value
 
 
-from .error import *
-from .core import *
-from .nuclide import *
-from .material import *
 from .cell import *
-from .mesh import *
+from .core import *
+from .error import *
 from .filter import *
-from .tally import *
-from .settings import settings
+from .material import *
 from .math import *
+from .mesh import *
+from .nuclide import *
 from .plot import *
+from .settings import settings
+from .tally import *
 from .weight_windows import *
 
 # Flag to denote whether or not openmc.lib.init has been called

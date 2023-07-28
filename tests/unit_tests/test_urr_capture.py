@@ -1,5 +1,6 @@
-import openmc
 import pytest
+
+import openmc
 
 
 @pytest.fixture

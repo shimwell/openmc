@@ -1,18 +1,18 @@
+import math
 from abc import ABC, abstractmethod
 from collections import defaultdict
 from collections.abc import Iterable
 from copy import deepcopy
-import math
 from numbers import Real
 from warnings import warn
-import lxml.etree as ET
 
+import lxml.etree as ET
 import numpy as np
 
 import openmc.checkvalue as cv
+
 from .._xml import get_text
 from ..mixin import EqualityMixin
-
 
 _INTERPOLATION_SCHEMES = [
     'histogram',

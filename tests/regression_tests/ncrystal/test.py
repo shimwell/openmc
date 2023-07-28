@@ -1,12 +1,12 @@
-from math import pi
 import filecmp
 from difflib import unified_diff
+from math import pi
 
 import numpy as np
-import openmc
-import openmc.lib
 import pytest
 
+import openmc
+import openmc.lib
 from tests.testing_harness import PyAPITestHarness
 
 pytestmark = pytest.mark.skipif(

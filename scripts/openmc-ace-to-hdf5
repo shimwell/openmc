@@ -19,10 +19,10 @@ the ground state is 95642).
 """
 
 import argparse
-from functools import partial
 import os
-from pathlib import Path
 import warnings
+from functools import partial
+from pathlib import Path
 
 import openmc.data
 from openmc.data.ace import TableType

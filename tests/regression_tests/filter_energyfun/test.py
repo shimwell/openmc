@@ -1,6 +1,6 @@
-import openmc
 import pytest
 
+import openmc
 from tests.testing_harness import PyAPITestHarness
 
 

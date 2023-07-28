@@ -1,5 +1,6 @@
-import openmc
 import numpy as np
+
+import openmc
 
 names = ['H', 'O', 'Zr', 'U235', 'U238']
 

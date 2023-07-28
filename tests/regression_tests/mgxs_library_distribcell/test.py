@@ -1,11 +1,11 @@
 import hashlib
 import sys
 
+import pytest
+
 import openmc
 import openmc.mgxs
 from openmc.examples import pwr_assembly
-import pytest
-
 from tests.testing_harness import PyAPITestHarness
 
 

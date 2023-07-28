@@ -5,11 +5,11 @@ from numbers import Real
 from operator import attrgetter
 from warnings import warn
 
-from openmc import Plane, Cylinder, Universe, Cell
-from ..checkvalue import (check_type, check_value, check_length,
-                          check_less_than, check_iterable_type)
 import openmc.data
+from openmc import Cell, Cylinder, Plane, Universe
 
+from ..checkvalue import (check_iterable_type, check_length, check_less_than,
+                          check_type, check_value)
 
 ZERO_CELSIUS_TO_KELVIN = 273.15
 ZERO_FAHRENHEIT_TO_KELVIN = 459.67

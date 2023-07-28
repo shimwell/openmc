@@ -4,11 +4,11 @@ HDF5-based format.
 
 """
 
+import argparse
 import os
 import warnings
 import xml.etree.ElementTree as ET
 
-import argparse
 import numpy as np
 
 import openmc.mgxs_library

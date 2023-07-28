@@ -4,10 +4,10 @@ from pathlib import Path
 import pytest
 
 import openmc
-from openmc.data import decay_photon_energy
 import openmc.examples
 import openmc.model
 import openmc.stats
+from openmc.data import decay_photon_energy
 
 
 def test_attributes(uo2):

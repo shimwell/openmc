@@ -1,8 +1,7 @@
 import pytest
 
-from tests.testing_harness import PlotTestHarness
 from tests.regression_tests import config
-
+from tests.testing_harness import PlotTestHarness
 
 vtk = pytest.importorskip('vtk')
 

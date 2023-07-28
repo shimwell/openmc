@@ -1,11 +1,10 @@
-from ctypes import c_int, c_double, POINTER, c_uint64
+from ctypes import POINTER, c_double, c_int, c_uint64
 from random import getrandbits
 
 import numpy as np
 from numpy.ctypeslib import ndpointer
 
 from . import _dll
-
 
 _dll.t_percentile.restype = c_double
 _dll.t_percentile.argtypes = [c_double, c_int]

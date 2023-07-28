@@ -1,16 +1,17 @@
-from collections import OrderedDict
-from collections.abc import Iterable
 import copy
-from numbers import Integral
 import os
 import pickle
+from collections import OrderedDict
+from collections.abc import Iterable
+from numbers import Integral
 from warnings import warn
 
 import numpy as np
 
 import openmc
-import openmc.mgxs
 import openmc.checkvalue as cv
+import openmc.mgxs
+
 from ..tallies import ESTIMATOR_TYPES
 
 

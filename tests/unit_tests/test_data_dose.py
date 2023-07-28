@@ -1,5 +1,6 @@
-from openmc.data import dose_coefficients
 from pytest import approx, raises
+
+from openmc.data import dose_coefficients
 
 
 def test_dose_coefficients():

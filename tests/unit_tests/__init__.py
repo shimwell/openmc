@@ -3,7 +3,6 @@ import shutil
 import numpy as np
 import pytest
 
-
 # Check if NJOY is available
 needs_njoy = pytest.mark.skipif(shutil.which('njoy') is None,
                                 reason="NJOY not installed")

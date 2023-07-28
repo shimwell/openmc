@@ -1,16 +1,19 @@
-from collections.abc import MutableSequence, Iterable
 import io
+from collections.abc import Iterable, MutableSequence
 
 import numpy as np
-from numpy.polynomial import Polynomial
 import pandas as pd
+from numpy.polynomial import Polynomial
 
 import openmc.checkvalue as cv
+
 from .data import NEUTRON_MASS
-from .endf import get_head_record, get_cont_record, get_tab1_record, get_list_record
+from .endf import (get_cont_record, get_head_record, get_list_record,
+                   get_tab1_record)
+
 try:
-    from .reconstruct import wave_number, penetration_shift, reconstruct_mlbw, \
-        reconstruct_slbw, reconstruct_rm
+    from .reconstruct import (penetration_shift, reconstruct_mlbw,
+                              reconstruct_rm, reconstruct_slbw, wave_number)
     _reconstruct = True
 except ImportError:
     _reconstruct = False

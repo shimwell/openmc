@@ -1,8 +1,8 @@
-from numbers import Real
 import re
+from numbers import Real
 
-from openmc.checkvalue import check_type, check_value
 from openmc import Material
+from openmc.checkvalue import check_type, check_value
 from openmc.data import ELEMENT_SYMBOL
 
 

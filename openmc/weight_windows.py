@@ -1,21 +1,23 @@
 from __future__ import annotations
-from collections.abc import Iterable
-from numbers import Real, Integral
-import pathlib
-from typing import Iterable, List, Optional, Union, Dict
-import warnings
 
+import pathlib
+import warnings
+from collections.abc import Iterable
+from numbers import Integral, Real
+from typing import Dict, Iterable, List, Optional, Union
+
+import h5py
 import lxml.etree as ET
 import numpy as np
-import h5py
 
 import openmc
-from openmc.filter import _PARTICLES
-from openmc.mesh import MeshBase, RectilinearMesh, CylindricalMesh, SphericalMesh, UnstructuredMesh
 import openmc.checkvalue as cv
 from openmc.checkvalue import PathLike
+from openmc.filter import _PARTICLES
+from openmc.mesh import (CylindricalMesh, MeshBase, RectilinearMesh,
+                         SphericalMesh, UnstructuredMesh)
 
-from ._xml import get_text, clean_indentation
+from ._xml import clean_indentation, get_text
 from .mixin import IDManagerMixin
 
 

@@ -1,21 +1,21 @@
-from numbers import Real
-from math import exp, erf, pi, sqrt
-from copy import deepcopy
-
 import os
-import h5py
 import pickle
+from copy import deepcopy
+from math import erf, exp, pi, sqrt
+from numbers import Real
+
+import h5py
 import numpy as np
 from scipy.signal import find_peaks
 
 import openmc.checkvalue as cv
+
 from ..exceptions import DataError
 from ..mixin import EqualityMixin
 from . import WMP_VERSION, WMP_VERSION_MAJOR
 from .data import K_BOLTZMANN
 from .neutron import IncidentNeutron
 from .resonance import ResonanceRange
-
 
 # Constants that determine which value to access
 _MP_EA = 0       # Pole

@@ -1,12 +1,12 @@
-import os
 import hashlib
+import os
 
-import numpy as np
 import h5py
+import numpy as np
+
 import openmc
 import openmc.mgxs
 from openmc.examples import pwr_pin_cell
-
 from tests.testing_harness import PyAPITestHarness
 
 

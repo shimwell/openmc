@@ -4,10 +4,11 @@
 
 from pathlib import Path
 
-import pytest
-from openmc.deplete import IndependentOperator, MicroXS
-from openmc import Material, Materials
 import numpy as np
+import pytest
+
+from openmc import Material, Materials
+from openmc.deplete import IndependentOperator, MicroXS
 
 CHAIN_PATH = Path(__file__).parents[1] / "chain_simple.xml"
 ONE_GROUP_XS = Path(__file__).parents[1] / "micro_xs_simple.csv"

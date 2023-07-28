@@ -1,10 +1,12 @@
-from numbers import Real, Integral
+from numbers import Integral, Real
 
 import numpy as np
 
 import openmc.checkvalue as cv
+
 from .angle_energy import AngleEnergy
 from .endf import get_cont_record
+
 
 class NBodyPhaseSpace(AngleEnergy):
     """N-body phase space distribution

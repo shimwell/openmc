@@ -1,5 +1,5 @@
 import copy
-from numbers import Real, Integral
+from numbers import Integral, Real
 
 import h5py
 import numpy as np
@@ -9,9 +9,11 @@ from scipy.special import eval_legendre
 
 import openmc
 import openmc.mgxs
-from openmc.mgxs import SCATTER_TABULAR, SCATTER_LEGENDRE, SCATTER_HISTOGRAM
-from .checkvalue import check_type, check_value, check_greater_than, \
-    check_iterable_type, check_less_than, check_filetype_version
+from openmc.mgxs import SCATTER_HISTOGRAM, SCATTER_LEGENDRE, SCATTER_TABULAR
+
+from .checkvalue import (check_filetype_version, check_greater_than,
+                         check_iterable_type, check_less_than, check_type,
+                         check_value)
 
 ROOM_TEMPERATURE_KELVIN = 294.0
 

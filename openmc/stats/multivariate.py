@@ -1,15 +1,16 @@
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
-from math import pi, cos
+from math import cos, pi
 from numbers import Real
-import lxml.etree as ET
 
+import lxml.etree as ET
 import numpy as np
 
 import openmc.checkvalue as cv
+
 from .._xml import get_text
-from .univariate import Univariate, Uniform, PowerLaw
 from ..mesh import MeshBase
+from .univariate import PowerLaw, Uniform, Univariate
 
 
 class UnitSphere(ABC):

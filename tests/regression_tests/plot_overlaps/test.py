@@ -1,5 +1,5 @@
-from tests.testing_harness import PlotTestHarness
 from tests.regression_tests import config
+from tests.testing_harness import PlotTestHarness
 
 
 def test_plot_overlap():

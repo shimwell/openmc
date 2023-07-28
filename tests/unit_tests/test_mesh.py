@@ -1,6 +1,8 @@
-import openmc
-import pytest
 import numpy as np
+import pytest
+
+import openmc
+
 
 @pytest.mark.parametrize("val_left,val_right", [(0, 0), (-1., -1.), (2.0, 2)])
 def test_raises_error_when_flat(val_left, val_right):

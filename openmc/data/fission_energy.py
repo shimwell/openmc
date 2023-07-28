@@ -4,10 +4,10 @@ from io import StringIO
 
 import openmc.checkvalue as cv
 from openmc.mixin import EqualityMixin
-from .data import EV_PER_MEV
-from .endf import get_cont_record, get_list_record, get_tab1_record, Evaluation
-from .function import Function1D, Tabulated1D, Polynomial, sum_functions
 
+from .data import EV_PER_MEV
+from .endf import Evaluation, get_cont_record, get_list_record, get_tab1_record
+from .function import Function1D, Polynomial, Tabulated1D, sum_functions
 
 _NAMES = (
     'fragments', 'prompt_neutrons', 'delayed_neutrons',

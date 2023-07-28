@@ -1,22 +1,22 @@
+import itertools
 import os
-import typing  # imported separately as py3.8 requires typing.Iterable
+import typing  # required to prevent typing.Union namespace overwriting Union
 from collections.abc import Iterable, Mapping, MutableSequence
 from enum import Enum
-import itertools
 from math import ceil
 from numbers import Integral, Real
 from pathlib import Path
-import typing  # required to prevent typing.Union namespace overwriting Union
 from typing import Optional
+
 import lxml.etree as ET
 
 import openmc.checkvalue as cv
+from openmc.checkvalue import PathLike
 from openmc.stats.multivariate import MeshSpatial
 
-from . import (RegularMesh, SourceBase, IndependentSource,
-               VolumeCalculation, WeightWindows, WeightWindowGenerator)
+from . import (IndependentSource, RegularMesh, SourceBase, VolumeCalculation,
+               WeightWindowGenerator, WeightWindows)
 from ._xml import clean_indentation, get_text, reorder_attributes
-from openmc.checkvalue import PathLike
 from .mesh import _read_meshes
 
 

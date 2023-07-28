@@ -2,7 +2,6 @@ import hashlib
 import itertools
 
 import openmc
-
 from tests.testing_harness import PyAPITestHarness
 
 

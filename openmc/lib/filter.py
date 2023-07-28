@@ -1,20 +1,20 @@
 from collections.abc import Mapping
-from ctypes import c_int, c_int32, c_double, c_char_p, POINTER, \
-    create_string_buffer, c_size_t
+from ctypes import (POINTER, c_char_p, c_double, c_int, c_int32, c_size_t,
+                    create_string_buffer)
 from weakref import WeakValueDictionary
 
 import numpy as np
 from numpy.ctypeslib import as_array
 
-from openmc.exceptions import AllocationError, InvalidIDError
-from openmc.data.function import INTERPOLATION_SCHEME
 from openmc import ParticleType
+from openmc.data.function import INTERPOLATION_SCHEME
+from openmc.exceptions import AllocationError, InvalidIDError
+
 from . import _dll
 from .core import _FortranObjectWithID
 from .error import _error_handler
 from .material import Material
 from .mesh import _get_mesh
-
 
 __all__ = [
     'Filter', 'AzimuthalFilter', 'CellFilter', 'CellbornFilter', 'CellfromFilter',

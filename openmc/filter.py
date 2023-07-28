@@ -1,24 +1,24 @@
+import hashlib
+import warnings
 from abc import ABCMeta
 from collections import OrderedDict
 from collections.abc import Iterable
-import hashlib
 from itertools import product
-from numbers import Real, Integral
-import lxml.etree as ET
-import warnings
+from numbers import Integral, Real
 
+import lxml.etree as ET
 import numpy as np
 import pandas as pd
 
 import openmc
 import openmc.checkvalue as cv
+
+from ._xml import get_text
 from .cell import Cell
 from .material import Material
 from .mixin import IDManagerMixin
 from .surface import Surface
 from .universe import UniverseBase
-from ._xml import get_text
-
 
 _FILTER_TYPES = (
     'universe', 'material', 'cell', 'cellborn', 'surface', 'mesh', 'energy',

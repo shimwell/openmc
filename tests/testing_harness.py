@@ -1,17 +1,17 @@
-from difflib import unified_diff
-from subprocess import check_call
 import filecmp
 import glob
-import h5py
 import hashlib
 import os
 import shutil
+from difflib import unified_diff
+from subprocess import check_call
 
+import h5py
 import numpy as np
-import openmc
-from openmc.examples import pwr_core
 from colorama import Fore, init
 
+import openmc
+from openmc.examples import pwr_core
 from tests.regression_tests import config
 
 init()

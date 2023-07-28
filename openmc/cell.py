@@ -1,19 +1,20 @@
 from collections import OrderedDict
 from collections.abc import Iterable
-from math import cos, sin, pi
+from math import cos, pi, sin
 from numbers import Real
-import lxml.etree as ET
 
+import lxml.etree as ET
 import numpy as np
 from uncertainties import UFloat
 
 import openmc
 import openmc.checkvalue as cv
+
 from ._xml import get_text
-from .mixin import IDManagerMixin
-from .region import Region, Complement
-from .surface import Halfspace
 from .bounding_box import BoundingBox
+from .mixin import IDManagerMixin
+from .region import Complement, Region
+from .surface import Halfspace
 
 
 class Cell(IDManagerMixin):

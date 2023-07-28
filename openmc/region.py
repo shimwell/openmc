@@ -5,8 +5,8 @@ from copy import deepcopy
 
 import numpy as np
 
-from .checkvalue import check_type
 from .bounding_box import BoundingBox
+from .checkvalue import check_type
 
 
 class Region(ABC):

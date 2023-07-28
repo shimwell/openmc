@@ -3,7 +3,6 @@ import pytest
 
 import openmc
 import openmc.lib
-
 from tests import cdtemp
 
 

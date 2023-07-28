@@ -2,9 +2,10 @@ from itertools import permutations
 from pathlib import Path
 
 import numpy as np
+import pytest
+
 import openmc
 import openmc.lib
-import pytest
 
 
 @pytest.fixture

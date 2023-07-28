@@ -1,8 +1,9 @@
 from pathlib import Path
 
 import numpy as np
-import openmc
 import pytest
+
+import openmc
 
 # check that we can successfully read wwinp files with the following contents:
 #

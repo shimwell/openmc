@@ -1,19 +1,19 @@
-from difflib import unified_diff
-import glob
 import filecmp
+import glob
 import os
+from difflib import unified_diff
 from pathlib import Path
 
-import openmc
 import pytest
 
+import openmc
 from tests.testing_harness import PyAPITestHarness, colorize
 
 # use a few models from other tests to make sure the same results are
 # produced when using a single model.xml file as input
 from ..adj_cell_rotation.test import model as adj_cell_rotation_model
-from ..lattice_multiple.test import model as lattice_multiple_model
 from ..energy_laws.test import model as energy_laws_model
+from ..lattice_multiple.test import model as lattice_multiple_model
 from ..photon_production.test import model as photon_production_model
 
 

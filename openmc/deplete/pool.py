@@ -5,8 +5,8 @@ Provided to avoid some circular imports
 from itertools import repeat, starmap
 from multiprocessing import Pool
 
-from scipy.sparse import bmat
 import numpy as np
+from scipy.sparse import bmat
 
 from openmc.mpi import comm
 

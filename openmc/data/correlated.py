@@ -1,16 +1,17 @@
 from collections.abc import Iterable
-from numbers import Real, Integral
+from numbers import Integral, Real
 from warnings import warn
 
 import numpy as np
 
 import openmc.checkvalue as cv
-from openmc.stats import Tabular, Univariate, Discrete, Mixture, \
-    Uniform, Legendre
-from .function import INTERPOLATION_SCHEME
+from openmc.stats import (Discrete, Legendre, Mixture, Tabular, Uniform,
+                          Univariate)
+
 from .angle_energy import AngleEnergy
 from .data import EV_PER_MEV
 from .endf import get_list_record, get_tab2_record
+from .function import INTERPOLATION_SCHEME
 
 
 class CorrelatedAngleEnergy(AngleEnergy):

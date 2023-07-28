@@ -7,9 +7,10 @@ to a custom file with new depletion_chain node
 from os import remove
 from pathlib import Path
 
-import pytest
-from openmc.deplete import MicroXS
 import numpy as np
+import pytest
+
+from openmc.deplete import MicroXS
 
 ONE_GROUP_XS = Path(__file__).parents[1] / "micro_xs_simple.csv"
 

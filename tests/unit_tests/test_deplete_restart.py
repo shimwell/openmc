@@ -7,7 +7,6 @@ problem described in dummy_geometry.py.
 import pytest
 
 import openmc.deplete
-
 from tests import dummy_operator
 
 
