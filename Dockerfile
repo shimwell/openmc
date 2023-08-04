@@ -24,7 +24,7 @@ ARG compile_cores=1
 ARG build_dagmc=off
 ARG build_libmesh=off
 
-FROM debian:bullseye-slim AS dependencies
+FROM debian:bookworm-slim AS dependencies
 
 ARG compile_cores
 ARG build_dagmc
@@ -39,7 +39,7 @@ ENV EMBREE_REPO='https://github.com/embree/embree'
 ENV EMBREE_INSTALL_DIR=$HOME/EMBREE/
 
 # MOAB variables
-ENV MOAB_TAG='5.3.0'
+ENV MOAB_TAG='5.3.1'
 ENV MOAB_REPO='https://bitbucket.org/fathomteam/moab/'
 
 # Double-Down variables
@@ -48,7 +48,7 @@ ENV DD_REPO='https://github.com/pshriwise/double-down'
 ENV DD_INSTALL_DIR=$HOME/Double_down
 
 # DAGMC variables
-ENV DAGMC_BRANCH='v3.2.1'
+ENV DAGMC_BRANCH='v3.2.2'
 ENV DAGMC_REPO='https://github.com/svalinn/DAGMC'
 ENV DAGMC_INSTALL_DIR=$HOME/DAGMC/
 
@@ -74,9 +74,6 @@ RUN apt-get update -y && \
         libpng-dev && \
     apt-get autoremove
 
-# Update system-provided pip
-RUN pip install --upgrade pip
-
 # Clone and install NJOY2016
 RUN cd $HOME \
     && git clone --single-branch --depth 1 ${NJOY_REPO} \
@@ -91,7 +88,7 @@ RUN cd $HOME \
 RUN if [ "$build_dagmc" = "on" ]; then \
         # Install addition packages required for DAGMC
         apt-get -y install libeigen3-dev libnetcdf-dev libtbb-dev libglfw3-dev \
-        && pip install --upgrade numpy cython \
+        && pip install --upgrade numpy cython<3.0 \
         # Clone and install EMBREE
         && mkdir -p $HOME/EMBREE && cd $HOME/EMBREE \
         && git clone --single-branch -b ${EMBREE_TAG} --depth 1 ${EMBREE_REPO} \
@@ -223,7 +220,7 @@ RUN mkdir -p ${HOME}/OpenMC && cd ${HOME}/OpenMC \
             -DHDF5_PREFER_PARALLEL=on ; \
     fi ; \
     make 2>/dev/null -j${compile_cores} install \
-    && cd ../openmc && pip install .[test,depletion-mpi] \
+    && cd ../openmc && python -m pip install .[test,depletion-mpi] \
     && python -c "import openmc"
 
 FROM build AS release
