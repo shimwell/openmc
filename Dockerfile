@@ -69,10 +69,15 @@ ENV LD_LIBRARY_PATH=${DAGMC_INSTALL_DIR}/lib:$LD_LIBRARY_PATH \
 RUN apt-get update -y && \
     apt-get upgrade -y && \
     apt-get install -y \
-        python3-pip python-is-python3 wget git build-essential cmake \
+        python3-pip python3-venv wget git build-essential cmake \
         mpich libmpich-dev libhdf5-serial-dev libhdf5-mpich-dev \
         libpng-dev && \
     apt-get autoremove
+
+# Enabling a venv within Docker is needed to avoid system wide installs
+ENV VIRTUAL_ENV=/opt/venv
+RUN python3 -m venv $VIRTUAL_ENV
+ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
 # Clone and install NJOY2016
 RUN cd $HOME \
