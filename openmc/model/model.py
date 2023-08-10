@@ -1016,3 +1016,18 @@ class Model:
         """
 
         self._change_py_lib_attribs(names_or_ids, volume, 'material', 'volume')
+
+    def clone_materials(self):
+        """Create a copy of each material so that each cell has a unique material.
+
+        .. versionadded:: 0.13.4
+
+        """
+
+        self.materials.clear()
+
+        all_cells = [mat for _, mat in self.geometry.get_all_cells().items()] 
+        # loops through the cells creating a new material for each cell fill
+        for cell in all_cells:
+            if cell.fill is not None:
+                cell.fill = cell.fill.clone()
