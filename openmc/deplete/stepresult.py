@@ -219,6 +219,13 @@ class StepResult:
         with warnings.catch_warnings():
             warnings.simplefilter('ignore', openmc.IDWarning)
             material = openmc.Material(material_id=int(mat_id))
+        # Note self.volume keys are strings while mat ids are normally ints
+        if mat_id not in self.volume.keys():
+            msg = (
+                f'mat_id of {mat_id} was not found in this depletion timestep '
+                f'available mat_ids are {self.volume.keys()}'
+            )
+            raise KeyError(msg)
         vol = self.volume[mat_id]
         for nuc, _ in sorted(self.index_nuc.items(), key=lambda x: x[1]):
             atoms = self[0, mat_id, nuc]
