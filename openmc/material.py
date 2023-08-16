@@ -162,7 +162,7 @@ class Material(IDManagerMixin):
             if percent != 0.:
                 stability='unstable' if nuclide not in NATURAL_ABUNDANCE.keys() else ''
                 string += '{: <16}'.format('\t{}'.format(nuclide))
-                string += '=\t{: <12} [{}]\n'.format(percent, percent_type, stability)
+                string += '=\t{: <12} [{}] {}\n'.format(percent, percent_type, stability)
 
         if self._macroscopic is not None:
             string += '{: <16}\n'.format('\tMacroscopic Data')
