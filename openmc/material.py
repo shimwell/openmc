@@ -160,7 +160,7 @@ class Material(IDManagerMixin):
 
         for nuclide, percent, percent_type in self._nuclides:
             if percent != 0.:
-                stability='unstable' if nuclide not in NATURAL_ABUNDANCE.keys() else ''
+                stability = 'unstable' if nuclide not in NATURAL_ABUNDANCE.keys() else ''
                 string += '{: <16}'.format('\t{}'.format(nuclide))
                 string += '=\t{: <12} [{}] {}\n'.format(percent, percent_type, stability)
 
