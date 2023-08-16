@@ -18,6 +18,7 @@ import openmc.data
 import openmc.checkvalue as cv
 from ._xml import clean_indentation, reorder_attributes
 from .mixin import IDManagerMixin
+from openmc.data import NATURAL_ABUNDANCE
 from openmc.checkvalue import PathLike
 from openmc.stats import Univariate
 
