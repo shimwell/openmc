@@ -522,7 +522,8 @@ class Results(list):
         self,
         burnup_index: int,
         nuc_with_data: Optional[Iterable[str]] = None,
-        path: PathLike = 'materials.xml'
+        path: PathLike = 'materials.xml',
+        mat_id: Optional[Iterable[int]] = None,
     ) -> Materials:
         """Return openmc.Materials object based on results at a given step
 
@@ -545,6 +546,12 @@ class Results(list):
             Path to materials XML file to read. Defaults to 'materials.xml'.
 
             .. versionadded:: 0.13.3
+
+        mat_id : Iterable of int, optional
+            Matieral IDs of the materials to export, if left as None all
+            materials IDs in burn_index will be exported.
+
+            .. versionadded:: 0.13.4
 
         Returns
         -------
@@ -586,27 +593,28 @@ class Results(list):
         # Overwrite material definitions, if they can be found in the depletion
         # results, and save them to the new depleted xml file.
         for mat in mat_file:
-            mat_id = str(mat.id)
-            if mat_id in result.index_mat:
-                mat.volume = result.volume[mat_id]
+            if mat_id is None or mat.id in mat_id:
+                mat_id_str = str(mat.id)
+                if mat_id_str in result.index_mat:
+                    mat.volume = result.volume[mat_id_str]
 
-                # Change density of all nuclides in material to atom/b-cm
-                atoms_per_barn_cm = mat.get_nuclide_atom_densities()
-                for nuc, value in atoms_per_barn_cm.items():
-                    mat.remove_nuclide(nuc)
-                    mat.add_nuclide(nuc, value)
-                mat.set_density('sum')
+                    # Change density of all nuclides in material to atom/b-cm
+                    atoms_per_barn_cm = mat.get_nuclide_atom_densities()
+                    for nuc, value in atoms_per_barn_cm.items():
+                        mat.remove_nuclide(nuc)
+                        mat.add_nuclide(nuc, value)
+                    mat.set_density('sum')
 
-                # For nuclides in chain that have cross sections, replace
-                # density in original material with new density from results
-                for nuc in result.index_nuc:
-                    if nuc not in available_cross_sections:
-                        continue
-                    atoms = result[0, mat_id, nuc]
-                    if atoms > 0.0:
-                        atoms_per_barn_cm = 1e-24 * atoms / mat.volume
-                        mat.remove_nuclide(nuc) # Replace if it's there
-                        mat.add_nuclide(nuc, atoms_per_barn_cm)
+                    # For nuclides in chain that have cross sections, replace
+                    # density in original material with new density from results
+                    for nuc in result.index_nuc:
+                        if nuc not in available_cross_sections:
+                            continue
+                        atoms = result[0, mat_id_str, nuc]
+                        if atoms > 0.0:
+                            atoms_per_barn_cm = 1e-24 * atoms / mat.volume
+                            mat.remove_nuclide(nuc) # Replace if it's there
+                            mat.add_nuclide(nuc, atoms_per_barn_cm)
 
         return mat_file
 

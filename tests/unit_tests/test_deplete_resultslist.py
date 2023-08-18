@@ -222,3 +222,25 @@ def test_stepresult_get_material(res):
     assert densities['Xe135'] == pytest.approx(1e-14)
     assert densities['I135'] == pytest.approx(1e-21)
     assert densities['U234'] == pytest.approx(1.00506e-05)
+
+
+def test_result_export_material(res):
+
+    materials_xml = (Path(__file__).parents[1] / 'regression_tests' / 'deplete_with_transport'
+                / 'last_step_reference_materials.xml')
+    # Get material at first timestep
+    mats = res.export_to_materials(
+        burnup_index=1,
+        path=materials_xml,
+        mat_id=[1]
+    )
+
+    assert len(mats) == 76  # there are 76 steps
+    mat1 = mats[0]
+    assert mat1.id == 1
+    assert mat1.volume == res[1].volume["1"]
+
+    densities = mat1.get_nuclide_atom_densities()
+    assert densities['Xe135'] == pytest.approx(1e-14)
+    assert densities['I135'] == pytest.approx(1e-21)
+    assert densities['U234'] == pytest.approx(1.00506e-05)
