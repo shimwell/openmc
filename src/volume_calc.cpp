@@ -538,15 +538,12 @@ int openmc_calculate_volumes()
         if (vol_calc.domain_type_ == VolumeCalculation::TallyDomain::CELL) {
           int cell_idx = model::cell_map[vol_calc.domain_ids_[j]];
           region_name = model::cells[cell_idx]->name();
-          if (region_name.size())
-            region_name.insert(0, " "); // prepend space for formatting
-        }
-        if (vol_calc.domain_type_ == VolumeCalculation::TallyDomain::MATERIAL) {
+        } else if (vol_calc.domain_type_ == VolumeCalculation::TallyDomain::MATERIAL) {
           int mat_idx = model::material_map[vol_calc.domain_ids_[j]];
           region_name = model::materials[mat_idx]->name();
-          if (region_name.size())
-            region_name.insert(0, " "); // prepend space for formatting
         }
+        if (region_name.size())
+          region_name.insert(0, " "); // prepend space for formatting
 
         write_message(4, "{}{}{}: {} +/- {} cm^3", domain_type,
           vol_calc.domain_ids_[j], region_name, results[j].volume[0],
