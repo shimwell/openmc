@@ -188,9 +188,9 @@ def plot_mesh_tally(
     geometry: Optional['openmc.Geometry'] = None,
     pixels: int = 40000,
     colorbar: bool = True,
-    color_bar_title: str = None,
     volume_normalization: bool = True,
     scaling_factor: Optional[float] = None,
+    colorbar_kwargs: dict = {},
     outline_kwargs: dict = _default_outline_kwargs,
     **kwargs
 ) -> 'matplotlib.image.AxesImage':
@@ -303,11 +303,7 @@ def plot_mesh_tally(
     im = axes.imshow(data, extent=(x_min, x_max, y_min, y_max), **kwargs)
 
     if colorbar:
-        cbar = fig.colorbar(im)
-        if color_bar_title is None:
-            cbar.set_label(score)
-        else:
-            cbar.set_label(color_bar_title)
+        fig.colorbar(im, **colorbar_kwargs)
 
     if outline and geometry is not None:
         import matplotlib.image as mpimg
