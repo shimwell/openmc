@@ -16,7 +16,7 @@ from openmc.checkvalue import PathLike
 from ._xml import clean_indentation, get_elem_tuple, reorder_attributes, get_text
 from .mixin import IDManagerMixin
 
-_BASES = ['xy', 'xz', 'yz']
+_BASES = ['xy', 'xz', 'yz', 'rz']
 
 _SVG_COLORS = {
     'aliceblue': (240, 248, 255),
@@ -200,7 +200,7 @@ def plot_mesh_tally(
     ----------
     tally : openmc.Tally
         The openmc tally to plot. Tally must contain a MeshFilter that uses a RegularMesh.
-    basis : {'xy', 'xz', 'yz'}
+    basis : {'xy', 'xz', 'yz', 'rz'}
         The basis directions for the plot
     slice_index : int
         The mesh index to plot
@@ -252,8 +252,17 @@ def plot_mesh_tally(
     cv.check_type('outline', outline, bool)
 
     mesh = tally.find_filter(filter_type=openmc.MeshFilter).mesh
-    if not isinstance(mesh, openmc.RegularMesh):
-        raise NotImplemented(f'Only RegularMesh are currently supported not {type(mesh)}')
+    msg = (
+        f'Tally mesh ({type(mesh)}) and basis ({basis}) combination is not '
+        f'supported. {msg}. Supported combinations of mesh type and basis are '
+        'either RegularMesh with xy xz, yz basis or CylindricalMesh with rz basis.'
+    )
+    if basis in ['xy', 'xz', 'yz']:
+        if not isinstance(mesh, openmc.RegularMesh):
+            raise ValueError(msg)
+    else: # basis is rz
+        if not isinstance(mesh, openmc.CylindricalMesh):
+            raise ValueError(msg)
 
     # if score is not specified and tally has a single score then we know which score to use
     if score is None:
@@ -268,7 +277,7 @@ def plot_mesh_tally(
     tally_data = tally_slice.get_reshaped_data(expand_dims=True, value=value).squeeze()
 
     if slice_index is None:
-        basis_to_index = {'xy': 2, 'xz': 1, 'yz': 0}[basis]
+        basis_to_index = {'xy': 2, 'xz': 1, 'yz': 0, 'rz': 1}[basis]
         slice_index = int(tally_data.shape[basis_to_index]/2)
 
     if basis == 'xz':
@@ -279,14 +288,21 @@ def plot_mesh_tally(
         slice_data = tally_data[slice_index, :, :]
         data = np.flip(np.rot90(slice_data, -1))
         xlabel, ylabel = f'y [{axis_units}]', f'z [{axis_units}]'
-    else:  # basis == 'xy'
+    elif basis == 'xy':
         slice_data = tally_data[:, :, slice_index]
         data = np.rot90(slice_data, -3)
         xlabel, ylabel = f'x [{axis_units}]', f'y [{axis_units}]'
+    else:  # basis is rz
+        slice_data = tally_data[:, slice_index, :]
+        data = np.rot90(slice_data, -1)
 
     if volume_normalization:
-        # in a regular mesh all volumes are the same so we just divide by the first
-        data = data / mesh.volumes[0][0][0]
+        if isinstance(mesh, openmc.RegularMesh):
+            # in a regular mesh all volumes are the same so we just divide by the first
+            data = data / mesh.volumes[0][0][0]
+        if isinstance(mesh, openmc.CylindricalMesh):
+            slice_volumes = mesh.volumes[:, slice_index, :]
+            data = data / slice_volumes
 
     if scaling_factor:
         data = data * scaling_factor
