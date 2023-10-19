@@ -163,7 +163,6 @@ class CrossNuclide:
 
     @property
     def name(self):
-
         string = ""
 
         # If the Summary was linked, the left nuclide is a Nuclide object
@@ -393,7 +392,6 @@ class AggregateScore:
     """
 
     def __init__(self, scores=None, aggregate_op=None):
-
         self._scores = None
         self._aggregate_op = None
 
@@ -434,7 +432,6 @@ class AggregateScore:
 
     @property
     def name(self):
-
         # Append each score in the aggregate to the string
         string = "(" + ", ".join(self.scores) + ")"
         return string
@@ -463,7 +460,6 @@ class AggregateNuclide:
     """
 
     def __init__(self, nuclides=None, aggregate_op=None):
-
         self._nuclides = None
         self._aggregate_op = None
 
@@ -479,7 +475,6 @@ class AggregateNuclide:
         return str(other) == str(self)
 
     def __repr__(self):
-
         # Append each nuclide in the aggregate to the string
         string = f"{self.aggregate_op}("
         names = [
@@ -510,7 +505,6 @@ class AggregateNuclide:
 
     @property
     def name(self):
-
         # Append each nuclide in the aggregate to the string
         names = [
             nuclide.name if isinstance(nuclide, openmc.Nuclide) else str(nuclide)
@@ -551,7 +545,6 @@ class AggregateFilter:
     """
 
     def __init__(self, aggregate_filter, bins=None, aggregate_op=None):
-
         self._type = f"{aggregate_op}({aggregate_filter.short_name.lower()})"
         self._bins = None
 
