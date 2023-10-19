@@ -11,4 +11,4 @@ jobs:
       - name: Lint code
         run: |
           pip install black==23.10.0
-          black openmc/arithmetic.py
+          black --check --verbose openmc/arithmetic.py
