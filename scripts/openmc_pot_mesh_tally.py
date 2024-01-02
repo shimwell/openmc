@@ -316,7 +316,7 @@ class MeshPlotter(tk.Frame):
             sys.exit(1)
 
 
-if __name__ == '__main__':
+def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('statepoint', nargs='?', help='Statepoint file')
     args = parser.parse_args()
@@ -342,3 +342,6 @@ if __name__ == '__main__':
         app = MeshPlotter(root, filename)
         root.deiconify()
         root.mainloop()
+
+if __name__ == '__main__':
+    main()

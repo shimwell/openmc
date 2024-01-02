@@ -28,7 +28,52 @@ import openmc.data
 from openmc.data.ace import TableType
 
 
-def ace_to_hdf5(destination, xsdir, xsdata, libraries, metastable, libver):
+class CustomFormatter(
+    argparse.ArgumentDefaultsHelpFormatter, argparse.RawDescriptionHelpFormatter
+):
+    pass
+
+parser = argparse.ArgumentParser(
+    description=__doc__, formatter_class=CustomFormatter
+)
+parser.add_argument("libraries", nargs="*", help="ACE libraries to convert to HDF5")
+parser.add_argument(
+    "-d",
+    "--destination",
+    type=Path,
+    default=Path.cwd(),
+    help="Directory to create new library in",
+)
+parser.add_argument(
+    "-m",
+    "--metastable",
+    choices=["mcnp", "nndc"],
+    default="nndc",
+    help="How to interpret ZAIDs for metastable nuclides",
+)
+parser.add_argument("--xsdir", help="MCNP xsdir file that lists " "ACE libraries")
+parser.add_argument(
+    "--xsdata", help="Serpent xsdata file that lists " "ACE libraries"
+)
+parser.add_argument(
+    "--libver",
+    choices=["earliest", "latest"],
+    default="earliest",
+    help="Output HDF5 versioning. Use "
+    "'earliest' for backwards compatibility or 'latest' "
+    "for performance",
+)
+args = parser.parse_args()
+
+
+def main():
+
+    destination=args.destination
+    xsdir=args.xsdir
+    xsdata=args.xsdata
+    libraries=args.libraries
+    metastable=args.metastable
+    libver=args.libver
 
     if not destination.is_dir():
         destination.mkdir(parents=True, exist_ok=True)
@@ -109,48 +154,4 @@ def ace_to_hdf5(destination, xsdir, xsdata, libraries, metastable, libver):
 
 if __name__ == "__main__":
 
-    class CustomFormatter(
-        argparse.ArgumentDefaultsHelpFormatter, argparse.RawDescriptionHelpFormatter
-    ):
-        pass
-
-    parser = argparse.ArgumentParser(
-        description=__doc__, formatter_class=CustomFormatter
-    )
-    parser.add_argument("libraries", nargs="*", help="ACE libraries to convert to HDF5")
-    parser.add_argument(
-        "-d",
-        "--destination",
-        type=Path,
-        default=Path.cwd(),
-        help="Directory to create new library in",
-    )
-    parser.add_argument(
-        "-m",
-        "--metastable",
-        choices=["mcnp", "nndc"],
-        default="nndc",
-        help="How to interpret ZAIDs for metastable nuclides",
-    )
-    parser.add_argument("--xsdir", help="MCNP xsdir file that lists " "ACE libraries")
-    parser.add_argument(
-        "--xsdata", help="Serpent xsdata file that lists " "ACE libraries"
-    )
-    parser.add_argument(
-        "--libver",
-        choices=["earliest", "latest"],
-        default="earliest",
-        help="Output HDF5 versioning. Use "
-        "'earliest' for backwards compatibility or 'latest' "
-        "for performance",
-    )
-    args = parser.parse_args()
-
-    ace_to_hdf5(
-        destination=args.destination,
-        xsdir=args.xsdir,
-        xsdata=args.xsdata,
-        libraries=args.libraries,
-        metastable=args.metastable,
-        libver=args.libver,
-    )
+    main()
