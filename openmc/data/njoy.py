@@ -154,6 +154,19 @@ acer / %%%%%%%%%%%%%%%%%%%%%%%% Write out in ACE format %%%%%%%%%%%%%%%%%%%%%%%%
 222 64 {mt_elastic} {elastic_type} {data.nmix} {energy_max} {iwt}/
 """
 
+_TEMPLATE_GROUPR = """
+groupr / %%%%%%%%%%%%%%%% Multigroup data %%%%%%%%%%%%%%%%
+{nendf} {npendf} 0 {ndir} /
+{mat} 5 5 11 6 1 1 1 /
+'{library} GROUPR processed by NJOY'/
+{temperature} /
+1.E+10 /
+3/
+6/
+16/
+0/
+0/
+"""
 
 def run(commands, tapein, tapeout, input_filename=None, stdout=False,
         njoy_exec='njoy'):
@@ -248,8 +261,8 @@ def make_pendf(filename, pendf='pendf', error=0.001, stdout=False):
 
 def make_ace(filename, temperatures=None, acer=True, xsdir=None,
              output_dir=None, pendf=False, error=0.001, broadr=True,
-             heatr=True, gaspr=True, purr=True, evaluation=None,
-             smoothing=True, **kwargs):
+             heatr=True, gaspr=True, purr=True, groupr=False,
+             evaluation=None, smoothing=True, **kwargs):
     """Generate incident neutron ACE file from an ENDF file
 
     File names can be passed to
@@ -380,6 +393,16 @@ def make_ace(filename, temperatures=None, acer=True, xsdir=None,
         nlast = npurr
 
     commands = commands.format(**locals())
+
+    #groupr
+    if groupr:
+        ngroupr_in = nlast
+        for i, temperature in enumerate(temperatures):
+            ngroupr = ngroupr_in + 1 + 2*i
+            ndir = ngroupr + 1
+            commands += _TEMPLATE_GROUPR.format(**locals())
+
+            tapeout[ngroupr] = output_dir / "groupr_{:.1f}".format(temperature)
 
     # acer
     if acer:
