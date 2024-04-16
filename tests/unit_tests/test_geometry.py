@@ -306,6 +306,16 @@ def test_from_xml(run_in_tmpdir, mixed_lattice_model):
     assert ur == pytest.approx((6.0, 6.0, np.inf))
 
 
+def test_from_xml_with_void_mat(run_in_tmpdir):
+    surf1 = openmc.Sphere(r=1)
+    cell = openmc.Cell(region=-surf1, cell_id=42)
+    geometry = openmc.Geometry([cell])
+    materials = openmc.Materials()
+    geometry.export_to_xml(path='geometry.xml')
+    geometry = openmc.Geometry.from_xml(path='geometry.xml', materials=materials)
+    assert geometry.get_all_cells()[42].fill == None
+
+
 def test_rotation_matrix():
     """Test ability to set a rotation matrix directly"""
     y = openmc.YPlane()
