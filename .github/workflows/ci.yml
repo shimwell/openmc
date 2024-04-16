@@ -86,10 +86,10 @@ jobs:
             os: "macos-latest"
             omp: n
             mpi: n
-    name: "Python ${{ matrix.python-version }} (omp=${{ matrix.omp }},
-      mpi=${{ matrix.mpi }}, dagmc=${{ matrix.dagmc }}, ncrystal=${{ matrix.ncrystal }},
-      libmesh=${{ matrix.libmesh }}, event=${{ matrix.event }}
-      vectfit=${{ matrix.vectfit }})"
+    name: "Python ${{ matrix.os }} ${{ matrix.python-version }},
+      (omp=${{ matrix.omp }} mpi=${{ matrix.mpi }}, dagmc=${{ matrix.dagmc }},
+      ncrystal=${{ matrix.ncrystal }}, libmesh=${{ matrix.libmesh }},
+      event=${{ matrix.event }}, vectfit=${{ matrix.vectfit }})"
 
     env:
       MPI: ${{ matrix.mpi }}
@@ -123,7 +123,7 @@ jobs:
 
       - name: Apt dependencies
         shell: bash
-        if: ${{ matrix.os != 'ubuntu-22.04' }}
+        if: ${{ matrix.os == 'ubuntu-22.04' }}
         run: |
           sudo apt -y update
           sudo apt install -y libpng-dev \
@@ -139,7 +139,7 @@ jobs:
 
       - name: Apt dependencies
         shell: bash
-        if: ${{ matrix.os != 'ubuntu-22.04' && matrix.vectfit == 'y' }}
+        if: ${{ matrix.os == 'ubuntu-22.04' && matrix.vectfit == 'y' }}
         run: sudo apt-get install -y libblas-dev liblapack-dev
 
       - name: install
