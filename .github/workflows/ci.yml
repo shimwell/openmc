@@ -123,6 +123,7 @@ jobs:
 
       - name: Apt dependencies
         shell: bash
+        if: ${{ matrix.os != 'ubuntu-22.04' }}
         run: |
           sudo apt -y update
           sudo apt install -y libpng-dev \
@@ -135,6 +136,11 @@ jobs:
           sudo update-alternatives --set mpi /usr/bin/mpicc.mpich
           sudo update-alternatives --set mpirun /usr/bin/mpirun.mpich
           sudo update-alternatives --set mpi-x86_64-linux-gnu /usr/include/x86_64-linux-gnu/mpich
+
+      - name: Apt dependencies
+        shell: bash
+        if: ${{ matrix.os != 'ubuntu-22.04' && matrix.vectfit == 'y' }}
+        run: sudo apt-get install -y libblas-dev liblapack-dev
 
       - name: install
         shell: bash
