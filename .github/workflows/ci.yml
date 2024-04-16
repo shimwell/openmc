@@ -37,38 +37,48 @@ jobs:
 
         include:
           - python-version: "3.8"
+            os: "ubuntu-22.04"
             omp: n
             mpi: n
           - python-version: "3.9"
+            os: "ubuntu-22.04"
             omp: n
             mpi: n
           - python-version: "3.11"
+            os: "ubuntu-22.04"
             omp: n
             mpi: n
           - python-version: "3.12"
+            os: "ubuntu-22.04"
             omp: n
             mpi: n
           - dagmc: y
+            os: "ubuntu-22.04"
             python-version: "3.10"
             mpi: y
             omp: y
           - ncrystal: y
+            os: "ubuntu-22.04"
             python-version: "3.10"
             mpi: n
             omp: n
           - libmesh: y
+            os: "ubuntu-22.04"
             python-version: "3.10"
             mpi: y
             omp: y
           - libmesh: y
+            os: "ubuntu-22.04"
             python-version: "3.10"
             mpi: n
             omp: y
           - event: y
+            os: "ubuntu-22.04"
             python-version: "3.10"
             omp: y
             mpi: n
           - vectfit: y
+            os: "ubuntu-22.04"
             python-version: "3.10"
             omp: n
             mpi: y
