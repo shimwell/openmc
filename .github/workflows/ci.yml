@@ -22,9 +22,10 @@ env:
 
 jobs:
   main:
-    runs-on: ubuntu-22.04
+    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
+        os: ["ubuntu-22.04"]
         python-version: ["3.10"]
         mpi: [n, y]
         omp: [n, y]
@@ -35,46 +36,60 @@ jobs:
         vectfit: [n]
 
         include:
-          - python-version: "3.8"
+          # - python-version: "3.8"
+          #   os: "ubuntu-22.04"
+          #   omp: n
+          #   mpi: n
+          # - python-version: "3.9"
+          #   os: "ubuntu-22.04"
+          #   omp: n
+          #   mpi: n
+          # - python-version: "3.11"
+          #   os: "ubuntu-22.04"
+          #   omp: n
+          #   mpi: n
+          # - python-version: "3.12"
+          #   os: "ubuntu-22.04"
+          #   omp: n
+          #   mpi: n
+          # - dagmc: y
+          #   os: "ubuntu-22.04"
+          #   python-version: "3.10"
+          #   mpi: y
+          #   omp: y
+          # - ncrystal: y
+          #   os: "ubuntu-22.04"
+          #   python-version: "3.10"
+          #   mpi: n
+          #   omp: n
+          # - libmesh: y
+          #   os: "ubuntu-22.04"
+          #   python-version: "3.10"
+          #   mpi: y
+          #   omp: y
+          # - libmesh: y
+          #   os: "ubuntu-22.04"
+          #   python-version: "3.10"
+          #   mpi: n
+          #   omp: y
+          # - event: y
+          #   os: "ubuntu-22.04"
+          #   python-version: "3.10"
+          #   omp: y
+          #   mpi: n
+          # - vectfit: y
+          #   os: "ubuntu-22.04"
+          #   python-version: "3.10"
+          #   omp: n
+          #   mpi: y
+          - python-version: "3.10"
+            os: "macos-latest"
             omp: n
             mpi: n
-          - python-version: "3.9"
-            omp: n
-            mpi: n
-          - python-version: "3.11"
-            omp: n
-            mpi: n
-          - python-version: "3.12"
-            omp: n
-            mpi: n
-          - dagmc: y
-            python-version: "3.10"
-            mpi: y
-            omp: y
-          - ncrystal: y
-            python-version: "3.10"
-            mpi: n
-            omp: n
-          - libmesh: y
-            python-version: "3.10"
-            mpi: y
-            omp: y
-          - libmesh: y
-            python-version: "3.10"
-            mpi: n
-            omp: y
-          - event: y
-            python-version: "3.10"
-            omp: y
-            mpi: n
-          - vectfit: y
-            python-version: "3.10"
-            omp: n
-            mpi: y
-    name: "Python ${{ matrix.python-version }} (omp=${{ matrix.omp }},
-      mpi=${{ matrix.mpi }}, dagmc=${{ matrix.dagmc }}, ncrystal=${{ matrix.ncrystal }},
-      libmesh=${{ matrix.libmesh }}, event=${{ matrix.event }}
-      vectfit=${{ matrix.vectfit }})"
+    name: "Python ${{ matrix.os }} ${{ matrix.python-version }},
+      (omp=${{ matrix.omp }} mpi=${{ matrix.mpi }}, dagmc=${{ matrix.dagmc }},
+      ncrystal=${{ matrix.ncrystal }}, libmesh=${{ matrix.libmesh }},
+      event=${{ matrix.event }}, vectfit=${{ matrix.vectfit }})"
 
     env:
       MPI: ${{ matrix.mpi }}
@@ -108,6 +123,7 @@ jobs:
 
       - name: Apt dependencies
         shell: bash
+        if: ${{ matrix.os == 'ubuntu-22.04' }}
         run: |
           sudo apt -y update
           sudo apt install -y libpng-dev \
@@ -120,6 +136,22 @@ jobs:
           sudo update-alternatives --set mpi /usr/bin/mpicc.mpich
           sudo update-alternatives --set mpirun /usr/bin/mpirun.mpich
           sudo update-alternatives --set mpi-x86_64-linux-gnu /usr/include/x86_64-linux-gnu/mpich
+
+      - name: Optional apt dependencies
+        shell: bash
+        if: ${{ matrix.os == 'ubuntu-22.04' && matrix.vectfit == 'y' }}
+        run: sudo apt-get install -y libblas-dev liblapack-dev
+
+      - name: brew dependencies
+        shell: bash
+        if: ${{ matrix.os == 'macos-latest' }}
+        run: |
+          # fortran compiler needed for NJOY
+          brew update
+          brew install gcc
+          brew install llvm cmake xtensor hdf5 python libomp libpng
+          which clang++
+          export CXX=/opt/homebrew/opt/llvm/bin/clang++
 
       - name: install
         shell: bash
