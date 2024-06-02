@@ -4,7 +4,7 @@
 Development Workflow
 ====================
 
-Anyone wishing to make contributions to OpenMC should be fully acquianted and
+Anyone wishing to make contributions to OpenMC should be fully acquainted and
 comfortable working with git_ and GitHub_. We assume here that you have git
 installed on your system, have a GitHub account, and have setup SSH keys to be
 able to create/push to repositories on GitHub.
@@ -67,6 +67,12 @@ features and bug fixes. The general steps for contributing are as follows:
        cd openmc
        git checkout -b newbranch develop
 
+3. Run ``tools/dev/install-commit-hooks.sh`` to install a post-commit hook that
+   runs clang-format on C++ files to apply :ref:`automatic code formatting
+   <styleguide_formatting>` (requires that clang-format already be installed).
+   In addition, you may want to configure your text editor to automatically run
+   clang-format when saving C++ files.
+
 3. Make your changes on the new branch that you intend to have included in
    *develop*. If you have made other changes that should not be merged back,
    ensure that those changes are made on a different branch.
@@ -75,7 +81,7 @@ features and bug fixes. The general steps for contributing are as follows:
    openmc-dev/openmc as the target.
 
    At a minimum, you should describe what the changes you've made are and why
-   you are making them. If the changes are related to an oustanding issue, make
+   you are making them. If the changes are related to an outstanding issue, make
    sure it is cross-referenced.
 
 5. A committer will review your pull request based on the criteria
@@ -110,11 +116,11 @@ pip_. From the root directory of the OpenMC repository, run:
 
 .. code-block:: sh
 
-    pip install -e .[test]
+    python -m pip install -e .[test]
 
 This installs the OpenMC Python package in `"editable" mode
-<https://pip.pypa.io/en/stable/reference/pip_install/#editable-installs>`_ so
-that 1) it can be imported from a Python interpreter and 2) any changes made are
+<https://pip.pypa.io/en/stable/cli/pip_install/#editable-installs>`_ so that 1)
+it can be imported from a Python interpreter and 2) any changes made are
 immediately reflected in the installed version (that is, you don't need to keep
 reinstalling it). While the same effect can be achieved using the
 :envvar:`PYTHONPATH` environment variable, this is generally discouraged as it

@@ -5,6 +5,7 @@
 #include <iostream>
 #include <stdexcept> // for out_of_range
 
+#include "fmt/format.h"
 #include "openmc/array.h"
 #include "openmc/vector.h"
 
@@ -17,8 +18,8 @@ namespace openmc {
 struct Position {
   // Constructors
   Position() = default;
-  Position(double x_, double y_, double z_) : x{x_}, y{y_}, z{z_} { };
-  Position(const double xyz[]) : x{xyz[0]}, y{xyz[1]}, z{xyz[2]} { };
+  Position(double x_, double y_, double z_) : x {x_}, y {y_}, z {z_} {};
+  Position(const double xyz[]) : x {xyz[0]}, y {xyz[1]}, z {xyz[2]} {};
   Position(const vector<double>& xyz) : x {xyz[0]}, y {xyz[1]}, z {xyz[2]} {};
   Position(const array<double, 3>& xyz) : x {xyz[0]}, y {xyz[1]}, z {xyz[2]} {};
 
@@ -33,22 +34,30 @@ struct Position {
   Position& operator/=(double);
   Position operator-() const;
 
-  const double& operator[](int i) const {
+  const double& operator[](int i) const
+  {
     switch (i) {
-      case 0: return x;
-      case 1: return y;
-      case 2: return z;
-      default:
-        throw std::out_of_range{"Index in Position must be between 0 and 2."};
+    case 0:
+      return x;
+    case 1:
+      return y;
+    case 2:
+      return z;
+    default:
+      throw std::out_of_range {"Index in Position must be between 0 and 2."};
     }
   }
-  double& operator[](int i) {
+  double& operator[](int i)
+  {
     switch (i) {
-      case 0: return x;
-      case 1: return y;
-      case 2: return z;
-      default:
-        throw std::out_of_range{"Index in Position must be between 0 and 2."};
+    case 0:
+      return x;
+    case 1:
+      return y;
+    case 2:
+      return z;
+    default:
+      throw std::out_of_range {"Index in Position must be between 0 and 2."};
     }
   }
 
@@ -69,11 +78,15 @@ struct Position {
   //! Dot product of two vectors
   //! \param[in] other Vector to take dot product with
   //! \result Resulting dot product
-  inline double dot(Position other) const {
-    return x*other.x + y*other.y + z*other.z;
+  inline double dot(Position other) const
+  {
+    return x * other.x + y * other.y + z * other.z;
   }
-  inline double norm() const {
-    return std::sqrt(x*x + y*y + z*z);
+  inline double norm() const { return std::sqrt(x * x + y * y + z * z); }
+  inline Position cross(Position other) const
+  {
+    return {y * other.z - z * other.y, z * other.x - x * other.z,
+      x * other.y - y * other.x};
   }
 
   //! Reflect a direction across a normal vector
@@ -123,23 +136,60 @@ inline double& Position::get<2>()
 }
 
 // Binary operators
-inline Position operator+(Position a, Position b) { return a += b; }
-inline Position operator+(Position a, double b)   { return a += b; }
-inline Position operator+(double a, Position b)   { return b += a; }
+inline Position operator+(Position a, Position b)
+{
+  return a += b;
+}
+inline Position operator+(Position a, double b)
+{
+  return a += b;
+}
+inline Position operator+(double a, Position b)
+{
+  return b += a;
+}
 
-inline Position operator-(Position a, Position b) { return a -= b; }
-inline Position operator-(Position a, double b)   { return a -= b; }
-inline Position operator-(double a, Position b)   { return b -= a; }
+inline Position operator-(Position a, Position b)
+{
+  return a -= b;
+}
+inline Position operator-(Position a, double b)
+{
+  return a -= b;
+}
+inline Position operator-(double a, Position b)
+{
+  return b -= a;
+}
 
-inline Position operator*(Position a, Position b) { return a *= b; }
-inline Position operator*(Position a, double b)   { return a *= b; }
-inline Position operator*(double a, Position b)   { return b *= a; }
+inline Position operator*(Position a, Position b)
+{
+  return a *= b;
+}
+inline Position operator*(Position a, double b)
+{
+  return a *= b;
+}
+inline Position operator*(double a, Position b)
+{
+  return b *= a;
+}
 
-inline Position operator/(Position a, Position b) { return a /= b; }
-inline Position operator/(Position a, double b)   { return a /= b; }
-inline Position operator/(double a, Position b)   { return b /= a; }
+inline Position operator/(Position a, Position b)
+{
+  return a /= b;
+}
+inline Position operator/(Position a, double b)
+{
+  return a /= b;
+}
+inline Position operator/(double a, Position b)
+{
+  return b /= a;
+}
 
-inline Position Position::reflect(Position n) const {
+inline Position Position::reflect(Position n) const
+{
   const double projection = n.dot(*this);
   const double magnitude = n.dot(n);
   n *= (2.0 * projection / magnitude);
@@ -147,10 +197,14 @@ inline Position Position::reflect(Position n) const {
 }
 
 inline bool operator==(Position a, Position b)
-{return a.x == b.x && a.y == b.y && a.z == b.z;}
+{
+  return a.x == b.x && a.y == b.y && a.z == b.z;
+}
 
 inline bool operator!=(Position a, Position b)
-{return a.x != b.x || a.y != b.y || a.z != b.z;}
+{
+  return a.x != b.x || a.y != b.y || a.z != b.z;
+}
 
 std::ostream& operator<<(std::ostream& os, Position a);
 
@@ -161,5 +215,19 @@ std::ostream& operator<<(std::ostream& os, Position a);
 using Direction = Position;
 
 } // namespace openmc
+
+namespace fmt {
+
+template<>
+struct formatter<openmc::Position> : formatter<std::string> {
+  template<typename FormatContext>
+  auto format(const openmc::Position& pos, FormatContext& ctx)
+  {
+    return formatter<std::string>::format(
+      fmt::format("({}, {}, {})", pos.x, pos.y, pos.z), ctx);
+  }
+};
+
+} // namespace fmt
 
 #endif // OPENMC_POSITION_H

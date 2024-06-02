@@ -23,7 +23,7 @@ def _load_dose_icrp116():
     """Load effective dose tables from text files"""
     for particle, filename in _FILES:
         path = Path(__file__).parent / filename
-        data = np.loadtxt(path, skiprows=3)
+        data = np.loadtxt(path, skiprows=3, encoding='utf-8')
         data[:, 0] *= 1e6   # Change energies to eV
         _DOSE_ICRP116[particle] = data
 
@@ -60,7 +60,7 @@ def dose_coefficients(particle, geometry='AP'):
     # Get all data for selected particle
     data = _DOSE_ICRP116.get(particle)
     if data is None:
-        raise ValueError("{} has no effective dose data".format(particle))
+        raise ValueError(f"{particle} has no effective dose data")
 
     # Determine index for selected geometry
     if particle in ('neutron', 'photon', 'proton', 'photon kerma'):

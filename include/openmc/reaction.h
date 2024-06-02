@@ -6,9 +6,10 @@
 
 #include <string>
 
-#include <gsl/gsl>
 #include "hdf5.h"
+#include <gsl/gsl-lite.hpp>
 
+#include "openmc/particle_data.h"
 #include "openmc/reaction_product.h"
 #include "openmc/vector.h"
 
@@ -27,6 +28,18 @@ public:
   //! \param[in] temperatures Desired temperatures for cross sections
   explicit Reaction(hid_t group, const vector<int>& temperatures);
 
+  //! Calculate cross section given temperautre/grid index, interpolation factor
+  //
+  //! \param[in] i_temp Temperature index
+  //! \param[in] i_grid Energy grid index
+  //! \param[in] interp_factor Interpolation factor between grid points
+  double xs(gsl::index i_temp, gsl::index i_grid, double interp_factor) const;
+
+  //! Calculate cross section
+  //
+  //! \param[in] micro Microscopic cross section cache
+  double xs(const NuclideMicroXS& micro) const;
+
   //! \brief Calculate reaction rate based on group-wise flux distribution
   //
   //! \param[in] i_temp Temperature index
@@ -43,10 +56,10 @@ public:
     vector<double> value;
   };
 
-  int mt_;             //!< ENDF MT value
-  double q_value_;     //!< Reaction Q value in [eV]
-  bool scatter_in_cm_; //!< scattering system in center-of-mass?
-  bool redundant_;     //!< redundant reaction?
+  int mt_;                           //!< ENDF MT value
+  double q_value_;                   //!< Reaction Q value in [eV]
+  bool scatter_in_cm_;               //!< scattering system in center-of-mass?
+  bool redundant_;                   //!< redundant reaction?
   vector<TemperatureXS> xs_;         //!< Cross section at each temperature
   vector<ReactionProduct> products_; //!< Reaction products
 };

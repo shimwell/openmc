@@ -4,14 +4,15 @@
 #include <string>
 #include <unordered_map>
 
-#include <gsl/gsl>
-#include <hdf5.h>
 #include "pugixml.hpp"
 #include "xtensor/xtensor.hpp"
+#include <gsl/gsl-lite.hpp>
+#include <hdf5.h>
 
 #include "openmc/bremsstrahlung.h"
 #include "openmc/constants.h"
 #include "openmc/memory.h" // for unique_ptr
+#include "openmc/ncrystal_interface.h"
 #include "openmc/particle.h"
 #include "openmc/vector.h"
 
@@ -34,15 +35,14 @@ extern vector<unique_ptr<Material>> materials;
 //! A substance with constituent nuclides and thermal scattering data
 //==============================================================================
 
-class Material
-{
+class Material {
 public:
   //----------------------------------------------------------------------------
   // Types
   struct ThermalTable {
-    int index_table; //!< Index of table in data::thermal_scatt
+    int index_table;   //!< Index of table in data::thermal_scatt
     int index_nuclide; //!< Index in nuclide_
-    double fraction; //!< How often to use table
+    double fraction;   //!< How often to use table
   };
 
   //----------------------------------------------------------------------------
@@ -69,6 +69,14 @@ public:
   //! Write material data to HDF5
   void to_hdf5(hid_t group) const;
 
+  //! Export physical properties to HDF5
+  //! \param[in] group  HDF5 group to write to
+  void export_properties_hdf5(hid_t group) const;
+
+  //! Import physical properties from HDF5
+  //! \param[in] group  HDF5 group to read from
+  void import_properties_hdf5(hid_t group);
+
   //! Add nuclide to the material
   //
   //! \param[in] nuclide Name of the nuclide
@@ -81,6 +89,12 @@ public:
   //! \param[in] density Density of each nuclide in [atom/b-cm]
   void set_densities(
     const vector<std::string>& name, const vector<double>& density);
+
+  //! Clone the material by deep-copying all members, except for the ID,
+  //  which will get auto-assigned to the next available ID. After creating
+  //  the new material, it is added to openmc::model::materials.
+  //! \return reference to the cloned material
+  Material& clone();
 
   //----------------------------------------------------------------------------
   // Accessors
@@ -106,13 +120,22 @@ public:
   //! \param[in] units Units of density
   void set_density(double density, gsl::cstring_span units);
 
+  //! Set temperature of the material
+  void set_temperature(double temperature) { temperature_ = temperature; };
+
   //! Get nuclides in material
   //! \return Indices into the global nuclides vector
-  gsl::span<const int> nuclides() const { return {nuclide_.data(), nuclide_.size()}; }
+  gsl::span<const int> nuclides() const
+  {
+    return {nuclide_.data(), nuclide_.size()};
+  }
 
   //! Get densities of each nuclide in material
   //! \return Densities in [atom/b-cm]
-  gsl::span<const double> densities() const { return {atom_density_.data(), atom_density_.size()}; }
+  gsl::span<const double> densities() const
+  {
+    return {atom_density_.data(), atom_density_.size()};
+  }
 
   //! Get ID of material
   //! \return ID of material
@@ -126,6 +149,7 @@ public:
   //! Get whether material is fissionable
   //! \return Whether material is fissionable
   bool fissionable() const { return fissionable_; }
+  bool& fissionable() { return fissionable_; }
 
   //! Get volume of material
   //! \return Volume in [cm^3]
@@ -135,20 +159,27 @@ public:
   //! \return Temperature in [K]
   double temperature() const;
 
+  //! Whether or not the material is depletable
+  bool depletable() const { return depletable_; }
+  bool& depletable() { return depletable_; }
+
+  //! Get pointer to NCrystal material object
+  //! \return Pointer to NCrystal material object
+  const NCrystalMat& ncrystal_mat() const { return ncrystal_mat_; };
+
   //----------------------------------------------------------------------------
   // Data
-  int32_t id_ {C_NONE}; //!< Unique ID
-  std::string name_; //!< Name of material
+  int32_t id_ {C_NONE};                 //!< Unique ID
+  std::string name_;                    //!< Name of material
   vector<int> nuclide_;                 //!< Indices in nuclides vector
   vector<int> element_;                 //!< Indices in elements vector
+  NCrystalMat ncrystal_mat_;            //!< NCrystal material object
   xt::xtensor<double, 1> atom_density_; //!< Nuclide atom density in [atom/b-cm]
-  double density_; //!< Total atom density in [atom/b-cm]
-  double density_gpcc_; //!< Total atom density in [g/cm^3]
-  double volume_ {-1.0}; //!< Volume in [cm^3]
-  bool fissionable_ {false}; //!< Does this material contain fissionable nuclides
-  bool depletable_ {false}; //!< Is the material depletable?
-  vector<bool> p0_;         //!< Indicate which nuclides are to be treated with
-                            //!< iso-in-lab scattering
+  double density_;                      //!< Total atom density in [atom/b-cm]
+  double density_gpcc_;                 //!< Total atom density in [g/cm^3]
+  double volume_ {-1.0};                //!< Volume in [cm^3]
+  vector<bool> p0_; //!< Indicate which nuclides are to be treated with
+                    //!< iso-in-lab scattering
 
   // To improve performance of tallying, we store an array (direct address
   // table) that indicates for each nuclide in data::nuclides the index of the
@@ -181,6 +212,9 @@ private:
   // Private data members
   gsl::index index_;
 
+  bool depletable_ {false}; //!< Is the material depletable?
+  bool fissionable_ {
+    false}; //!< Does this material contain fissionable nuclides
   //! \brief Default temperature for cells containing this material.
   //!
   //! A negative value indicates no default temperature was specified.
@@ -203,6 +237,10 @@ double density_effect(const vector<double>& f, const vector<double>& e_b_sq,
 
 //! Read material data from materials.xml
 void read_materials_xml();
+
+//! Read material data XML node
+//! \param[in] root node of materials XML element
+void read_materials_xml(pugi::xml_node root);
 
 void free_memory_material();
 

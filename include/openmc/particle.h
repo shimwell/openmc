@@ -5,7 +5,6 @@
 //! \brief Particle type
 
 #include <cstdint>
-#include <sstream>
 #include <string>
 
 #include "openmc/constants.h"
@@ -30,11 +29,19 @@ class Surface;
 
 class Particle : public ParticleData {
 public:
-
   //==========================================================================
   // Constructors
 
   Particle() = default;
+
+  //==========================================================================
+  // Methods
+
+  double speed() const;
+
+  //! moves the particle by the distance length to its next location
+  //! \param length the distance the particle is moved
+  void move_distance(double length);
 
   //! create a secondary particle
   //
@@ -62,6 +69,10 @@ public:
   void event_revive_from_secondary();
   void event_death();
 
+  //! pulse-height recording
+  void pht_collision_energy();
+  void pht_secondary_particles();
+
   //! Cross a surface and handle boundary conditions
   void cross_surface();
 
@@ -86,21 +97,26 @@ public:
   //! \param new_u The direction of the particle after translation/rotation.
   //! \param new_surface The signed index of the surface that the particle will
   //!   reside on after translation/rotation.
-  void cross_periodic_bc(const Surface& surf, Position new_r, Direction new_u,
-                         int new_surface);
+  void cross_periodic_bc(
+    const Surface& surf, Position new_r, Direction new_u, int new_surface);
 
   //! mark a particle as lost and create a particle restart file
   //! \param message A warning message to display
-  void mark_as_lost(const char* message);
-
-  void mark_as_lost(const std::string& message)
-  {mark_as_lost(message.c_str());}
-
-  void mark_as_lost(const std::stringstream& message)
-  {mark_as_lost(message.str());}
+  virtual void mark_as_lost(const char* message) override;
+  using GeometryState::mark_as_lost;
 
   //! create a particle restart HDF5 file
   void write_restart() const;
+
+  //! Update microscopic cross section cache
+  //
+  //! \param[in] i_nuclide Index in data::nuclides
+  //! \param[in] i_grid Index on log union grid
+  //! \param[in] i_sab Index in data::thermal_scatt
+  //! \param[in] sab_frac  S(a,b) table fraction
+  //! \param[in] ncrystal_xs Thermal scattering xs from NCrystal
+  void update_neutron_xs(int i_nuclide, int i_grid = C_NONE, int i_sab = C_NONE,
+    double sab_frac = 0.0, double ncrystal_xs = -1.0);
 };
 
 //============================================================================

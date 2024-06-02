@@ -14,8 +14,11 @@ class EqualityMixin:
     def __eq__(self, other):
         if isinstance(other, type(self)):
             for key, value in self.__dict__.items():
-                if not np.array_equal(value, other.__dict__.get(key)):
-                    return False
+                if isinstance(value, np.ndarray):
+                    if not np.array_equal(value, other.__dict__.get(key)):
+                        return False
+                else:
+                    return value == other.__dict__.get(key)
         else:
             return False
 
@@ -60,11 +63,10 @@ class IDManagerMixin:
             cls.used_ids.add(cls.next_id)
         else:
             name = cls.__name__
-            cv.check_type('{} ID'.format(name), uid, Integral)
-            cv.check_greater_than('{} ID'.format(name), uid, 0, equality=True)
+            cv.check_type(f'{name} ID', uid, Integral)
+            cv.check_greater_than(f'{name} ID', uid, 0, equality=True)
             if uid in cls.used_ids:
-                msg = 'Another {} instance already exists with id={}.'.format(
-                    name, uid)
+                msg = f'Another {name} instance already exists with id={uid}.'
                 warn(msg, IDWarning)
             else:
                 cls.used_ids.add(uid)

@@ -12,6 +12,25 @@
 
 namespace openmc {
 
+unique_ptr<UnitSphereDistribution> UnitSphereDistribution::create(
+  pugi::xml_node node)
+{
+  // Check for type of angular distribution
+  std::string type;
+  if (check_for_node(node, "type"))
+    type = get_node_value(node, "type", true, true);
+  if (type == "isotropic") {
+    return UPtrAngle {new Isotropic()};
+  } else if (type == "monodirectional") {
+    return UPtrAngle {new Monodirectional(node)};
+  } else if (type == "mu-phi") {
+    return UPtrAngle {new PolarAzimuthal(node)};
+  } else {
+    fatal_error(fmt::format(
+      "Invalid angular distribution for external source: {}", type));
+  }
+}
+
 //==============================================================================
 // UnitSphereDistribution implementation
 //==============================================================================
@@ -28,29 +47,29 @@ UnitSphereDistribution::UnitSphereDistribution(pugi::xml_node node)
   }
 }
 
-
 //==============================================================================
 // PolarAzimuthal implementation
 //==============================================================================
 
-PolarAzimuthal::PolarAzimuthal(Direction u, UPtrDist mu, UPtrDist phi) :
-  UnitSphereDistribution{u}, mu_{std::move(mu)}, phi_{std::move(phi)} { }
+PolarAzimuthal::PolarAzimuthal(Direction u, UPtrDist mu, UPtrDist phi)
+  : UnitSphereDistribution {u}, mu_ {std::move(mu)}, phi_ {std::move(phi)}
+{}
 
 PolarAzimuthal::PolarAzimuthal(pugi::xml_node node)
-  : UnitSphereDistribution{node}
+  : UnitSphereDistribution {node}
 {
   if (check_for_node(node, "mu")) {
     pugi::xml_node node_dist = node.child("mu");
     mu_ = distribution_from_xml(node_dist);
   } else {
-    mu_ = UPtrDist{new Uniform(-1., 1.)};
+    mu_ = UPtrDist {new Uniform(-1., 1.)};
   }
 
   if (check_for_node(node, "phi")) {
     pugi::xml_node node_dist = node.child("phi");
     phi_ = distribution_from_xml(node_dist);
   } else {
-    phi_ = UPtrDist{new Uniform(0.0, 2.0*PI)};
+    phi_ = UPtrDist {new Uniform(0.0, 2.0 * PI)};
   }
 }
 
@@ -58,7 +77,8 @@ Direction PolarAzimuthal::sample(uint64_t* seed) const
 {
   // Sample cosine of polar angle
   double mu = mu_->sample(seed);
-  if (mu == 1.0) return u_ref_;
+  if (mu == 1.0)
+    return u_ref_;
 
   // Sample azimuthal angle
   double phi = phi_->sample(seed);
@@ -72,10 +92,10 @@ Direction PolarAzimuthal::sample(uint64_t* seed) const
 
 Direction isotropic_direction(uint64_t* seed)
 {
-  double phi = uniform_distribution(0., 2.0*PI, seed);
+  double phi = uniform_distribution(0., 2.0 * PI, seed);
   double mu = uniform_distribution(-1., 1., seed);
-  return {mu, std::sqrt(1.0 - mu*mu) * std::cos(phi),
-      std::sqrt(1.0 - mu*mu) * std::sin(phi)};
+  return {mu, std::sqrt(1.0 - mu * mu) * std::cos(phi),
+    std::sqrt(1.0 - mu * mu) * std::sin(phi)};
 }
 
 Direction Isotropic::sample(uint64_t* seed) const

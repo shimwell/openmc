@@ -18,10 +18,8 @@ namespace openmc {
 //! bins that are valid for the current tally event.
 //==============================================================================
 
-class FilterBinIter
-{
+class FilterBinIter {
 public:
-
   //! Construct an iterator over bins that match a given particle's state.
   FilterBinIter(const Tally& tally, Particle& p);
 
@@ -32,10 +30,14 @@ public:
     const Tally& tally, bool end, vector<FilterMatch>* particle_filter_matches);
 
   bool operator==(const FilterBinIter& other) const
-  {return index_ == other.index_;}
+  {
+    return index_ == other.index_;
+  }
 
   bool operator!=(const FilterBinIter& other) const
-  {return !(*this == other);}
+  {
+    return !(*this == other);
+  }
 
   FilterBinIter& operator++();
 
@@ -92,8 +94,15 @@ void score_tracklength_tally(Particle& p, double distance);
 //! Score surface or mesh-surface tallies for particle currents.
 //
 //! \param p The particle being tracked
-//! \param tallies A vector of tallies to score to
+//! \param tallies A vector of the indices of the tallies to score to
 void score_surface_tally(Particle& p, const vector<int>& tallies);
+
+//! Score the pulse-height tally
+//! This is triggered at the end of every particle history
+//
+//! \param p The particle being tracked
+//! \param tallies A vector of the indices of the tallies to score to
+void score_pulse_height_tally(Particle& p, const vector<int>& tallies);
 
 } // namespace openmc
 

@@ -8,6 +8,7 @@
 #include "openmc/event.h"
 #include "openmc/geometry_aux.h"
 #include "openmc/material.h"
+#include "openmc/mcpl_interface.h"
 #include "openmc/message_passing.h"
 #include "openmc/nuclide.h"
 #include "openmc/output.h"
@@ -17,12 +18,13 @@
 #include "openmc/settings.h"
 #include "openmc/source.h"
 #include "openmc/state_point.h"
-#include "openmc/timer.h"
 #include "openmc/tallies/derivative.h"
 #include "openmc/tallies/filter.h"
 #include "openmc/tallies/tally.h"
 #include "openmc/tallies/trigger.h"
+#include "openmc/timer.h"
 #include "openmc/track_output.h"
+#include "openmc/weight_windows.h"
 
 #ifdef _OPENMP
 #include <omp.h>
@@ -39,22 +41,27 @@
 #include <cmath>
 #include <string>
 
-
 //==============================================================================
 // C API functions
 //==============================================================================
 
 // OPENMC_RUN encompasses all the main logic where iterations are performed
-// over the batches, generations, and histories in a fixed source or k-eigenvalue
-// calculation.
+// over the batches, generations, and histories in a fixed source or
+// k-eigenvalue calculation.
 
 int openmc_run()
 {
   openmc::simulation::time_total.start();
   openmc_simulation_init();
 
-  int err = 0;
+  // Ensure that a batch isn't executed in the case that the maximum number of
+  // batches has already been run in a restart statepoint file
   int status = 0;
+  if (openmc::simulation::current_batch >= openmc::settings::n_max_batches) {
+    status = openmc::STATUS_EXIT_MAX_BATCH;
+  }
+
+  int err = 0;
   while (status == 0 && err == 0) {
     err = openmc_next_batch(&status);
   }
@@ -69,7 +76,8 @@ int openmc_simulation_init()
   using namespace openmc;
 
   // Skip if simulation has already been initialized
-  if (simulation::initialized) return 0;
+  if (simulation::initialized)
+    return 0;
 
   // Initialize nuclear data (energy limits, log grid)
   if (settings::run_CE) {
@@ -82,16 +90,22 @@ int openmc_simulation_init()
   // Allocate source, fission and surface source banks.
   allocate_banks();
 
+  // Create track file if needed
+  if (!settings::track_identifiers.empty() || settings::write_all_tracks) {
+    open_track_file();
+  }
+
   // If doing an event-based simulation, intialize the particle buffer
   // and event queues
   if (settings::event_based) {
-    int64_t event_buffer_length = std::min(simulation::work_per_rank,
-      settings::max_particles_in_flight);
+    int64_t event_buffer_length =
+      std::min(simulation::work_per_rank, settings::max_particles_in_flight);
     init_event_queues(event_buffer_length);
   }
 
   // Allocate tally results arrays if they're not allocated yet
   for (auto& t : model::tallies) {
+    t->set_strides();
     t->init_results();
   }
 
@@ -114,7 +128,8 @@ int openmc_simulation_init()
     write_message("Resuming simulation...", 6);
   } else {
     // Only initialize primary source bank for eigenvalue simulations
-    if (settings::run_mode == RunMode::EIGENVALUE) {
+    if (settings::run_mode == RunMode::EIGENVALUE &&
+        settings::solver_type == SolverType::MONTE_CARLO) {
       initialize_source();
     }
   }
@@ -124,9 +139,19 @@ int openmc_simulation_init()
     if (settings::run_mode == RunMode::FIXED_SOURCE) {
       header("FIXED SOURCE TRANSPORT SIMULATION", 3);
     } else if (settings::run_mode == RunMode::EIGENVALUE) {
-      header("K EIGENVALUE SIMULATION", 3);
-      if (settings::verbosity >= 7) print_columns();
+      if (settings::solver_type == SolverType::MONTE_CARLO) {
+        header("K EIGENVALUE SIMULATION", 3);
+      } else if (settings::solver_type == SolverType::RANDOM_RAY) {
+        header("K EIGENVALUE SIMULATION (RANDOM RAY SOLVER)", 3);
+      }
+      if (settings::verbosity >= 7)
+        print_columns();
     }
+  }
+
+  // load weight windows from file
+  if (!settings::weight_windows_file.empty()) {
+    openmc_weight_windows_import(settings::weight_windows_file.c_str());
   }
 
   // Set flag indicating initialization is done
@@ -139,7 +164,8 @@ int openmc_simulation_finalize()
   using namespace openmc;
 
   // Skip if simulation was never run
-  if (!simulation::initialized) return 0;
+  if (!simulation::initialized)
+    return 0;
 
   // Stop active batch timer and start finalization timer
   simulation::time_active.stop();
@@ -150,15 +176,27 @@ int openmc_simulation_finalize()
     mat->mat_nuclide_index_.clear();
   }
 
+  // Close track file if open
+  if (!settings::track_identifiers.empty() || settings::write_all_tracks) {
+    close_track_file();
+  }
+
   // Increment total number of generations
-  simulation::total_gen += simulation::current_batch*settings::gen_per_batch;
+  simulation::total_gen += simulation::current_batch * settings::gen_per_batch;
 
 #ifdef OPENMC_MPI
   broadcast_results();
 #endif
 
   // Write tally results to tallies.out
-  if (settings::output_tallies && mpi::master) write_tallies();
+  if (settings::output_tallies && mpi::master)
+    write_tallies();
+
+  // If weight window generators are present in this simulation,
+  // write a weight windows file
+  if (variance_reduction::weight_windows_generators.size() > 0) {
+    openmc_weight_windows_export();
+  }
 
   // Deactivate all tallies
   for (auto& t : model::tallies) {
@@ -169,10 +207,15 @@ int openmc_simulation_finalize()
   simulation::time_finalize.stop();
   simulation::time_total.stop();
   if (mpi::master) {
-    if (settings::verbosity >= 6) print_runtime();
-    if (settings::verbosity >= 4) print_results();
+    if (settings::solver_type != SolverType::RANDOM_RAY) {
+      if (settings::verbosity >= 6)
+        print_runtime();
+      if (settings::verbosity >= 4)
+        print_results();
+    }
   }
-  if (settings::check_overlaps) print_overlap_check();
+  if (settings::check_overlaps)
+    print_overlap_check();
 
   // Reset flags
   simulation::initialized = false;
@@ -218,7 +261,7 @@ int openmc_next_batch(int* status)
 
   // Check simulation ending criteria
   if (status) {
-    if (simulation::current_batch == settings::n_max_batches) {
+    if (simulation::current_batch >= settings::n_max_batches) {
       *status = STATUS_EXIT_MAX_BATCH;
     } else if (simulation::satisfy_triggers) {
       *status = STATUS_EXIT_ON_TRIGGER;
@@ -229,7 +272,8 @@ int openmc_next_batch(int* status)
   return 0;
 }
 
-bool openmc_is_statepoint_batch() {
+bool openmc_is_statepoint_batch()
+{
   using namespace openmc;
   using openmc::simulation::current_gen;
 
@@ -278,19 +322,19 @@ vector<int64_t> work_index;
 
 void allocate_banks()
 {
-  if (settings::run_mode == RunMode::EIGENVALUE) {
+  if (settings::run_mode == RunMode::EIGENVALUE &&
+      settings::solver_type == SolverType::MONTE_CARLO) {
     // Allocate source bank
     simulation::source_bank.resize(simulation::work_per_rank);
 
     // Allocate fission bank
-    init_fission_bank(3*simulation::work_per_rank);
+    init_fission_bank(3 * simulation::work_per_rank);
   }
 
   if (settings::surf_source_write) {
     // Allocate surface source bank
     simulation::surf_source_bank.reserve(settings::max_surface_particles);
   }
-
 }
 
 void initialize_batch()
@@ -311,7 +355,7 @@ void initialize_batch()
   if (!settings::restart_run) {
     first_inactive = settings::n_inactive > 0 && simulation::current_batch == 1;
     first_active = simulation::current_batch == settings::n_inactive + 1;
-  } else if (simulation::current_batch == simulation::restart_batch + 1){
+  } else if (simulation::current_batch == simulation::restart_batch + 1) {
     first_inactive = simulation::restart_batch < settings::n_inactive;
     first_active = !first_inactive;
   }
@@ -338,6 +382,11 @@ void finalize_batch()
   accumulate_tallies();
   simulation::time_tallies.stop();
 
+  // update weight windows if needed
+  for (const auto& wwg : variance_reduction::weight_windows_generators) {
+    wwg->update();
+  }
+
   // Reset global tally results
   if (simulation::current_batch <= settings::n_inactive) {
     xt::view(simulation::global_tallies, xt::all()) = 0.0;
@@ -345,21 +394,23 @@ void finalize_batch()
   }
 
   // Check_triggers
-  if (mpi::master) check_triggers();
+  if (mpi::master)
+    check_triggers();
 #ifdef OPENMC_MPI
   MPI_Bcast(&simulation::satisfy_triggers, 1, MPI_C_BOOL, 0, mpi::intracomm);
 #endif
-  if (simulation::satisfy_triggers || (settings::trigger_on &&
-      simulation::current_batch == settings::n_max_batches)) {
+  if (simulation::satisfy_triggers ||
+      (settings::trigger_on &&
+        simulation::current_batch == settings::n_max_batches)) {
     settings::statepoint_batch.insert(simulation::current_batch);
   }
 
   // Write out state point if it's been specified for this batch and is not
   // a CMFD run instance
-  if (contains(settings::statepoint_batch, simulation::current_batch)
-      && !settings::cmfd_run) {
-    if (contains(settings::sourcepoint_batch, simulation::current_batch)
-        && settings::source_write && !settings::source_separate) {
+  if (contains(settings::statepoint_batch, simulation::current_batch) &&
+      !settings::cmfd_run) {
+    if (contains(settings::sourcepoint_batch, simulation::current_batch) &&
+        settings::source_write && !settings::source_separate) {
       bool b = (settings::run_mode == RunMode::EIGENVALUE);
       openmc_statepoint_write(nullptr, &b);
     } else {
@@ -370,22 +421,51 @@ void finalize_batch()
 
   if (settings::run_mode == RunMode::EIGENVALUE) {
     // Write out a separate source point if it's been specified for this batch
-    if (contains(settings::sourcepoint_batch, simulation::current_batch)
-        && settings::source_write && settings::source_separate) {
-      write_source_point(nullptr);
+    if (contains(settings::sourcepoint_batch, simulation::current_batch) &&
+        settings::source_write && settings::source_separate) {
+
+      // Determine width for zero padding
+      int w = std::to_string(settings::n_max_batches).size();
+      std::string source_point_filename = fmt::format("{0}source.{1:0{2}}",
+        settings::path_output, simulation::current_batch, w);
+      gsl::span<SourceSite> bankspan(simulation::source_bank);
+      if (settings::source_mcpl_write) {
+        write_mcpl_source_point(
+          source_point_filename.c_str(), bankspan, simulation::work_index);
+      } else {
+        write_source_point(
+          source_point_filename.c_str(), bankspan, simulation::work_index);
+      }
     }
 
     // Write a continously-overwritten source point if requested.
     if (settings::source_latest) {
-      auto filename = settings::path_output + "source.h5";
-      write_source_point(filename.c_str());
+
+      // note: correct file extension appended automatically
+      auto filename = settings::path_output + "source";
+      gsl::span<SourceSite> bankspan(simulation::source_bank);
+      if (settings::source_mcpl_write) {
+        write_mcpl_source_point(
+          filename.c_str(), bankspan, simulation::work_index);
+      } else {
+        write_source_point(filename.c_str(), bankspan, simulation::work_index);
+      }
     }
   }
 
   // Write out surface source if requested.
-  if (settings::surf_source_write && simulation::current_batch == settings::n_batches) {
-    auto filename = settings::path_output + "surface_source.h5";
-    write_source_point(filename.c_str(), true);
+  if (settings::surf_source_write &&
+      simulation::current_batch == settings::n_batches) {
+    auto filename = settings::path_output + "surface_source";
+    auto surf_work_index =
+      mpi::calculate_parallel_index_vector(simulation::surf_source_bank.size());
+    gsl::span<SourceSite> surfbankspan(simulation::surf_source_bank.begin(),
+      simulation::surf_source_bank.size());
+    if (settings::surf_mcpl_write) {
+      write_mcpl_source_point(filename.c_str(), surfbankspan, surf_work_index);
+    } else {
+      write_source_point(filename.c_str(), surfbankspan, surf_work_index);
+    }
   }
 }
 
@@ -396,7 +476,8 @@ void initialize_generation()
     simulation::fission_bank.resize(0);
 
     // Count source sites if using uniform fission source weighting
-    if (settings::ufs_on) ufs_count_sites();
+    if (settings::ufs_on)
+      ufs_count_sites();
 
     // Store current value of tracklength k
     simulation::keff_generation = simulation::global_tallies(
@@ -411,8 +492,10 @@ void finalize_generation()
   // Update global tallies with the accumulation variables
   if (settings::run_mode == RunMode::EIGENVALUE) {
     gt(GlobalTally::K_COLLISION, TallyResult::VALUE) += global_tally_collision;
-    gt(GlobalTally::K_ABSORPTION, TallyResult::VALUE) += global_tally_absorption;
-    gt(GlobalTally::K_TRACKLENGTH, TallyResult::VALUE) += global_tally_tracklength;
+    gt(GlobalTally::K_ABSORPTION, TallyResult::VALUE) +=
+      global_tally_absorption;
+    gt(GlobalTally::K_TRACKLENGTH, TallyResult::VALUE) +=
+      global_tally_tracklength;
   }
   gt(GlobalTally::LEAKAGE, TallyResult::VALUE) += global_tally_leakage;
 
@@ -424,7 +507,8 @@ void finalize_generation()
   }
   global_tally_leakage = 0.0;
 
-  if (settings::run_mode == RunMode::EIGENVALUE) {
+  if (settings::run_mode == RunMode::EIGENVALUE &&
+      settings::solver_type == SolverType::MONTE_CARLO) {
     // If using shared memory, stable sort the fission bank (by parent IDs)
     // so as to allow for reproducibility regardless of which order particles
     // are run in.
@@ -432,9 +516,13 @@ void finalize_generation()
 
     // Distribute fission bank across processors evenly
     synchronize_bank();
+  }
+
+  if (settings::run_mode == RunMode::EIGENVALUE) {
 
     // Calculate shannon entropy
-    if (settings::entropy_on) shannon_entropy();
+    if (settings::entropy_on)
+      shannon_entropy();
 
     // Collect results and statistics
     calculate_generation_keff();
@@ -444,7 +532,6 @@ void finalize_generation()
     if (mpi::master && settings::verbosity >= 7) {
       print_generation();
     }
-
   }
 }
 
@@ -456,8 +543,9 @@ void initialize_history(Particle& p, int64_t index_source)
     p.from_source(&simulation::source_bank[index_source - 1]);
   } else if (settings::run_mode == RunMode::FIXED_SOURCE) {
     // initialize random number seed
-    int64_t id = (simulation::total_gen + overall_generation() - 1)*settings::n_particles +
-      simulation::work_index[mpi::rank] + index_source;
+    int64_t id = (simulation::total_gen + overall_generation() - 1) *
+                   settings::n_particles +
+                 simulation::work_index[mpi::rank] + index_source;
     uint64_t seed = init_seed(id, STREAM_SOURCE);
     // sample from external source distribution or custom library then set
     auto site = sample_external_source(&seed);
@@ -474,6 +562,15 @@ void initialize_history(Particle& p, int64_t index_source)
   // Reset particle event counter
   p.n_event() = 0;
 
+  // Reset split counter
+  p.n_split() = 0;
+
+  // Reset weight window ratio
+  p.ww_factor() = 0.0;
+
+  // Reset pulse_height_storage
+  std::fill(p.pht_storage().begin(), p.pht_storage().end(), 0);
+
   // set random number seed
   int64_t particle_seed =
     (simulation::total_gen + overall_generation() - 1) * settings::n_particles +
@@ -488,26 +585,15 @@ void initialize_history(Particle& p, int64_t index_source)
     p.trace() = true;
 
   // Set particle track.
-  p.write_track() = false;
-  if (settings::write_all_tracks) {
-    p.write_track() = true;
-  } else if (settings::track_identifiers.size() > 0) {
-    for (const auto& t : settings::track_identifiers) {
-      if (simulation::current_batch == t[0] &&
-          simulation::current_gen == t[1] && p.id() == t[2]) {
-        p.write_track() = true;
-        break;
-      }
-    }
-  }
+  p.write_track() = check_track_criteria(p);
 
   // Display message if high verbosity or trace is on
   if (settings::verbosity >= 9 || p.trace()) {
     write_message("Simulating Particle {}", p.id());
   }
 
-  // Add paricle's starting weight to count for normalizing tallies later
-  #pragma omp atomic
+// Add paricle's starting weight to count for normalizing tallies later
+#pragma omp atomic
   simulation::total_weight += p.wgt();
 
   // Force calculation of cross-sections by setting last energy to zero
@@ -523,7 +609,7 @@ void initialize_history(Particle& p, int64_t index_source)
 int overall_generation()
 {
   using namespace simulation;
-  return settings::gen_per_batch*(current_batch - 1) + current_gen;
+  return settings::gen_per_batch * (current_batch - 1) + current_gen;
 }
 
 void calculate_work()
@@ -542,7 +628,8 @@ void calculate_work()
     int64_t work_i = i < remainder ? min_work + 1 : min_work;
 
     // Set number of particles
-    if (mpi::rank == i) simulation::work_per_rank = work_i;
+    if (mpi::rank == i)
+      simulation::work_per_rank = work_i;
 
     // Set index into source bank for rank i
     i_bank += work_i;
@@ -558,10 +645,10 @@ void initialize_data()
   for (const auto& nuc : data::nuclides) {
     if (nuc->grid_.size() >= 1) {
       int neutron = static_cast<int>(ParticleType::neutron);
-      data::energy_min[neutron] = std::max(data::energy_min[neutron],
-        nuc->grid_[0].energy.front());
-      data::energy_max[neutron] = std::min(data::energy_max[neutron],
-        nuc->grid_[0].energy.back());
+      data::energy_min[neutron] =
+        std::max(data::energy_min[neutron], nuc->grid_[0].energy.front());
+      data::energy_max[neutron] =
+        std::min(data::energy_max[neutron], nuc->grid_[0].energy.back());
     }
   }
 
@@ -570,10 +657,10 @@ void initialize_data()
       if (elem->energy_.size() >= 1) {
         int photon = static_cast<int>(ParticleType::photon);
         int n = elem->energy_.size();
-        data::energy_min[photon] = std::max(data::energy_min[photon],
-          std::exp(elem->energy_(1)));
-        data::energy_max[photon] = std::min(data::energy_max[photon],
-          std::exp(elem->energy_(n - 1)));
+        data::energy_min[photon] =
+          std::max(data::energy_min[photon], std::exp(elem->energy_(1)));
+        data::energy_max[photon] =
+          std::min(data::energy_max[photon], std::exp(elem->energy_(n - 1)));
       }
     }
 
@@ -583,10 +670,10 @@ void initialize_data()
       if (data::ttb_e_grid.size() >= 1) {
         int photon = static_cast<int>(ParticleType::photon);
         int n_e = data::ttb_e_grid.size();
-        data::energy_min[photon] = std::max(data::energy_min[photon],
-          std::exp(data::ttb_e_grid(1)));
-        data::energy_max[photon] = std::min(data::energy_max[photon],
-          std::exp(data::ttb_e_grid(n_e - 1)));
+        data::energy_min[photon] =
+          std::max(data::energy_min[photon], std::exp(data::ttb_e_grid(1)));
+        data::energy_max[photon] = std::min(
+          data::energy_max[photon], std::exp(data::ttb_e_grid(n_e - 1)));
       }
     }
   }
@@ -603,7 +690,7 @@ void initialize_data()
           data::energy_max[neutron], nuc->name_);
         if (mpi::master && data::energy_max[neutron] < 20.0e6) {
           warning("Maximum neutron energy is below 20 MeV. This may bias "
-            "the results.");
+                  "the results.");
         }
         break;
       }
@@ -615,12 +702,14 @@ void initialize_data()
     nuc->init_grid();
   }
   int neutron = static_cast<int>(ParticleType::neutron);
-  simulation::log_spacing = std::log(data::energy_max[neutron] /
-    data::energy_min[neutron]) / settings::n_log_bins;
+  simulation::log_spacing =
+    std::log(data::energy_max[neutron] / data::energy_min[neutron]) /
+    settings::n_log_bins;
 }
 
 #ifdef OPENMC_MPI
-void broadcast_results() {
+void broadcast_results()
+{
   // Broadcast tally results so that each process has access to results
   for (auto& t : model::tallies) {
     // Create a new datatype that consists of all values for a given filter
@@ -643,8 +732,8 @@ void broadcast_results() {
 
   // These guys are needed so that non-master processes can calculate the
   // combined estimate of k-effective
-  double temp[] {simulation::k_col_abs, simulation::k_col_tra,
-    simulation::k_abs_tra};
+  double temp[] {
+    simulation::k_col_abs, simulation::k_col_tra, simulation::k_abs_tra};
   MPI_Bcast(temp, 3, MPI_DOUBLE, 0, mpi::intracomm);
   simulation::k_col_abs = temp[0];
   simulation::k_col_tra = temp[1];
@@ -661,8 +750,10 @@ void free_memory_simulation()
 
 void transport_history_based_single_particle(Particle& p)
 {
-  while (true) {
+  while (p.alive()) {
     p.event_calculate_xs();
+    if (!p.alive())
+      break;
     p.event_advance();
     if (p.collision_distance() > p.boundary().distance) {
       p.event_cross_surface();
@@ -670,15 +761,13 @@ void transport_history_based_single_particle(Particle& p)
       p.event_collide();
     }
     p.event_revive_from_secondary();
-    if (!p.alive())
-      break;
   }
   p.event_death();
 }
 
 void transport_history_based()
 {
-  #pragma omp parallel for schedule(runtime)
+#pragma omp parallel for schedule(runtime)
   for (int64_t i_work = 1; i_work <= simulation::work_per_rank; ++i_work) {
     Particle p;
     initialize_history(p, i_work);
@@ -698,7 +787,8 @@ void transport_event_based()
   // loop is executed multiple times until all particles have been completed.
   while (remaining_work > 0) {
     // Figure out # of particles to run for this subiteration
-    int64_t n_particles = std::min(remaining_work, settings::max_particles_in_flight);
+    int64_t n_particles =
+      std::min(remaining_work, settings::max_particles_in_flight);
 
     // Initialize all particle histories for this subiteration
     process_init_events(n_particles, source_offset);
@@ -706,8 +796,7 @@ void transport_event_based()
     // Event-based transport loop
     while (true) {
       // Determine which event kernel has the longest queue
-      int64_t max = std::max({
-        simulation::calculate_fuel_xs_queue.size(),
+      int64_t max = std::max({simulation::calculate_fuel_xs_queue.size(),
         simulation::calculate_nonfuel_xs_queue.size(),
         simulation::advance_particle_queue.size(),
         simulation::surface_crossing_queue.size(),

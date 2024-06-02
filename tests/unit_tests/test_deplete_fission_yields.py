@@ -27,8 +27,8 @@ def materials(tmpdir_factory):
         mfuel.add_nuclide(nuclide, 1.0)
     openmc.Materials([mfuel]).export_to_xml()
     # Geometry
-    box = openmc.rectangular_prism(1.0, 1.0, boundary_type="reflective")
-    cell = openmc.Cell(fill=mfuel, region=box)
+    box = openmc.model.RectangularPrism(1.0, 1.0, boundary_type="reflective")
+    cell = openmc.Cell(fill=mfuel, region=-box)
     root = openmc.Universe(cells=[cell])
     openmc.Geometry(root).export_to_xml()
     # settings
@@ -43,12 +43,11 @@ def materials(tmpdir_factory):
         with lib.run_in_memory():
             yield [lib.Material(), lib.Material()]
     finally:
-        # Convert to strings as os.remove in py 3.5 doesn't support Paths
         for file_path in ("settings.xml", "geometry.xml", "materials.xml",
                           "summary.h5"):
-            os.remove(str(tmpdir / file_path))
+            os.remove(tmpdir / file_path)
         orig.chdir()
-        os.rmdir(str(tmpdir))
+        os.rmdir(tmpdir)
 
 
 def proxy_tally_data(tally, fill=None):

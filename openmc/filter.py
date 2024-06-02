@@ -1,11 +1,12 @@
+from __future__ import annotations
 from abc import ABCMeta
-from collections import OrderedDict
 from collections.abc import Iterable
 import hashlib
 from itertools import product
 from numbers import Real, Integral
-from xml.etree import ElementTree as ET
+import warnings
 
+import lxml.etree as ET
 import numpy as np
 import pandas as pd
 
@@ -15,15 +16,16 @@ from .cell import Cell
 from .material import Material
 from .mixin import IDManagerMixin
 from .surface import Surface
-from .universe import Universe
+from .universe import UniverseBase
+from ._xml import get_text
 
 
 _FILTER_TYPES = (
     'universe', 'material', 'cell', 'cellborn', 'surface', 'mesh', 'energy',
     'energyout', 'mu', 'polar', 'azimuthal', 'distribcell', 'delayedgroup',
-    'energyfunction', 'cellfrom', 'legendre', 'spatiallegendre',
+    'energyfunction', 'cellfrom', 'materialfrom', 'legendre', 'spatiallegendre',
     'sphericalharmonics', 'zernike', 'zernikeradial', 'particle', 'cellinstance',
-    'collision'
+    'collision', 'time'
 )
 
 _CURRENT_NAMES = (
@@ -88,7 +90,7 @@ class Filter(IDManagerMixin, metaclass=FilterMeta):
     ----------
     bins : Integral or Iterable of Integral or Iterable of Real
         The bins for the filter. This takes on different meaning for different
-        filters. See the docstrings for sublcasses of this filter or the online
+        filters. See the docstrings for subclasses of this filter or the online
         documentation for more details.
     filter_id : int
         Unique identifier for the filter
@@ -101,6 +103,8 @@ class Filter(IDManagerMixin, metaclass=FilterMeta):
         Unique identifier for the filter
     num_bins : Integral
         The number of filter bins
+    shape : tuple
+        The shape of the filter
 
     """
 
@@ -176,7 +180,7 @@ class Filter(IDManagerMixin, metaclass=FilterMeta):
         filter_id = int(group.name.split('/')[-1].lstrip('filter '))
 
         # If the HDF5 'type' variable matches this class's short_name, then
-        # there is no overriden from_hdf5 method.  Pass the bins to __init__.
+        # there is no overridden from_hdf5 method.  Pass the bins to __init__.
         if group['type'][()].decode() == cls.short_name.lower():
             out = cls(group['bins'][()], filter_id=filter_id)
             out._num_bins = group['n_bins'][()]
@@ -204,6 +208,10 @@ class Filter(IDManagerMixin, metaclass=FilterMeta):
     def num_bins(self):
         return len(self.bins)
 
+    @property
+    def shape(self):
+        return (self.num_bins,)
+
     def check_bins(self, bins):
         """Make sure given bins are valid for this filter.
 
@@ -221,7 +229,7 @@ class Filter(IDManagerMixin, metaclass=FilterMeta):
 
         Returns
         -------
-        element : xml.etree.ElementTree.Element
+        element : lxml.etree._Element
             XML element containing filter data
 
         """
@@ -231,8 +239,44 @@ class Filter(IDManagerMixin, metaclass=FilterMeta):
 
         subelement = ET.SubElement(element, 'bins')
         subelement.text = ' '.join(str(b) for b in self.bins)
-
         return element
+
+    @classmethod
+    def from_xml_element(cls, elem, **kwargs):
+        """Generate a filter from an XML element
+
+        Parameters
+        ----------
+        elem : lxml.etree._Element
+            XML element
+        **kwargs
+            Keyword arguments (e.g., mesh information)
+
+        Returns
+        -------
+        openmc.Filter
+            Filter object
+
+        """
+        filter_type = elem.get('type')
+        if filter_type is None:
+            filter_type = elem.find('type').text
+
+        # If the filter type matches this class's short_name, then
+        # there is no overridden from_xml_element method
+        if filter_type == cls.short_name.lower():
+            # Get bins from element -- the default here works for any filters
+            # that just store a list of bins that can be represented as integers
+            filter_id = int(elem.get('id'))
+            bins = [int(x) for x in get_text(elem, 'bins').split()]
+            return cls(bins, filter_id=filter_id)
+
+        # Search through all subclasses and find the one matching the HDF5
+        # 'type'.  Call that class's from_hdf5 method
+        for subclass in cls._recursive_subclasses():
+            if filter_type == subclass.short_name.lower():
+                return subclass.from_xml_element(elem, **kwargs)
+
 
     def can_merge(self, other):
         """Determine if filter can be merged with another.
@@ -266,8 +310,7 @@ class Filter(IDManagerMixin, metaclass=FilterMeta):
         """
 
         if not self.can_merge(other):
-            msg = 'Unable to merge "{0}" with "{1}" '.format(
-                type(self), type(other))
+            msg = f'Unable to merge "{type(self)}" with "{type(other)}"'
             raise ValueError(msg)
 
         # Merge unique filter bins
@@ -326,8 +369,8 @@ class Filter(IDManagerMixin, metaclass=FilterMeta):
         """
 
         if filter_bin not in self.bins:
-            msg = 'Unable to get the bin index for Filter since "{0}" ' \
-                  'is not one of the bins'.format(filter_bin)
+            msg = ('Unable to get the bin index for Filter since '
+                   f'"{filter_bin}" is not one of the bins')
             raise ValueError(msg)
 
         if isinstance(self.bins, np.ndarray):
@@ -404,12 +447,12 @@ class WithIDFilter(Filter):
 
 
 class UniverseFilter(WithIDFilter):
-    """Bins tally event locations based on the Universe they occured in.
+    """Bins tally event locations based on the Universe they occurred in.
 
     Parameters
     ----------
-    bins : openmc.Universe, int, or iterable thereof
-        The Universes to tally. Either openmc.Universe objects or their
+    bins : openmc.UniverseBase, int, or iterable thereof
+        The Universes to tally. Either :class:`openmc.UniverseBase` objects or their
         Integral ID numbers can be used.
     filter_id : int
         Unique identifier for the filter
@@ -417,23 +460,47 @@ class UniverseFilter(WithIDFilter):
     Attributes
     ----------
     bins : Iterable of Integral
-        openmc.Universe IDs.
+        openmc.UniverseBase IDs.
     id : int
         Unique identifier for the filter
     num_bins : Integral
         The number of filter bins
 
     """
-    expected_type = Universe
+    expected_type = UniverseBase
 
 
 class MaterialFilter(WithIDFilter):
-    """Bins tally event locations based on the Material they occured in.
+    """Bins tally event locations based on the Material they occurred in.
 
     Parameters
     ----------
     bins : openmc.Material, Integral, or iterable thereof
-        The Materials to tally. Either openmc.Material objects or their
+        The material(s) to tally. Either :class:`openmc.Material` objects or their
+        Integral ID numbers can be used.
+    filter_id : int
+        Unique identifier for the filter
+
+    Attributes
+    ----------
+    bins : Iterable of Integral
+        openmc.Material IDs.
+    id : int
+        Unique identifier for the filter
+    num_bins : Integral
+        The number of filter bins
+
+    """
+    expected_type = Material
+
+
+class MaterialFromFilter(WithIDFilter):
+    """Bins tally event locations based on the Material they occurred in.
+
+    Parameters
+    ----------
+    bins : openmc.Material, Integral, or iterable thereof
+        The material(s) to tally. Either :class:`openmc.Material` objects or their
         Integral ID numbers can be used.
     filter_id : int
         Unique identifier for the filter
@@ -452,12 +519,12 @@ class MaterialFilter(WithIDFilter):
 
 
 class CellFilter(WithIDFilter):
-    """Bins tally event locations based on the Cell they occured in.
+    """Bins tally event locations based on the Cell they occurred in.
 
     Parameters
     ----------
     bins : openmc.Cell, int, or iterable thereof
-        The cells to tally. Either openmc.Cell objects or their ID numbers can
+        The cells to tally. Either :class:`openmc.Cell` objects or their ID numbers can
         be used.
     filter_id : int
         Unique identifier for the filter
@@ -476,20 +543,20 @@ class CellFilter(WithIDFilter):
 
 
 class CellFromFilter(WithIDFilter):
-    """Bins tally on which Cell the neutron came from.
+    """Bins tally on which cell the particle came from.
 
     Parameters
     ----------
     bins : openmc.Cell, Integral, or iterable thereof
-        The Cell(s) to tally. Either openmc.Cell objects or their
-        Integral ID numbers can be used.
+        The cell(s) to tally. Either :class:`openmc.Cell` objects or their
+        integral ID numbers can be used.
     filter_id : int
         Unique identifier for the filter
 
     Attributes
     ----------
     bins : Integral or Iterable of Integral
-        openmc.Cell IDs.
+        Cell IDs.
     id : int
         Unique identifier for the filter
     num_bins : Integral
@@ -499,21 +566,21 @@ class CellFromFilter(WithIDFilter):
     expected_type = Cell
 
 
-class CellbornFilter(WithIDFilter):
-    """Bins tally events based on which Cell the neutron was born in.
+class CellBornFilter(WithIDFilter):
+    """Bins tally events based on which cell the particle was born in.
 
     Parameters
     ----------
     bins : openmc.Cell, Integral, or iterable thereof
-        The birth Cells to tally. Either openmc.Cell objects or their
-        Integral ID numbers can be used.
+        The birth cells to tally. Either :class:`openmc.Cell` objects or their
+        integral ID numbers can be used.
     filter_id : int
         Unique identifier for the filter
 
     Attributes
     ----------
     bins : Iterable of Integral
-        openmc.Cell IDs.
+        Cell IDs.
     id : int
         Unique identifier for the filter
     num_bins : Integral
@@ -521,6 +588,14 @@ class CellbornFilter(WithIDFilter):
 
     """
     expected_type = Cell
+
+
+# Temporary alias for CellbornFilter
+def CellbornFilter(*args, **kwargs):
+    warnings.warn('The name of "CellbornFilter" has changed to '
+                  '"CellBornFilter". "CellbornFilter" will be '
+                  'removed in the future.', FutureWarning)
+    return CellBornFilter(*args, **kwargs)
 
 
 class CellInstanceFilter(Filter):
@@ -538,7 +613,7 @@ class CellInstanceFilter(Filter):
     bins : iterable of 2-tuples or numpy.ndarray
         The cell instances to tally, given as 2-tuples. For the first value in
         the tuple, either openmc.Cell objects or their integral ID numbers can
-        be used.
+        be used. The second value indicates the cell instance.
     filter_id : int
         Unique identifier for the filter
 
@@ -611,7 +686,7 @@ class CellInstanceFilter(Filter):
 
         Returns
         -------
-        element : xml.etree.ElementTree.Element
+        element : lxml.etree._Element
             XML element containing filter data
 
         """
@@ -622,6 +697,13 @@ class CellInstanceFilter(Filter):
         subelement = ET.SubElement(element, 'bins')
         subelement.text = ' '.join(str(i) for i in self.bins.ravel())
         return element
+
+    @classmethod
+    def from_xml_element(cls, elem, **kwargs):
+        filter_id = int(elem.get('id'))
+        bins = [int(x) for x in get_text(elem, 'bins').split()]
+        cell_instances = list(zip(bins[::2], bins[1::2]))
+        return cls(cell_instances, filter_id=filter_id)
 
 
 class SurfaceFilter(WithIDFilter):
@@ -662,8 +744,8 @@ class ParticleFilter(Filter):
 
     Attributes
     ----------
-    bins : Iterable of Integral
-        The Particles to tally
+    bins : iterable of str
+        The particles to tally
     id : int
         Unique identifier for the filter
     num_bins : Integral
@@ -699,9 +781,15 @@ class ParticleFilter(Filter):
         filter_id = int(group.name.split('/')[-1].lstrip('filter '))
         return cls(particles, filter_id=filter_id)
 
+    @classmethod
+    def from_xml_element(cls, elem, **kwargs):
+        filter_id = int(elem.get('id'))
+        bins = get_text(elem, 'bins').split()
+        return cls(bins, filter_id=filter_id)
+
 
 class MeshFilter(Filter):
-    """Bins tally event locations onto a regular, rectangular mesh.
+    """Bins tally event locations by mesh elements.
 
     Parameters
     ----------
@@ -717,8 +805,8 @@ class MeshFilter(Filter):
     id : int
         Unique identifier for the filter
     translation : Iterable of float
-        This array specifies a vector that is used to translate (shift)
-        the mesh for this filter
+        This array specifies a vector that is used to translate (shift) the mesh
+        for this filter
     bins : list of tuple
         A list of mesh indices for each filter bin, e.g. [(1, 1, 1), (2, 1, 1),
         ...]
@@ -759,7 +847,6 @@ class MeshFilter(Filter):
         mesh_obj = kwargs['meshes'][mesh_id]
         filter_id = int(group.name.split('/')[-1].lstrip('filter '))
 
-
         out = cls(mesh_obj, filter_id=filter_id)
 
         translation = group.get('translation')
@@ -777,12 +864,18 @@ class MeshFilter(Filter):
         cv.check_type('filter mesh', mesh, openmc.MeshBase)
         self._mesh = mesh
         if isinstance(mesh, openmc.UnstructuredMesh):
-            if mesh.volumes is None:
-                self.bins = []
-            else:
+            if mesh.has_statepoint_data:
                 self.bins = list(range(len(mesh.volumes)))
+            else:
+                self.bins = []
         else:
             self.bins = list(mesh.indices)
+
+    @property
+    def shape(self):
+        if isinstance(self, MeshSurfaceFilter):
+            return (self.num_bins,)
+        return self.mesh.dimension
 
     @property
     def translation(self):
@@ -833,7 +926,7 @@ class MeshFilter(Filter):
         filter_dict = {}
 
         # Append mesh ID as outermost index of multi-index
-        mesh_key = 'mesh {}'.format(self.mesh.id)
+        mesh_key = f'mesh {self.mesh.id}'
 
         # Find mesh dimensions - use 3D indices for simplicity
         n_dim = len(self.mesh.dimension)
@@ -868,7 +961,7 @@ class MeshFilter(Filter):
 
         Returns
         -------
-        element : xml.etree.ElementTree.Element
+        element : lxml.etree._Element
             XML element containing filter data
 
         """
@@ -878,9 +971,21 @@ class MeshFilter(Filter):
             element.set('translation', ' '.join(map(str, self.translation)))
         return element
 
+    @classmethod
+    def from_xml_element(cls, elem: ET.Element, **kwargs) -> MeshFilter:
+        mesh_id = int(get_text(elem, 'bins'))
+        mesh_obj = kwargs['meshes'][mesh_id]
+        filter_id = int(elem.get('id'))
+        out = cls(mesh_obj, filter_id=filter_id)
 
-class MeshSurfaceFilter(MeshFilter):
-    """Filter events by surface crossings on a regular, rectangular mesh.
+        translation = elem.get('translation')
+        if translation:
+            out.translation = [float(x) for x in translation.split()]
+        return out
+
+
+class MeshBornFilter(MeshFilter):
+    """Filter events by the mesh cell a particle originated from.
 
     Parameters
     ----------
@@ -891,8 +996,34 @@ class MeshSurfaceFilter(MeshFilter):
 
     Attributes
     ----------
-    bins : Integral
-        The mesh ID
+    mesh : openmc.MeshBase
+        The mesh object that events will be tallied onto
+    id : int
+        Unique identifier for the filter
+    translation : Iterable of float
+        This array specifies a vector that is used to translate (shift)
+        the mesh for this filter
+    bins : list of tuple
+        A list of mesh indices for each filter bin, e.g. [(1, 1, 1), (2, 1, 1),
+        ...]
+    num_bins : Integral
+        The number of filter bins
+
+    """
+
+
+class MeshSurfaceFilter(MeshFilter):
+    """Filter events by surface crossings on a mesh.
+
+    Parameters
+    ----------
+    mesh : openmc.MeshBase
+        The mesh object that events will be tallied onto
+    filter_id : int
+        Unique identifier for the filter
+
+    Attributes
+    ----------
     mesh : openmc.MeshBase
         The mesh object that events will be tallied onto
     translation : Iterable of float
@@ -901,10 +1032,8 @@ class MeshSurfaceFilter(MeshFilter):
     id : int
         Unique identifier for the filter
     bins : list of tuple
-
         A list of mesh indices / surfaces for each filter bin, e.g. [(1, 1,
         'x-min out'), (1, 1, 'x-min in'), ...]
-
     num_bins : Integral
         The number of filter bins
 
@@ -955,7 +1084,7 @@ class MeshSurfaceFilter(MeshFilter):
         filter_dict = {}
 
         # Append mesh ID as outermost index of multi-index
-        mesh_key = 'mesh {}'.format(self.mesh.id)
+        mesh_key = f'mesh {self.mesh.id}'
 
         # Find mesh dimensions - use 3D indices for simplicity
         n_surfs = 4 * len(self.mesh.dimension)
@@ -1020,34 +1149,11 @@ class CollisionFilter(Filter):
         self.bins = np.asarray(bins)
         self.id = filter_id
 
-    def __repr__(self):
-        string = type(self).__name__ + '\n'
-        string += '{: <16}=\t{}\n'.format('\tValues', self.bins)
-        string += '{: <16}=\t{}\n'.format('\tID', self.id)
-        return string
-
-    @Filter.bins.setter
-    def bins(self, bins):
-        Filter.bins.__set__(self, np.asarray(bins))
-
     def check_bins(self, bins):
         for x in bins:
             # Values should be integers
             cv.check_type('filter value', x, Integral)
             cv.check_greater_than('filter value', x, 0, equality=True)
-
-    def to_xml_element(self):
-        """Return XML Element representing the Filter.
-
-        Returns
-        -------
-        element : xml.etree.ElementTree.Element
-            XML element containing filter data
-
-        """
-        element = super().to_xml_element()
-        element[0].text = ' '.join(str(x) for x in self.bins)
-        return element
 
 
 class RealFilter(Filter):
@@ -1106,14 +1212,14 @@ class RealFilter(Filter):
 
             # Make sure that each tuple has values that are increasing
             if v1 < v0:
-                raise ValueError('Values {} and {} appear to be out of order'
-                                 .format(v0, v1))
+                raise ValueError(f'Values {v0} and {v1} appear to be out of '
+                                 'order')
 
         for pair0, pair1 in zip(bins[:-1], bins[1:]):
             # Successive pairs should be ordered
             if pair1[1] < pair0[1]:
-                raise ValueError('Values {} and {} appear to be out of order'
-                                 .format(pair1[1], pair0[1]))
+                raise ValueError(f'Values {pair1[1]} and {pair0[1]} appear to '
+                                 'be out of order')
 
     def can_merge(self, other):
         if type(self) is not type(other):
@@ -1130,8 +1236,7 @@ class RealFilter(Filter):
 
     def merge(self, other):
         if not self.can_merge(other):
-            msg = 'Unable to merge "{0}" with "{1}" ' \
-                  'filters'.format(type(self), type(other))
+            msg = f'Unable to merge "{type(self)}" with "{type(other)}" filters'
             raise ValueError(msg)
 
         # Merge unique filter bins
@@ -1169,8 +1274,8 @@ class RealFilter(Filter):
     def get_bin_index(self, filter_bin):
         i = np.where(self.bins[:, 1] == filter_bin[1])[0]
         if len(i) == 0:
-            msg = 'Unable to get the bin index for Filter since "{0}" ' \
-                  'is not one of the bins'.format(filter_bin)
+            msg = ('Unable to get the bin index for Filter since '
+                   f'"{filter_bin}" is not one of the bins')
             raise ValueError(msg)
         else:
             return i[0]
@@ -1216,7 +1321,7 @@ class RealFilter(Filter):
 
         # Add the new energy columns to the DataFrame.
         if hasattr(self, 'units'):
-            units = ' [{}]'.format(self.units)
+            units = f' [{self.units}]'
         else:
             units = ''
 
@@ -1230,13 +1335,19 @@ class RealFilter(Filter):
 
         Returns
         -------
-        element : xml.etree.ElementTree.Element
+        element : lxml.etree._Element
             XML element containing filter data
 
         """
         element = super().to_xml_element()
         element[0].text = ' '.join(str(x) for x in self.values)
         return element
+
+    @classmethod
+    def from_xml_element(cls, elem, **kwargs):
+        filter_id = int(elem.get('id'))
+        bins = [float(x) for x in get_text(elem, 'bins').split()]
+        return cls(bins, filter_id=filter_id)
 
 
 class EnergyFilter(RealFilter):
@@ -1266,6 +1377,10 @@ class EnergyFilter(RealFilter):
     """
     units = 'eV'
 
+    def __init__(self, values, filter_id=None):
+        cv.check_length('values', values, 2)
+        super().__init__(values, filter_id)
+
     def get_bin_index(self, filter_bin):
         # Use lower energy bound to find index for RealFilters
         deltas = np.abs(self.bins[:, 1] - filter_bin[1]) / filter_bin[1]
@@ -1273,8 +1388,8 @@ class EnergyFilter(RealFilter):
         if min_delta < 1E-3:
             return deltas.argmin()
         else:
-            msg = 'Unable to get the bin index for Filter since "{0}" ' \
-                  'is not one of the bins'.format(filter_bin)
+            msg = ('Unable to get the bin index for Filter since '
+                   f'"{filter_bin}" is not one of the bins')
             raise ValueError(msg)
 
     def check_bins(self, bins):
@@ -1282,6 +1397,67 @@ class EnergyFilter(RealFilter):
         for v0, v1 in bins:
             cv.check_greater_than('filter value', v0, 0., equality=True)
             cv.check_greater_than('filter value', v1, 0., equality=True)
+
+    def get_tabular(self, values, **kwargs):
+        """Create a tabulated distribution based on tally results with an energy filter
+
+        This method provides an easy way to create a distribution in energy
+        (e.g., a source spectrum) based on tally results that were obtained from
+        using an :class:`~openmc.EnergyFilter`.
+
+        .. versionadded:: 0.13.3
+
+        Parameters
+        ----------
+        values : iterable of float
+            Array of numeric values, typically from a tally result
+        **kwargs
+            Keyword arguments passed to :class:`openmc.stats.Tabular`
+
+        Returns
+        -------
+        openmc.stats.Tabular
+            Tabular distribution with histogram interpolation
+        """
+
+        probabilities = np.array(values, dtype=float)
+        probabilities /= probabilities.sum()
+
+        # Determine probability per eV, adding extra 0 at the end since it is a histogram
+        probability_per_ev = probabilities / np.diff(self.values)
+        probability_per_ev = np.append(probability_per_ev, 0.0)
+
+        kwargs.setdefault('interpolation', 'histogram')
+        return openmc.stats.Tabular(self.values, probability_per_ev, **kwargs)
+
+    @property
+    def lethargy_bin_width(self):
+        """Calculates the base 10 log width of energy bins which is useful when
+        plotting the normalized flux.
+
+        Returns
+        -------
+        numpy.array
+            Array of bin widths
+        """
+        return np.log10(self.bins[:, 1]/self.bins[:, 0])
+
+    @classmethod
+    def from_group_structure(cls, group_structure):
+        """Construct an EnergyFilter instance from a standard group structure.
+
+        .. versionadded:: 0.13.1
+
+        Parameters
+        ----------
+        group_structure : str
+            Name of the group structure. Must be a valid key of
+            openmc.mgxs.GROUP_STRUCTURES dictionary.
+
+        """
+
+        cv.check_value('group_structure', group_structure, openmc.mgxs.GROUP_STRUCTURES.keys())
+        return cls(openmc.mgxs.GROUP_STRUCTURES[group_structure.upper()])
 
 
 class EnergyoutFilter(EnergyFilter):
@@ -1309,6 +1485,52 @@ class EnergyoutFilter(EnergyFilter):
         The number of filter bins
 
     """
+
+class TimeFilter(RealFilter):
+    """Bins tally events based on the particle's time.
+
+    .. versionadded:: 0.13.0
+
+    Parameters
+    ----------
+    values : iterable of float
+        A list of values for which each successive pair constitutes a range of
+        time in [s] for a single bin
+    filter_id : int
+        Unique identifier for the filter
+
+    Attributes
+    ----------
+    values : numpy.ndarray
+        An array of values for which each successive pair constitutes a range of
+        time in [s] for a single bin
+    id : int
+        Unique identifier for the filter
+    bins : numpy.ndarray
+        An array of shape (N, 2) where each row is a pair of time in [s]
+        for a single filter bin
+    num_bins : int
+        The number of filter bins
+
+    """
+    units = 's'
+
+    def get_bin_index(self, filter_bin):
+        # Use lower energy bound to find index for RealFilters
+        deltas = np.abs(self.bins[:, 1] - filter_bin[1]) / filter_bin[1]
+        min_delta = np.min(deltas)
+        if min_delta < 1e-3:
+            return deltas.argmin()
+        else:
+            msg = ('Unable to get the bin index for Filter since '
+                   f'"{filter_bin}" is not one of the bins')
+            raise ValueError(msg)
+
+    def check_bins(self, bins):
+        super().check_bins(bins)
+        for v0, v1 in bins:
+            cv.check_greater_than('filter value', v0, 0., equality=True)
+            cv.check_greater_than('filter value', v1, 0., equality=True)
 
 
 def _path_to_levels(path):
@@ -1409,6 +1631,11 @@ class DistribcellFilter(Filter):
     def paths(self):
         return self._paths
 
+    @paths.setter
+    def paths(self, paths):
+        cv.check_iterable_type('paths', paths, str)
+        self._paths = paths
+
     @Filter.bins.setter
     def bins(self, bins):
         # Format the bins as a 1D numpy array.
@@ -1416,8 +1643,8 @@ class DistribcellFilter(Filter):
 
         # Make sure there is only 1 bin.
         if not len(bins) == 1:
-            msg = 'Unable to add bins "{0}" to a DistribcellFilter since ' \
-                  'only a single distribcell can be used per tally'.format(bins)
+            msg = (f'Unable to add bins "{bins}" to a DistribcellFilter since '
+                  'only a single distribcell can be used per tally')
             raise ValueError(msg)
 
         # Check the type and extract the id, if necessary.
@@ -1426,11 +1653,6 @@ class DistribcellFilter(Filter):
             bins = np.atleast_1d(bins[0].id)
 
         self._bins = bins
-
-    @paths.setter
-    def paths(self, paths):
-        cv.check_iterable_type('paths', paths, str)
-        self._paths = paths
 
     def can_merge(self, other):
         # Distribcell filters cannot have more than one bin
@@ -1508,10 +1730,10 @@ class DistribcellFilter(Filter):
             num_levels = len(paths[0])
             for i_level in range(num_levels):
                 # Use level key as first index in Pandas Multi-index column
-                level_key = 'level {}'.format(i_level + 1)
+                level_key = f'level {i_level + 1}'
 
                 # Create a dictionary for this level for Pandas Multi-index
-                level_dict = OrderedDict()
+                level_dict = {}
 
                 # Use the first distribcell path to determine if level
                 # is a universe/cell or lattice level
@@ -1580,7 +1802,7 @@ class DistribcellFilter(Filter):
         # Concatenate with DataFrame of distribcell instance IDs
         if level_df is not None:
             level_df = level_df.dropna(axis=1, how='all')
-            level_df = level_df.astype(np.int)
+            level_df = level_df.astype(int)
             df = pd.concat([level_df, df], axis=1)
 
         return df
@@ -1760,6 +1982,9 @@ class EnergyFunctionFilter(Filter):
         A grid of energy values in [eV]
     y : iterable of Real
         A grid of interpolant values in [eV]
+    interpolation : str
+        Interpolation scheme: {'histogram', 'linear-linear', 'linear-log',
+        'log-linear', 'log-log', 'quadratic', 'cubic'}
     filter_id : int
         Unique identifier for the filter
 
@@ -1769,6 +1994,9 @@ class EnergyFunctionFilter(Filter):
         A grid of energy values in [eV]
     y : iterable of Real
         A grid of interpolant values in [eV]
+    interpolation : str
+        Interpolation scheme: {'histogram', 'linear-linear', 'linear-log',
+        'log-linear', 'log-log', 'quadratic', 'cubic'}
     id : int
         Unique identifier for the filter
     num_bins : Integral
@@ -1776,13 +2004,24 @@ class EnergyFunctionFilter(Filter):
 
     """
 
-    def __init__(self, energy, y, filter_id=None):
+    # keys selected to match those in function.py where possible
+    # skip 6 b/c ENDF-6 reserves this value for
+    # "special one-dimensional interpolation law"
+    INTERPOLATION_SCHEMES = {1: 'histogram', 2: 'linear-linear',
+                             3: 'linear-log', 4: 'log-linear',
+                             5: 'log-log', 7: 'quadratic',
+                             8: 'cubic'}
+
+    def __init__(self, energy, y, interpolation='linear-linear', filter_id=None):
         self.energy = energy
         self.y = y
         self.id = filter_id
+        self.interpolation = interpolation
 
     def __eq__(self, other):
         if type(self) is not type(other):
+            return False
+        elif not self.interpolation == other.interpolation:
             return False
         elif not all(self.energy == other.energy):
             return False
@@ -1817,12 +2056,14 @@ class EnergyFunctionFilter(Filter):
         string = type(self).__name__ + '\n'
         string += '{: <16}=\t{}\n'.format('\tEnergy', self.energy)
         string += '{: <16}=\t{}\n'.format('\tInterpolant', self.y)
+        string += '{: <16}=\t{}\n'.format('\tInterpolation', self.interpolation)
         return hash(string)
 
     def __repr__(self):
         string = type(self).__name__ + '\n'
         string += '{: <16}=\t{}\n'.format('\tEnergy', self.energy)
         string += '{: <16}=\t{}\n'.format('\tInterpolant', self.y)
+        string += '{: <16}=\t{}\n'.format('\tInterpolation', self.interpolation)
         string += '{: <16}=\t{}\n'.format('\tID', self.id)
         return string
 
@@ -1834,10 +2075,16 @@ class EnergyFunctionFilter(Filter):
                              + group['type'][()].decode() + " instead")
 
         energy = group['energy'][()]
-        y = group['y'][()]
+        y_grp = group['y']
+        y = y_grp[()]
         filter_id = int(group.name.split('/')[-1].lstrip('filter '))
 
-        return cls(energy, y, filter_id=filter_id)
+        out = cls(energy, y, filter_id=filter_id)
+        if 'interpolation' in y_grp.attrs:
+            out.interpolation =  \
+                cls.INTERPOLATION_SCHEMES[y_grp.attrs['interpolation'][()]]
+
+        return out
 
     @classmethod
     def from_tabulated1d(cls, tab1d):
@@ -1859,26 +2106,15 @@ class EnergyFunctionFilter(Filter):
         if tab1d.n_regions > 1:
             raise ValueError('Only Tabulated1Ds with a single interpolation '
                              'region are supported')
-        if tab1d.interpolation[0] != 2:
-            raise ValueError('Only linear-linar Tabulated1Ds are supported')
-
-        return cls(tab1d.x, tab1d.y)
+        interpolation_val = tab1d.interpolation[0]
+        if interpolation_val not in cls.INTERPOLATION_SCHEMES.keys():
+            raise ValueError('Only histogram, linear-linear, linear-log, log-linear, and '
+                             'log-log Tabulated1Ds are supported')
+        return cls(tab1d.x, tab1d.y, cls.INTERPOLATION_SCHEMES[interpolation_val])
 
     @property
     def energy(self):
         return self._energy
-
-    @property
-    def y(self):
-        return self._y
-
-    @property
-    def bins(self):
-        raise AttributeError('EnergyFunctionFilters have no bins.')
-
-    @property
-    def num_bins(self):
-        return 1
 
     @energy.setter
     def energy(self, energy):
@@ -1892,6 +2128,10 @@ class EnergyFunctionFilter(Filter):
 
         self._energy = energy
 
+    @property
+    def y(self):
+        return self._y
+
     @y.setter
     def y(self, y):
         # Format the bins as a 1D numpy array.
@@ -1902,16 +2142,41 @@ class EnergyFunctionFilter(Filter):
 
         self._y = y
 
+    @property
+    def interpolation(self):
+        return self._interpolation
+
+    @interpolation.setter
+    def interpolation(self, val):
+        cv.check_type('interpolation', val, str)
+        cv.check_value('interpolation', val, self.INTERPOLATION_SCHEMES.values())
+
+        if val == 'quadratic' and len(self.energy) < 3:
+            raise ValueError('Quadratic interpolation requires 3 or more values.')
+
+        if val == 'cubic' and len(self.energy) < 4:
+            raise ValueError('Cubic interpolation requires 3 or more values.')
+
+        self._interpolation = val
+
+    @property
+    def bins(self):
+        raise AttributeError('EnergyFunctionFilters have no bins.')
+
     @bins.setter
     def bins(self, bins):
         raise RuntimeError('EnergyFunctionFilters have no bins.')
+
+    @property
+    def num_bins(self):
+        return 1
 
     def to_xml_element(self):
         """Return XML Element representing the Filter.
 
         Returns
         -------
-        element : xml.etree.ElementTree.Element
+        element : lxml.etree._Element
             XML element containing filter data
 
         """
@@ -1925,7 +2190,20 @@ class EnergyFunctionFilter(Filter):
         subelement = ET.SubElement(element, 'y')
         subelement.text = ' '.join(str(y) for y in self.y)
 
+        subelement = ET.SubElement(element, 'interpolation')
+        subelement.text = self.interpolation
+
         return element
+
+    @classmethod
+    def from_xml_element(cls, elem, **kwargs):
+        filter_id = int(elem.get('id'))
+        energy = [float(x) for x in get_text(elem, 'energy').split()]
+        y = [float(x) for x in get_text(elem, 'y').split()]
+        out = cls(energy, y, filter_id=filter_id)
+        if elem.find('interpolation') is not None:
+            out.interpolation = elem.find('interpolation').text
+        return out
 
     def can_merge(self, other):
         return False

@@ -1,10 +1,11 @@
-from collections import OrderedDict
-import os
 import re
-from xml.etree import ElementTree as ET
+import warnings
+
+import lxml.etree as ET
 
 import openmc.checkvalue as cv
-from openmc.data import NATURAL_ABUNDANCE, atomic_mass, \
+import openmc
+from openmc.data import NATURAL_ABUNDANCE, atomic_mass, zam, \
     isotopes as natural_isotopes
 
 
@@ -40,10 +41,10 @@ class Element(str):
                cross_sections=None):
         """Expand natural element into its naturally-occurring isotopes.
 
-        An optional cross_sections argument or the :envvar:`OPENMC_CROSS_SECTIONS`
-        environment variable is used to specify a cross_sections.xml file.
-        If the cross_sections.xml file is found, the element is expanded only
-        into the isotopes/nuclides present in cross_sections.xml. If no
+        An optional cross_sections argument or the ``cross_sections``
+        configuration value is used to specify a cross_sections.xml file. If the
+        cross_sections.xml file is found, the element is expanded only into the
+        isotopes/nuclides present in cross_sections.xml. If no
         cross_sections.xml file is found, the element is expanded based on its
         naturally occurring isotopes.
 
@@ -54,12 +55,13 @@ class Element(str):
         percent_type : {'ao', 'wo'}
             'ao' for atom percent and 'wo' for weight percent
         enrichment : float, optional
-            Enrichment of an enrichment_taget nuclide in percent (ao or wo).
-            If enrichment_taget is not supplied then it is enrichment for U235
-            in weight percent. For example, input 4.95 for 4.95 weight percent
+            Enrichment of an enrichment_target nuclide in percent (ao or wo). If
+            enrichment_target is not supplied then it is enrichment for U235 in
+            weight percent. For example, input 4.95 for 4.95 weight percent
             enriched U. Default is None (natural composition).
         enrichment_target: str, optional
-            Single nuclide name to enrich from a natural composition (e.g., 'O16')
+            Single nuclide name to enrich from a natural composition (e.g.,
+            'O16')
 
             .. versionadded:: 0.12
         enrichment_type: {'ao', 'wo'}, optional
@@ -82,8 +84,8 @@ class Element(str):
         ValueError
             No data is available for any of natural isotopes of the element
         ValueError
-            If only some natural isotopes are available in the cross-section data
-            library and the element is not O, W, or Ta
+            If only some natural isotopes are available in the cross-section
+            data library and the element is not O, W, or Ta
         ValueError
             If a non-naturally-occurring isotope is requested
         ValueError
@@ -101,8 +103,8 @@ class Element(str):
         `ORNL/CSD/TM-244 <https://doi.org/10.2172/5561567>`_ is used to
         calculate the weight fractions of U234, U235, U236, and U238. Namely,
         the weight fraction of U234 and U236 are taken to be 0.89% and 0.46%,
-        respectively, of the U235 weight fraction. The remainder of the
-        isotopic weight is assigned to U238.
+        respectively, of the U235 weight fraction. The remainder of the isotopic
+        weight is assigned to U238.
 
         When the `enrichment` argument is specified with `enrichment_target`, a
         general enrichment procedure is used for elements composed of exactly
@@ -122,13 +124,17 @@ class Element(str):
         # Get the nuclides present in nature
         natural_nuclides = {name for name, abundance in natural_isotopes(self)}
 
-        # Create dict to store the expanded nuclides and abundances
-        abundances = OrderedDict()
+        # Issue warning if no existing nuclides
+        if len(natural_nuclides) == 0:
+            warnings.warn(f"No naturally occurring isotopes found for {self}.")
 
-        # If cross_sections is None, get the cross sections from the
-        # OPENMC_CROSS_SECTIONS environment variable
+        # Create dict to store the expanded nuclides and abundances
+        abundances = {}
+
+        # If cross_sections is None, get the cross sections from the global
+        # configuration
         if cross_sections is None:
-            cross_sections = os.environ.get('OPENMC_CROSS_SECTIONS')
+            cross_sections = openmc.config.get('cross_sections')
 
         # If a cross_sections library is present, check natural nuclides
         # against the nuclides in the library
@@ -146,10 +152,10 @@ class Element(str):
             # and sort to avoid different ordering between Python 2 and 3.
             mutual_nuclides = natural_nuclides.intersection(library_nuclides)
             absent_nuclides = natural_nuclides.difference(mutual_nuclides)
-            mutual_nuclides = sorted(list(mutual_nuclides))
-            absent_nuclides = sorted(list(absent_nuclides))
+            mutual_nuclides = sorted(mutual_nuclides, key=zam)
+            absent_nuclides = sorted(absent_nuclides, key=zam)
 
-            # If all naturally ocurring isotopes are present in the library,
+            # If all naturally occurring isotopes are present in the library,
             # add them based on their abundance
             if len(absent_nuclides) == 0:
                 for nuclide in mutual_nuclides:
@@ -162,10 +168,9 @@ class Element(str):
                 abundances[self + '0'] = 1.0
 
             elif len(mutual_nuclides) == 0:
-                msg = ('Unable to expand element {} because the cross '
+                msg = (f'Unable to expand element {self} because the cross '
                        'section library provided does not contain any of '
-                       'the natural isotopes for that element.'
-                       .format(self))
+                       'the natural isotopes for that element.')
                 raise ValueError(msg)
 
             # If some naturally occurring isotopes are in the library, add them.
@@ -195,7 +200,7 @@ class Element(str):
         # If a cross_section library is not present, expand the element into
         # its natural nuclides
         else:
-            for nuclide in natural_nuclides:
+            for nuclide in sorted(natural_nuclides, key=zam):
                 abundances[nuclide] = NATURAL_ABUNDANCE[nuclide]
 
         # Modify mole fractions if enrichment provided
@@ -205,7 +210,7 @@ class Element(str):
             # Check that the element is Uranium
             if self.name != 'U':
                 msg = ('Enrichment procedure for Uranium was requested, '
-                       'but the isotope is {} not U'.format(self))
+                       f'but the isotope is {self} not U')
                 raise ValueError(msg)
 
             # Check that enrichment_type is not 'ao'
@@ -243,9 +248,8 @@ class Element(str):
 
             # Check if it is two-isotope mixture
             if len(abundances) != 2:
-                msg = ('Element {} does not consist of two naturally-occurring '
-                       'isotopes. Please enter isotopic abundances manually.'
-                       .format(self))
+                msg = (f'Element {self} does not consist of two naturally-occurring '
+                       'isotopes. Please enter isotopic abundances manually.')
                 raise ValueError(msg)
 
             # Check if the target nuclide is present in the mixture
@@ -279,7 +283,7 @@ class Element(str):
             tail_fraction = 1.0 - enrichment / 100.0
 
             # Enrich all nuclides
-            # Do bogus operation for enrichment target but overwrite immediatly
+            # Do bogus operation for enrichment target but overwrite immediately
             # to avoid if statement in the loop
             for nuclide, fraction in abundances.items():
                 abundances[nuclide] = tail_fraction * fraction / non_enriched

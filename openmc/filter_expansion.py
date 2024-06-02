@@ -1,5 +1,6 @@
 from numbers import Integral, Real
-from xml.etree import ElementTree as ET
+
+import lxml.etree as ET
 
 import openmc.checkvalue as cv
 from . import Filter
@@ -33,7 +34,7 @@ class ExpansionFilter(Filter):
 
         Returns
         -------
-        element : xml.etree.ElementTree.Element
+        element : lxml.etree._Element
             XML element containing Legendre filter data
 
         """
@@ -45,6 +46,40 @@ class ExpansionFilter(Filter):
         subelement.text = str(self.order)
 
         return element
+
+    @classmethod
+    def from_xml_element(cls, elem, **kwargs):
+        filter_id = int(elem.get('id'))
+        order = int(elem.find('order').text)
+        return cls(order, filter_id=filter_id)
+
+    def merge(self, other):
+        """Merge this filter with another.
+
+        This overrides the behavior of the parent Filter class, since its
+        merging technique is to take the union of the set of bins of each
+        filter. That technique does not apply to expansion filters, since the
+        argument should be the maximum filter order rather than the list of all
+        bins.
+
+        Parameters
+        ----------
+        other : openmc.Filter
+            Filter to merge with
+
+        Returns
+        -------
+        merged_filter : openmc.Filter
+            Filter resulting from the merge
+
+        """
+
+        if not self.can_merge(other):
+            msg = f'Unable to merge "{type(self)}" with "{type(other)}"'
+            raise ValueError(msg)
+
+        # Create a new filter with these bins and a new auto-generated ID
+        return type(self)(max(self.order, other.order))
 
 
 class LegendreFilter(ExpansionFilter):
@@ -85,7 +120,7 @@ class LegendreFilter(ExpansionFilter):
     @ExpansionFilter.order.setter
     def order(self, order):
         ExpansionFilter.order.__set__(self, order)
-        self.bins = ['P{}'.format(i) for i in range(order + 1)]
+        self.bins = [f'P{i}' for i in range(order + 1)]
 
     @classmethod
     def from_hdf5(cls, group, **kwargs):
@@ -164,7 +199,7 @@ class SpatialLegendreFilter(ExpansionFilter):
     @ExpansionFilter.order.setter
     def order(self, order):
         ExpansionFilter.order.__set__(self, order)
-        self.bins = ['P{}'.format(i) for i in range(order + 1)]
+        self.bins = [f'P{i}' for i in range(order + 1)]
 
     @property
     def axis(self):
@@ -212,7 +247,7 @@ class SpatialLegendreFilter(ExpansionFilter):
 
         Returns
         -------
-        element : xml.etree.ElementTree.Element
+        element : lxml.etree._Element
             XML element containing Legendre filter data
 
         """
@@ -225,6 +260,15 @@ class SpatialLegendreFilter(ExpansionFilter):
         subelement.text = str(self.maximum)
 
         return element
+
+    @classmethod
+    def from_xml_element(cls, elem, **kwargs):
+        filter_id = int(elem.get('id'))
+        order = int(elem.find('order').text)
+        axis = elem.find('axis').text
+        minimum = float(elem.find('min').text)
+        maximum = float(elem.find('max').text)
+        return cls(order, axis, minimum, maximum, filter_id=filter_id)
 
 
 class SphericalHarmonicsFilter(ExpansionFilter):
@@ -275,7 +319,7 @@ class SphericalHarmonicsFilter(ExpansionFilter):
     @ExpansionFilter.order.setter
     def order(self, order):
         ExpansionFilter.order.__set__(self, order)
-        self.bins = ['Y{},{}'.format(n, m)
+        self.bins = [f'Y{n},{m}'
                      for n in range(order + 1)
                      for m in range(-n, n + 1)]
 
@@ -308,13 +352,21 @@ class SphericalHarmonicsFilter(ExpansionFilter):
 
         Returns
         -------
-        element : xml.etree.ElementTree.Element
+        element : lxml.etree._Element
             XML element containing spherical harmonics filter data
 
         """
         element = super().to_xml_element()
         element.set('cosine', self.cosine)
         return element
+
+    @classmethod
+    def from_xml_element(cls, elem, **kwargs):
+        filter_id = int(elem.get('id'))
+        order = int(elem.find('order').text)
+        filter = cls(order, filter_id=filter_id)
+        filter.cosine = elem.get('cosine')
+        return filter
 
 
 class ZernikeFilter(ExpansionFilter):
@@ -358,7 +410,7 @@ class ZernikeFilter(ExpansionFilter):
         x-coordinate of center of circle for normalization
     y : float
         y-coordinate of center of circle for normalization
-    r : int or None
+    r : float
         Radius of circle for normalization
 
     Attributes
@@ -369,7 +421,7 @@ class ZernikeFilter(ExpansionFilter):
         x-coordinate of center of circle for normalization
     y : float
         y-coordinate of center of circle for normalization
-    r : int or None
+    r : float
         Radius of circle for normalization
     id : int
         Unique identifier for the filter
@@ -401,7 +453,7 @@ class ZernikeFilter(ExpansionFilter):
     @ExpansionFilter.order.setter
     def order(self, order):
         ExpansionFilter.order.__set__(self, order)
-        self.bins = ['Z{},{}'.format(n, m)
+        self.bins = [f'Z{n},{m}'
                      for n in range(order + 1)
                      for m in range(-n, n + 1, 2)]
 
@@ -450,7 +502,7 @@ class ZernikeFilter(ExpansionFilter):
 
         Returns
         -------
-        element : xml.etree.ElementTree.Element
+        element : lxml.etree._Element
             XML element containing Zernike filter data
 
         """
@@ -463,6 +515,15 @@ class ZernikeFilter(ExpansionFilter):
         subelement.text = str(self.r)
 
         return element
+
+    @classmethod
+    def from_xml_element(cls, elem, **kwargs):
+        filter_id = int(elem.get('id'))
+        order = int(elem.find('order').text)
+        x = float(elem.find('x').text)
+        y = float(elem.find('y').text)
+        r = float(elem.find('r').text)
+        return cls(order, x, y, r, filter_id=filter_id)
 
 
 class ZernikeRadialFilter(ZernikeFilter):
@@ -499,7 +560,7 @@ class ZernikeRadialFilter(ZernikeFilter):
         x-coordinate of center of circle for normalization
     y : float
         y-coordinate of center of circle for normalization
-    r : int or None
+    r : float
         Radius of circle for normalization
 
     Attributes
@@ -510,7 +571,7 @@ class ZernikeRadialFilter(ZernikeFilter):
         x-coordinate of center of circle for normalization
     y : float
         y-coordinate of center of circle for normalization
-    r : int or None
+    r : float
         Radius of circle for normalization
     id : int
         Unique identifier for the filter
@@ -522,4 +583,4 @@ class ZernikeRadialFilter(ZernikeFilter):
     @ExpansionFilter.order.setter
     def order(self, order):
         ExpansionFilter.order.__set__(self, order)
-        self.bins = ['Z{},0'.format(n) for n in range(0, order+1, 2)]
+        self.bins = [f'Z{n},0' for n in range(0, order+1, 2)]

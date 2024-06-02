@@ -1,6 +1,5 @@
 import copy
 from numbers import Real, Integral
-import os
 
 import h5py
 import numpy as np
@@ -261,21 +260,61 @@ class XSdata:
     def name(self):
         return self._name
 
+    @name.setter
+    def name(self, name):
+
+        check_type('name for XSdata', name, str)
+        self._name = name
+
     @property
     def energy_groups(self):
         return self._energy_groups
+
+    @energy_groups.setter
+    def energy_groups(self, energy_groups):
+
+        check_type('energy_groups', energy_groups, openmc.mgxs.EnergyGroups)
+        if energy_groups.group_edges is None:
+            msg = 'Unable to assign an EnergyGroups object ' \
+                  'with uninitialized group edges'
+            raise ValueError(msg)
+
+        self._energy_groups = energy_groups
 
     @property
     def num_delayed_groups(self):
         return self._num_delayed_groups
 
+    @num_delayed_groups.setter
+    def num_delayed_groups(self, num_delayed_groups):
+
+        check_type('num_delayed_groups', num_delayed_groups, Integral)
+        check_less_than('num_delayed_groups', num_delayed_groups,
+                        openmc.mgxs.MAX_DELAYED_GROUPS, equality=True)
+        check_greater_than('num_delayed_groups', num_delayed_groups, 0,
+                           equality=True)
+        self._num_delayed_groups = num_delayed_groups
+
     @property
     def representation(self):
         return self._representation
 
+    @representation.setter
+    def representation(self, representation):
+
+        check_value('representation', representation, _REPRESENTATIONS)
+        self._representation = representation
+
     @property
     def atomic_weight_ratio(self):
         return self._atomic_weight_ratio
+
+    @atomic_weight_ratio.setter
+    def atomic_weight_ratio(self, atomic_weight_ratio):
+
+        check_type('atomic_weight_ratio', atomic_weight_ratio, Real)
+        check_greater_than('atomic_weight_ratio', atomic_weight_ratio, 0.0)
+        self._atomic_weight_ratio = atomic_weight_ratio
 
     @property
     def fissionable(self):
@@ -285,21 +324,54 @@ class XSdata:
     def temperatures(self):
         return self._temperatures
 
+    @temperatures.setter
+    def temperatures(self, temperatures):
+
+        check_iterable_type('temperatures', temperatures, Real)
+        self._temperatures = np.array(temperatures)
+
     @property
     def scatter_format(self):
         return self._scatter_format
+
+    @scatter_format.setter
+    def scatter_format(self, scatter_format):
+
+        check_value('scatter_format', scatter_format, _SCATTER_TYPES)
+        self._scatter_format = scatter_format
 
     @property
     def order(self):
         return self._order
 
+    @order.setter
+    def order(self, order):
+
+        check_type('order', order, Integral)
+        check_greater_than('order', order, 0, equality=True)
+        self._order = order
+
     @property
     def num_polar(self):
         return self._num_polar
 
+    @num_polar.setter
+    def num_polar(self, num_polar):
+
+        check_type('num_polar', num_polar, Integral)
+        check_greater_than('num_polar', num_polar, 0)
+        self._num_polar = num_polar
+
     @property
     def num_azimuthal(self):
         return self._num_azimuthal
+
+    @num_azimuthal.setter
+    def num_azimuthal(self, num_azimuthal):
+
+        check_type('num_azimuthal', num_azimuthal, Integral)
+        check_greater_than('num_azimuthal', num_azimuthal, 0)
+        self._num_azimuthal = num_azimuthal
 
     @property
     def total(self):
@@ -402,82 +474,9 @@ class XSdata:
 
         return self._xs_shapes
 
-    @name.setter
-    def name(self, name):
-
-        check_type('name for XSdata', name, str)
-        self._name = name
-
-    @energy_groups.setter
-    def energy_groups(self, energy_groups):
-
-        check_type('energy_groups', energy_groups, openmc.mgxs.EnergyGroups)
-        if energy_groups.group_edges is None:
-            msg = 'Unable to assign an EnergyGroups object ' \
-                  'with uninitialized group edges'
-            raise ValueError(msg)
-
-        self._energy_groups = energy_groups
-
-    @num_delayed_groups.setter
-    def num_delayed_groups(self, num_delayed_groups):
-
-        check_type('num_delayed_groups', num_delayed_groups, Integral)
-        check_less_than('num_delayed_groups', num_delayed_groups,
-                        openmc.mgxs.MAX_DELAYED_GROUPS, equality=True)
-        check_greater_than('num_delayed_groups', num_delayed_groups, 0,
-                           equality=True)
-        self._num_delayed_groups = num_delayed_groups
-
-    @representation.setter
-    def representation(self, representation):
-
-        check_value('representation', representation, _REPRESENTATIONS)
-        self._representation = representation
-
-    @atomic_weight_ratio.setter
-    def atomic_weight_ratio(self, atomic_weight_ratio):
-
-        check_type('atomic_weight_ratio', atomic_weight_ratio, Real)
-        check_greater_than('atomic_weight_ratio', atomic_weight_ratio, 0.0)
-        self._atomic_weight_ratio = atomic_weight_ratio
-
-    @temperatures.setter
-    def temperatures(self, temperatures):
-
-        check_iterable_type('temperatures', temperatures, Real)
-        self._temperatures = np.array(temperatures)
-
-    @scatter_format.setter
-    def scatter_format(self, scatter_format):
-
-        check_value('scatter_format', scatter_format, _SCATTER_TYPES)
-        self._scatter_format = scatter_format
-
-    @order.setter
-    def order(self, order):
-
-        check_type('order', order, Integral)
-        check_greater_than('order', order, 0, equality=True)
-        self._order = order
-
-    @num_polar.setter
-    def num_polar(self, num_polar):
-
-        check_type('num_polar', num_polar, Integral)
-        check_greater_than('num_polar', num_polar, 0)
-        self._num_polar = num_polar
-
-    @num_azimuthal.setter
-    def num_azimuthal(self, num_azimuthal):
-
-        check_type('num_azimuthal', num_azimuthal, Integral)
-        check_greater_than('num_azimuthal', num_azimuthal, 0)
-        self._num_azimuthal = num_azimuthal
-
     def add_temperature(self, temperature):
         """This method re-sizes the attributes of this XSdata object so that it
-        can accomodate an additional temperature.  Note that the set_* methods
+        can accommodate an additional temperature.  Note that the set_* methods
         will still need to be executed.
 
         Parameters
@@ -1965,7 +1964,7 @@ class XSdata:
             grp.attrs['fissionable'] = self.fissionable
 
         if self.representation is not None:
-            grp.attrs['representation'] = np.string_(self.representation)
+            grp.attrs['representation'] = np.bytes_(self.representation)
             if self.representation == REPRESENTATION_ANGLE:
                 if self.num_azimuthal is not None:
                     grp.attrs['num_azimuthal'] = self.num_azimuthal
@@ -1973,9 +1972,9 @@ class XSdata:
                 if self.num_polar is not None:
                     grp.attrs['num_polar'] = self.num_polar
 
-        grp.attrs['scatter_shape'] = np.string_("[G][G'][Order]")
+        grp.attrs['scatter_shape'] = np.bytes_("[G][G'][Order]")
         if self.scatter_format is not None:
-            grp.attrs['scatter_format'] = np.string_(self.scatter_format)
+            grp.attrs['scatter_format'] = np.bytes_(self.scatter_format)
         if self.order is not None:
             grp.attrs['order'] = self.order
 
@@ -2331,22 +2330,14 @@ class MGXSLibrary:
     def energy_groups(self):
         return self._energy_groups
 
-    @property
-    def num_delayed_groups(self):
-        return self._num_delayed_groups
-
-    @property
-    def xsdatas(self):
-        return self._xsdatas
-
-    @property
-    def names(self):
-        return [xsdata.name for xsdata in self.xsdatas]
-
     @energy_groups.setter
     def energy_groups(self, energy_groups):
         check_type('energy groups', energy_groups, openmc.mgxs.EnergyGroups)
         self._energy_groups = energy_groups
+
+    @property
+    def num_delayed_groups(self):
+        return self._num_delayed_groups
 
     @num_delayed_groups.setter
     def num_delayed_groups(self, num_delayed_groups):
@@ -2356,6 +2347,14 @@ class MGXSLibrary:
         check_less_than('num_delayed_groups', num_delayed_groups,
                         openmc.mgxs.MAX_DELAYED_GROUPS, equality=True)
         self._num_delayed_groups = num_delayed_groups
+
+    @property
+    def xsdatas(self):
+        return self._xsdatas
+
+    @property
+    def names(self):
+        return [xsdata.name for xsdata in self.xsdatas]
 
     def add_xsdata(self, xsdata):
         """Add an XSdata entry to the file.
@@ -2368,8 +2367,8 @@ class MGXSLibrary:
         """
 
         if not isinstance(xsdata, XSdata):
-            msg = 'Unable to add a non-XSdata "{0}" to the ' \
-                  'MGXSLibrary instance'.format(xsdata)
+            msg = f'Unable to add a non-XSdata "{xsdata}" to the ' \
+                  'MGXSLibrary instance'
             raise ValueError(msg)
 
         if xsdata.energy_groups != self._energy_groups:
@@ -2404,8 +2403,8 @@ class MGXSLibrary:
         """
 
         if not isinstance(xsdata, XSdata):
-            msg = 'Unable to remove a non-XSdata "{0}" from the ' \
-                  'MGXSLibrary instance'.format(xsdata)
+            msg = f'Unable to remove a non-XSdata "{xsdata}" from the ' \
+                  'MGXSLibrary instance'
             raise ValueError(msg)
 
         self._xsdatas.remove(xsdata)
@@ -2517,7 +2516,7 @@ class MGXSLibrary:
 
         # Create and write to the HDF5 file
         file = h5py.File(filename, "w", libver=libver)
-        file.attrs['filetype'] = np.string_(_FILETYPE_MGXS_LIBRARY)
+        file.attrs['filetype'] = np.bytes_(_FILETYPE_MGXS_LIBRARY)
         file.attrs['version'] = [_VERSION_MGXS_LIBRARY, 0]
         file.attrs['energy_groups'] = self.energy_groups.num_groups
         file.attrs['delayed_groups'] = self.num_delayed_groups
@@ -2536,8 +2535,7 @@ class MGXSLibrary:
         ----------
         filename : str, optional
             Name of HDF5 file containing MGXS data. Default is None.
-            If not provided, the value of the OPENMC_MG_CROSS_SECTIONS
-            environmental variable will be used
+            If not provided, openmc.config['mg_cross_sections'] will be used.
 
         Returns
         -------
@@ -2545,15 +2543,14 @@ class MGXSLibrary:
             Multi-group cross section data object.
 
         """
-        # If filename is None, get the cross sections from the
-        # OPENMC_CROSS_SECTIONS environment variable
+        # If filename is None, get the cross sections from openmc.config
         if filename is None:
-            filename = os.environ.get('OPENMC_MG_CROSS_SECTIONS')
+            filename = openmc.config.get('mg_cross_sections')
 
         # Check to make sure there was an environmental variable.
         if filename is None:
-            raise ValueError("Either path or OPENMC_MG_CROSS_SECTIONS "
-                             "environmental variable must be set")
+            raise ValueError("Either path or openmc.config['mg_cross_sections']"
+                             "must be set")
 
         check_type('filename', filename, str)
         file = h5py.File(filename, 'r')

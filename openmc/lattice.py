@@ -1,12 +1,11 @@
 from abc import ABC
-from collections import OrderedDict
 from collections.abc import Iterable
 from copy import deepcopy
 from math import sqrt, floor
 from numbers import Real
 import types
-from xml.etree import ElementTree as ET
 
+import lxml.etree as ET
 import numpy as np
 
 import openmc
@@ -34,16 +33,16 @@ class Lattice(IDManagerMixin, ABC):
         Name of the lattice
     pitch : Iterable of float
         Pitch of the lattice in each direction in cm
-    outer : openmc.Universe
+    outer : openmc.UniverseBase
         A universe to fill all space outside the lattice
-    universes : Iterable of Iterable of openmc.Universe
+    universes : Iterable of Iterable of openmc.UniverseBase
         A two-or three-dimensional list/array of universes filling each element
         of the lattice
 
     """
 
     next_id = 1
-    used_ids = openmc.Universe.used_ids
+    used_ids = openmc.UniverseBase.used_ids
 
     def __init__(self, lattice_id=None, name=''):
         # Initialize Lattice class attributes
@@ -57,18 +56,6 @@ class Lattice(IDManagerMixin, ABC):
     def name(self):
         return self._name
 
-    @property
-    def pitch(self):
-        return self._pitch
-
-    @property
-    def outer(self):
-        return self._outer
-
-    @property
-    def universes(self):
-        return self._universes
-
     @name.setter
     def name(self, name):
         if name is not None:
@@ -77,10 +64,22 @@ class Lattice(IDManagerMixin, ABC):
         else:
             self._name = ''
 
+    @property
+    def pitch(self):
+        return self._pitch
+
+    @property
+    def outer(self):
+        return self._outer
+
     @outer.setter
     def outer(self, outer):
-        cv.check_type('outer universe', outer, openmc.Universe)
+        cv.check_type('outer universe', outer, openmc.UniverseBase)
         self._outer = outer
+
+    @property
+    def universes(self):
+        return self._universes
 
     @staticmethod
     def from_hdf5(group, universes):
@@ -92,7 +91,7 @@ class Lattice(IDManagerMixin, ABC):
             Group in HDF5 file
         universes : dict
             Dictionary mapping universe IDs to instances of
-            :class:`openmc.Universe`.
+            :class:`openmc.UniverseBase`.
 
         Returns
         -------
@@ -106,29 +105,29 @@ class Lattice(IDManagerMixin, ABC):
         elif lattice_type == 'hexagonal':
             return openmc.HexLattice.from_hdf5(group, universes)
         else:
-            raise ValueError('Unkown lattice type: {}'.format(lattice_type))
+            raise ValueError(f'Unknown lattice type: {lattice_type}')
 
     def get_unique_universes(self):
         """Determine all unique universes in the lattice
 
         Returns
         -------
-        universes : collections.OrderedDict
+        universes : dict
             Dictionary whose keys are universe IDs and values are
-            :class:`openmc.Universe` instances
+            :class:`openmc.UniverseBase` instances
 
         """
 
-        univs = OrderedDict()
+        univs = {}
         for k in range(len(self._universes)):
             for j in range(len(self._universes[k])):
-                if isinstance(self._universes[k][j], openmc.Universe):
+                if isinstance(self._universes[k][j], openmc.UniverseBase):
                     u = self._universes[k][j]
                     univs[u._id] = u
                 else:
                     for i in range(len(self._universes[k][j])):
                         u = self._universes[k][j][i]
-                        assert isinstance(u, openmc.Universe)
+                        assert isinstance(u, openmc.UniverseBase)
                         univs[u._id] = u
 
         if self.outer is not None:
@@ -164,12 +163,12 @@ class Lattice(IDManagerMixin, ABC):
 
         Returns
         -------
-        cells : collections.OrderedDict
+        cells : dict
             Dictionary whose keys are cell IDs and values are :class:`Cell`
             instances
 
         """
-        cells = OrderedDict()
+        cells = {}
 
         if memo and self in memo:
             return cells
@@ -189,13 +188,13 @@ class Lattice(IDManagerMixin, ABC):
 
         Returns
         -------
-        materials : collections.OrderedDict
+        materials : dict
             Dictionary whose keys are material IDs and values are
             :class:`Material` instances
 
         """
 
-        materials = OrderedDict()
+        materials = {}
 
         # Append all Cells in each Cell in the Universe to the dictionary
         cells = self.get_all_cells(memo)
@@ -209,7 +208,7 @@ class Lattice(IDManagerMixin, ABC):
 
         Returns
         -------
-        universes : collections.OrderedDict
+        universes : dict
             Dictionary whose keys are universe IDs and values are
             :class:`Universe` instances
 
@@ -217,7 +216,7 @@ class Lattice(IDManagerMixin, ABC):
 
         # Initialize a dictionary of all Universes contained by the Lattice
         # in each nested Universe level
-        all_universes = OrderedDict()
+        all_universes = {}
 
         # Get all unique Universes contained in each of the lattice cells
         unique_universes = self.get_unique_universes()
@@ -246,7 +245,7 @@ class Lattice(IDManagerMixin, ABC):
 
         Returns
         -------
-        openmc.Universe
+        openmc.UniverseBase
             Universe with given indices
 
         """
@@ -370,9 +369,9 @@ class RectLattice(Lattice):
     pitch : Iterable of float
         Pitch of the lattice in the x, y, and (if applicable) z directions in
         cm.
-    outer : openmc.Universe
+    outer : openmc.UniverseBase
         A universe to fill all space outside the lattice
-    universes : Iterable of Iterable of openmc.Universe
+    universes : Iterable of Iterable of openmc.UniverseBase
         A two- or three-dimensional list/array of universes filling each element
         of the lattice. The first dimension corresponds to the z-direction (if
         applicable), the second dimension corresponds to the y-direction, and
@@ -416,7 +415,7 @@ class RectLattice(Lattice):
 
         # Lattice nested Universe IDs
         for i, universe in enumerate(np.ravel(self._universes)):
-            string += '{} '.format(universe._id)
+            string += f'{universe._id} '
 
             # Add a newline character every time we reach end of row of cells
             if (i + 1) % self.shape[0] == 0:
@@ -460,6 +459,12 @@ class RectLattice(Lattice):
     def lower_left(self):
         return self._lower_left
 
+    @lower_left.setter
+    def lower_left(self, lower_left):
+        cv.check_type('lattice lower left corner', lower_left, Iterable, Real)
+        cv.check_length('lattice lower left corner', lower_left, 2, 3)
+        self._lower_left = lower_left
+
     @property
     def ndim(self):
         if self.pitch is not None:
@@ -472,12 +477,6 @@ class RectLattice(Lattice):
     def shape(self):
         return self._universes.shape[::-1]
 
-    @lower_left.setter
-    def lower_left(self, lower_left):
-        cv.check_type('lattice lower left corner', lower_left, Iterable, Real)
-        cv.check_length('lattice lower left corner', lower_left, 2, 3)
-        self._lower_left = lower_left
-
     @Lattice.pitch.setter
     def pitch(self, pitch):
         cv.check_type('lattice pitch', pitch, Iterable, Real)
@@ -488,7 +487,7 @@ class RectLattice(Lattice):
 
     @Lattice.universes.setter
     def universes(self, universes):
-        cv.check_iterable_type('lattice universes', universes, openmc.Universe,
+        cv.check_iterable_type('lattice universes', universes, openmc.UniverseBase,
                                min_depth=2, max_depth=3)
         self._universes = np.asarray(universes)
 
@@ -633,11 +632,11 @@ class RectLattice(Lattice):
 
         cv.check_value('strategy', strategy, ('degenerate', 'lns'))
         cv.check_type('universes_to_ignore', universes_to_ignore, Iterable,
-                      openmc.Universe)
+                      openmc.UniverseBase)
         cv.check_type('materials_to_clone', materials_to_clone, Iterable,
                       openmc.Material)
         cv.check_type('lattice_neighbors', lattice_neighbors, Iterable,
-                      openmc.Universe)
+                      openmc.UniverseBase)
         cv.check_value('number of lattice_neighbors', len(lattice_neighbors),
                        (0, 8))
         cv.check_type('key', key, types.FunctionType)
@@ -833,7 +832,7 @@ class RectLattice(Lattice):
 
         Parameters
         ----------
-        xml_element : xml.etree.ElementTree.Element
+        xml_element : lxml.etree._Element
             XML element to be added to
 
         memo : set or None
@@ -852,6 +851,10 @@ class RectLattice(Lattice):
         if memo is not None:
             memo.add(self)
 
+        # Make sure universes have been assigned
+        if self.universes is None:
+            raise ValueError(f"Lattice {self.id} does not have universes assigned.")
+
         lattice_subelement = ET.Element("lattice")
         lattice_subelement.set("id", str(self._id))
 
@@ -865,7 +868,7 @@ class RectLattice(Lattice):
         # Export the Lattice outer Universe (if specified)
         if self._outer is not None:
             outer = ET.SubElement(lattice_subelement, "outer")
-            outer.text = '{0}'.format(self._outer._id)
+            outer.text = str(self._outer._id)
             self._outer.create_xml_subelement(xml_element, memo)
 
         # Export Lattice cell dimensions
@@ -876,7 +879,7 @@ class RectLattice(Lattice):
         lower_left = ET.SubElement(lattice_subelement, "lower_left")
         lower_left.text = ' '.join(map(str, self._lower_left))
 
-        # Export the Lattice nested Universe IDs - column major for Fortran
+        # Export the Lattice nested Universe IDs
         universe_ids = '\n'
 
         # 3D Lattices
@@ -887,7 +890,7 @@ class RectLattice(Lattice):
                         universe = self._universes[z][y][x]
 
                         # Append Universe ID to the Lattice XML subelement
-                        universe_ids += '{0} '.format(universe._id)
+                        universe_ids += f'{universe._id} '
 
                         # Create XML subelement for this Universe
                         universe.create_xml_subelement(xml_element, memo)
@@ -905,7 +908,7 @@ class RectLattice(Lattice):
                     universe = self._universes[y][x]
 
                     # Append Universe ID to Lattice XML subelement
-                    universe_ids += '{0} '.format(universe._id)
+                    universe_ids += f'{universe._id} '
 
                     # Create XML subelement for this Universe
                     universe.create_xml_subelement(xml_element, memo)
@@ -928,7 +931,7 @@ class RectLattice(Lattice):
 
         Parameters
         ----------
-        elem : xml.etree.ElementTree.Element
+        elem : lxml.etree._Element
             `<lattice>` element
         get_universe : function
             Function returning universe (defined in
@@ -969,7 +972,7 @@ class RectLattice(Lattice):
             Group in HDF5 file
         universes : dict
             Dictionary mapping universe IDs to instances of
-            :class:`openmc.Universe`.
+            :class:`openmc.UniverseBase`.
 
         Returns
         -------
@@ -995,7 +998,7 @@ class RectLattice(Lattice):
             lattice.outer = universes[outer]
 
         # Build array of Universe pointers for the Lattice
-        uarray = np.empty(universe_ids.shape, dtype=openmc.Universe)
+        uarray = np.empty(universe_ids.shape, dtype=openmc.UniverseBase)
 
         for z in range(universe_ids.shape[0]):
             for y in range(universe_ids.shape[1]):
@@ -1050,9 +1053,9 @@ class HexLattice(Lattice):
         Pitch of the lattice in cm. The first item in the iterable specifies the
         pitch in the radial direction and, if the lattice is 3D, the second item
         in the iterable specifies the pitch in the axial direction.
-    outer : openmc.Universe
+    outer : openmc.UniverseBase
         A universe to fill all space outside the lattice
-    universes : Nested Iterable of openmc.Universe
+    universes : Nested Iterable of openmc.UniverseBase
         A two- or three-dimensional list/array of universes filling each element
         of the lattice. Each sub-list corresponds to one ring of universes and
         should be ordered from outermost ring to innermost ring. The universes
@@ -1124,6 +1127,11 @@ class HexLattice(Lattice):
     def orientation(self):
         return self._orientation
 
+    @orientation.setter
+    def orientation(self, orientation):
+        cv.check_value('orientation', orientation.lower(), ('x', 'y'))
+        self._orientation = orientation.lower()
+
     @property
     def num_axial(self):
         return self._num_axial
@@ -1131,6 +1139,12 @@ class HexLattice(Lattice):
     @property
     def center(self):
         return self._center
+
+    @center.setter
+    def center(self, center):
+        cv.check_type('lattice center', center, Iterable, Real)
+        cv.check_length('lattice center', center, 2, 3)
+        self._center = center
 
     @property
     def indices(self):
@@ -1169,18 +1183,7 @@ class HexLattice(Lattice):
 
     @property
     def ndim(self):
-        return 2 if isinstance(self.universes[0][0], openmc.Universe) else 3
-
-    @center.setter
-    def center(self, center):
-        cv.check_type('lattice center', center, Iterable, Real)
-        cv.check_length('lattice center', center, 2, 3)
-        self._center = center
-
-    @orientation.setter
-    def orientation(self, orientation):
-        cv.check_value('orientation', orientation.lower(), ('x', 'y'))
-        self._orientation = orientation.lower()
+        return 2 if isinstance(self.universes[0][0], openmc.UniverseBase) else 3
 
     @Lattice.pitch.setter
     def pitch(self, pitch):
@@ -1192,7 +1195,7 @@ class HexLattice(Lattice):
 
     @Lattice.universes.setter
     def universes(self, universes):
-        cv.check_iterable_type('lattice universes', universes, openmc.Universe,
+        cv.check_iterable_type('lattice universes', universes, openmc.UniverseBase,
                                min_depth=2, max_depth=3)
         self._universes = universes
 
@@ -1215,7 +1218,7 @@ class HexLattice(Lattice):
             for rings in self._universes:
                 if len(rings) != self._num_rings:
                     msg = 'HexLattice ID={0:d} has an inconsistent number of ' \
-                          'rings per axial positon'.format(self._id)
+                          'rings per axial position'.format(self._id)
                     raise ValueError(msg)
 
         else:
@@ -1432,7 +1435,7 @@ class HexLattice(Lattice):
         # Export the Lattice outer Universe (if specified)
         if self._outer is not None:
             outer = ET.SubElement(lattice_subelement, "outer")
-            outer.text = '{0}'.format(self._outer._id)
+            outer.text = str(self._outer._id)
             self._outer.create_xml_subelement(xml_element, memo)
 
         lattice_subelement.set("n_rings", str(self._num_rings))
@@ -1448,6 +1451,8 @@ class HexLattice(Lattice):
         center.text = ' '.join(map(str, self._center))
 
         # Export the Lattice nested Universe IDs.
+        if self.universes is None:
+            raise ValueError(f"Lattice {self.id} does not have universes assigned.")
 
         # 3D Lattices
         if self._num_axial is not None:
@@ -1496,7 +1501,7 @@ class HexLattice(Lattice):
 
         Parameters
         ----------
-        elem : xml.etree.ElementTree.Element
+        elem : lxml.etree._Element
             `<hex_lattice>` element
         get_universe : function
             Function returning universe (defined in
@@ -1846,7 +1851,7 @@ class HexLattice(Lattice):
         largest_index = 6*(num_rings - 1)
         n_digits_index = len(str(largest_index))
         n_digits_ring = len(str(num_rings - 1))
-        str_form = '({{:{}}},{{:{}}})'.format(n_digits_ring, n_digits_index)
+        str_form = f'({{:{n_digits_ring}}},{{:{n_digits_index}}})'
         pad = ' '*(n_digits_index + n_digits_ring + 3)
 
         # Initialize the list for each row.
@@ -1951,7 +1956,7 @@ class HexLattice(Lattice):
         largest_index = 6*(num_rings - 1)
         n_digits_index = len(str(largest_index))
         n_digits_ring = len(str(num_rings - 1))
-        str_form = '({{:{}}},{{:{}}})'.format(n_digits_ring, n_digits_index)
+        str_form = f'({{:{n_digits_ring}}},{{:{n_digits_index}}})'
         pad = ' '*(n_digits_index + n_digits_ring + 3)
 
         # Initialize the list for each row.
@@ -2046,12 +2051,12 @@ class HexLattice(Lattice):
             Group in HDF5 file
         universes : dict
             Dictionary mapping universe IDs to instances of
-            :class:`openmc.Universe`.
+            :class:`openmc.UniverseBase`.
 
         Returns
         -------
-        openmc.RectLattice
-            Rectangular lattice
+        openmc.HexLattice
+            Hexagonal lattice
 
         """
         n_rings = group['n_rings'][()]

@@ -12,7 +12,12 @@ _VERSION_SUMMARY = 6
 
 
 class Summary:
-    """Summary of geometry, materials, and tallies used in a simulation.
+    """Summary of model used in a simulation.
+
+    Parameters
+    ----------
+    filename : str or path-like
+        Path to file to load
 
     Attributes
     ----------
@@ -33,8 +38,9 @@ class Summary:
     """
 
     def __init__(self, filename):
+        filename = str(filename)
         if not filename.endswith(('.h5', '.hdf5')):
-            msg = 'Unable to open "{0}" which is not an HDF5 summary file'
+            msg = f'Unable to open "{filename}" which is not an HDF5 summary file'
             raise ValueError(msg)
 
         self._f = h5py.File(filename, 'r')
@@ -123,7 +129,9 @@ class Summary:
     def _read_surfaces(self):
         for group in self._f['geometry/surfaces'].values():
             surface = openmc.Surface.from_hdf5(group)
-            self._fast_surfaces[surface.id] = surface
+            # surface may be None for DAGMC surfaces
+            if surface:
+                self._fast_surfaces[surface.id] = surface
 
     def _read_cells(self):
 
@@ -176,7 +184,11 @@ class Summary:
 
     def _read_universes(self):
         for group in self._f['geometry/universes'].values():
-            universe = openmc.Universe.from_hdf5(group, self._fast_cells)
+            geom_type = group.get('geom_type')
+            if geom_type and geom_type[()].decode() == 'dagmc':
+                universe = openmc.DAGMCUniverse.from_hdf5(group)
+            else:
+                universe = openmc.Universe.from_hdf5(group, self._fast_cells)
             self._fast_universes[universe.id] = universe
 
     def _read_lattices(self):
@@ -228,4 +240,9 @@ class Summary:
             Results from a stochastic volume calculation
 
         """
-        self.geometry.add_volume_information(volume_calc)
+        if volume_calc.domain_type == "material" and self.materials:
+            for material in self.materials:
+                if material.id in volume_calc.volumes:
+                    material.add_volume_information(volume_calc)
+        else:
+            self.geometry.add_volume_information(volume_calc)

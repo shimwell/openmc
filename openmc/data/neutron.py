@@ -1,4 +1,3 @@
-from collections import OrderedDict
 from collections.abc import Mapping, MutableMapping
 from io import StringIO
 from math import log10
@@ -44,7 +43,7 @@ class IncidentNeutron(EqualityMixin):
     Parameters
     ----------
     name : str
-        Name of the nuclide using the GND naming convention
+        Name of the nuclide using the GNDS naming convention
     atomic_number : int
         Number of protons in the target nucleus
     mass_number : int
@@ -75,8 +74,8 @@ class IncidentNeutron(EqualityMixin):
         Metastable state of the target nucleus. A value of zero indicates ground
         state.
     name : str
-        Name of the nuclide using the GND naming convention
-    reactions : collections.OrderedDict
+        Name of the nuclide using the GNDS naming convention
+    reactions : dict
         Contains the cross sections, secondary angle and energy distributions,
         and other associated data for each reaction. The keys are the MT values
         and the values are Reaction objects.
@@ -107,7 +106,7 @@ class IncidentNeutron(EqualityMixin):
         self.kTs = kTs
         self.energy = {}
         self._fission_energy = None
-        self.reactions = OrderedDict()
+        self.reactions = {}
         self._urr = {}
         self._resonances = None
 
@@ -123,10 +122,10 @@ class IncidentNeutron(EqualityMixin):
             if len(mts) > 0:
                 return self._get_redundant_reaction(mt, mts)
             else:
-                raise KeyError('No reaction with MT={}.'.format(mt))
+                raise KeyError(f'No reaction with MT={mt}.')
 
     def __repr__(self):
-        return "<IncidentNeutron: {}>".format(self.name)
+        return f"<IncidentNeutron: {self.name}>"
 
     def __iter__(self):
         return iter(self.reactions.values())
@@ -135,54 +134,14 @@ class IncidentNeutron(EqualityMixin):
     def name(self):
         return self._name
 
-    @property
-    def atomic_number(self):
-        return self._atomic_number
-
-    @property
-    def mass_number(self):
-        return self._mass_number
-
-    @property
-    def metastable(self):
-        return self._metastable
-
-    @property
-    def atomic_weight_ratio(self):
-        return self._atomic_weight_ratio
-
-    @property
-    def fission_energy(self):
-        return self._fission_energy
-
-    @property
-    def reactions(self):
-        return self._reactions
-
-    @property
-    def resonances(self):
-        return self._resonances
-
-    @property
-    def resonance_covariance(self):
-        return self._resonance_covariance
-
-    @property
-    def urr(self):
-        return self._urr
-
-    @property
-    def temperatures(self):
-        return ["{}K".format(int(round(kT / K_BOLTZMANN))) for kT in self.kTs]
-
     @name.setter
     def name(self, name):
         cv.check_type('name', name, str)
         self._name = name
 
     @property
-    def atomic_symbol(self):
-        return ATOMIC_SYMBOL[self.atomic_number]
+    def atomic_number(self):
+        return self._atomic_number
 
     @atomic_number.setter
     def atomic_number(self, atomic_number):
@@ -190,11 +149,19 @@ class IncidentNeutron(EqualityMixin):
         cv.check_greater_than('atomic number', atomic_number, 0, True)
         self._atomic_number = atomic_number
 
+    @property
+    def mass_number(self):
+        return self._mass_number
+
     @mass_number.setter
     def mass_number(self, mass_number):
         cv.check_type('mass number', mass_number, Integral)
         cv.check_greater_than('mass number', mass_number, 0, True)
         self._mass_number = mass_number
+
+    @property
+    def metastable(self):
+        return self._metastable
 
     @metastable.setter
     def metastable(self, metastable):
@@ -202,11 +169,19 @@ class IncidentNeutron(EqualityMixin):
         cv.check_greater_than('metastable', metastable, 0, True)
         self._metastable = metastable
 
+    @property
+    def atomic_weight_ratio(self):
+        return self._atomic_weight_ratio
+
     @atomic_weight_ratio.setter
     def atomic_weight_ratio(self, atomic_weight_ratio):
         cv.check_type('atomic weight ratio', atomic_weight_ratio, Real)
         cv.check_greater_than('atomic weight ratio', atomic_weight_ratio, 0.0)
         self._atomic_weight_ratio = atomic_weight_ratio
+
+    @property
+    def fission_energy(self):
+        return self._fission_energy
 
     @fission_energy.setter
     def fission_energy(self, fission_energy):
@@ -214,21 +189,37 @@ class IncidentNeutron(EqualityMixin):
                       FissionEnergyRelease)
         self._fission_energy = fission_energy
 
+    @property
+    def reactions(self):
+        return self._reactions
+
     @reactions.setter
     def reactions(self, reactions):
         cv.check_type('reactions', reactions, Mapping)
         self._reactions = reactions
+
+    @property
+    def resonances(self):
+        return self._resonances
 
     @resonances.setter
     def resonances(self, resonances):
         cv.check_type('resonances', resonances, res.Resonances)
         self._resonances = resonances
 
+    @property
+    def resonance_covariance(self):
+        return self._resonance_covariance
+
     @resonance_covariance.setter
     def resonance_covariance(self, resonance_covariance):
         cv.check_type('resonance covariance', resonance_covariance,
                       res_cov.ResonanceCovariances)
         self._resonance_covariance = resonance_covariance
+
+    @property
+    def urr(self):
+        return self._urr
 
     @urr.setter
     def urr(self, urr):
@@ -237,6 +228,14 @@ class IncidentNeutron(EqualityMixin):
             cv.check_type('probability table temperature', key, str)
             cv.check_type('probability tables', value, ProbabilityTables)
         self._urr = urr
+
+    @property
+    def temperatures(self):
+        return [f"{int(round(kT / K_BOLTZMANN))}K" for kT in self.kTs]
+
+    @property
+    def atomic_symbol(self):
+        return ATOMIC_SYMBOL[self.atomic_number]
 
     def add_temperature_from_ace(self, ace_or_filename, metastable_scheme='nndc'):
         """Append data from an ACE file at a different temperature.
@@ -262,7 +261,7 @@ class IncidentNeutron(EqualityMixin):
         # Check if temprature already exists
         strT = data.temperatures[0]
         if strT in self.temperatures:
-            warn('Cross sections at T={} already exist.'.format(strT))
+            warn(f'Cross sections at T={strT} already exist.')
             return
 
         # Check that name matches
@@ -426,7 +425,7 @@ class IncidentNeutron(EqualityMixin):
 
         # Open file and write version
         with h5py.File(str(path), mode, libver=libver) as f:
-            f.attrs['filetype'] = np.string_('data_neutron')
+            f.attrs['filetype'] = np.bytes_('data_neutron')
             f.attrs['version'] = np.array(HDF5_VERSION)
 
             # Write basic data
@@ -462,7 +461,7 @@ class IncidentNeutron(EqualityMixin):
                     if not (photon_rx or rx.mt in keep_mts):
                         continue
 
-                rx_group = rxs_group.create_group('reaction_{:03}'.format(rx.mt))
+                rx_group = rxs_group.create_group(f'reaction_{rx.mt:03}')
                 rx.to_hdf5(rx_group)
 
                 # Write total nu data if available
@@ -594,7 +593,7 @@ class IncidentNeutron(EqualityMixin):
         zaid, xs = ace.name.split('.')
         if not xs.endswith('c'):
             raise TypeError(
-                "{} is not a continuous-energy neutron ACE table.".format(ace))
+                f"{ace} is not a continuous-energy neutron ACE table.")
         name, element, Z, mass_number, metastable = \
             get_metadata(int(zaid), metastable_scheme)
 
@@ -733,9 +732,9 @@ class IncidentNeutron(EqualityMixin):
         # Determine name
         element = ATOMIC_SYMBOL[atomic_number]
         if metastable > 0:
-            name = '{}{}_m{}'.format(element, mass_number, metastable)
+            name = f'{element}{mass_number}_m{metastable}'
         else:
-            name = '{}{}'.format(element, mass_number)
+            name = f'{element}{mass_number}'
 
         # Instantiate incident neutron data
         data = cls(name, atomic_number, mass_number, metastable,
@@ -868,16 +867,15 @@ class IncidentNeutron(EqualityMixin):
 
             heatr_evals = get_evaluations(kwargs["heatr"])
             heatr_local_evals = get_evaluations(kwargs["heatr"] + "_local")
-            for ev, ev_local in zip(heatr_evals, heatr_local_evals):
-                temp = "{}K".format(round(ev.target["temperature"]))
 
+            for ev, ev_local, temp in zip(heatr_evals, heatr_local_evals, data.temperatures):
                 # Get total KERMA (originally from ACE file) and energy grid
                 kerma = data.reactions[301].xs[temp]
                 E = kerma.x
 
                 if f is not None:
                     # Replace fission KERMA with (EFR + EB)*sigma_f
-                    fission = data.reactions[18].xs[temp]
+                    fission = data[18].xs[temp]
                     kerma_fission = get_file3_xs(ev, 318, E)
                     kerma.y = kerma.y - kerma_fission + (
                         f.fragments(E) + f.betas(E)) * fission(E)

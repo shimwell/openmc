@@ -1,8 +1,8 @@
 #ifndef OPENMC_TALLIES_FILTER_COLLISIONS_H
 #define OPENMC_TALLIES_FILTER_COLLISIONS_H
 
+#include <gsl/gsl-lite.hpp>
 #include <unordered_map>
-#include <gsl/gsl>
 
 #include "openmc/tallies/filter.h"
 #include "openmc/vector.h"
@@ -23,11 +23,12 @@ public:
   //----------------------------------------------------------------------------
   // Methods
 
-  std::string type() const override { return "collision"; }
+  std::string type_str() const override { return "collision"; }
+  FilterType type() const override { return FilterType::COLLISION; }
 
   void from_xml(pugi::xml_node node) override;
 
-  void get_all_bins(const Particle& p, TallyEstimator estimator, 
+  void get_all_bins(const Particle& p, TallyEstimator estimator,
     FilterMatch& match) const override;
 
   void to_statepoint(hid_t filter_group) const override;
@@ -46,8 +47,7 @@ protected:
 
   vector<int> bins_;
 
-  std::unordered_map<int,int> map_;
-
+  std::unordered_map<int, int> map_;
 };
 
 } // namespace openmc

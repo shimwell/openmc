@@ -31,6 +31,7 @@ extern Timer time_event_advance_particle;
 extern Timer time_event_surface_crossing;
 extern Timer time_event_collision;
 extern Timer time_event_death;
+extern Timer time_update_src;
 
 } // namespace simulation
 
@@ -58,9 +59,9 @@ public:
   void reset();
 
 private:
-  bool running_ {false}; //!< is timer running?
+  bool running_ {false};                 //!< is timer running?
   std::chrono::time_point<clock> start_; //!< starting point for clock
-  double elapsed_ {0.0}; //!< elapsed time in [s]
+  double elapsed_ {0.0};                 //!< elapsed time in [s]
 };
 
 //==============================================================================

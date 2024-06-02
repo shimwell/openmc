@@ -24,7 +24,8 @@ namespace openmc {
 void read_particle_restart(Particle& p, RunMode& previous_run_mode)
 {
   // Write meessage
-  write_message(5, "Loading particle restart file {}", settings::path_particle_restart);
+  write_message(
+    5, "Loading particle restart file {}", settings::path_particle_restart);
 
   // Open file
   hid_t file_id = file_open(settings::path_particle_restart, 'r');
@@ -49,6 +50,7 @@ void read_particle_restart(Particle& p, RunMode& previous_run_mode)
   read_dataset(file_id, "energy", p.E());
   read_dataset(file_id, "xyz", p.r());
   read_dataset(file_id, "uvw", p.u());
+  read_dataset(file_id, "time", p.time());
 
   // Set energy group and average energy in multi-group mode
   if (!settings::run_CE) {
@@ -63,6 +65,7 @@ void read_particle_restart(Particle& p, RunMode& previous_run_mode)
   p.u_last() = p.u();
   p.E_last() = p.E();
   p.g_last() = p.g();
+  p.time_last() = p.time();
 
   // Close hdf5 file
   file_close(file_id);
@@ -84,8 +87,10 @@ void run_particle_restart()
   read_particle_restart(p, previous_run_mode);
 
   // write track if that was requested on command line
-  if (settings::write_all_tracks)
+  if (settings::write_all_tracks) {
+    open_track_file();
     p.write_track() = true;
+  }
 
   // Set all tallies to 0 for now (just tracking errors)
   model::tallies.clear();
@@ -94,15 +99,14 @@ void run_particle_restart()
   int64_t particle_seed;
   switch (previous_run_mode) {
   case RunMode::EIGENVALUE:
+  case RunMode::FIXED_SOURCE:
     particle_seed = (simulation::total_gen + overall_generation() - 1) *
                       settings::n_particles +
                     p.id();
     break;
-  case RunMode::FIXED_SOURCE:
-    particle_seed = p.id();
-    break;
   default:
-    throw std::runtime_error{"Unexpected run mode: " +
+    throw std::runtime_error {
+      "Unexpected run mode: " +
       std::to_string(static_cast<int>(previous_run_mode))};
   }
   init_particle_seeds(particle_seed, p.seeds());
@@ -121,6 +125,10 @@ void run_particle_restart()
 
   // Write output if particle made it
   print_particle(p);
+
+  if (settings::write_all_tracks) {
+    close_track_file();
+  }
 }
 
 } // namespace openmc

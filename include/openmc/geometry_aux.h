@@ -7,17 +7,25 @@
 #include <cstdint>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 #include "openmc/vector.h"
+#include "openmc/xml_interface.h"
 
 namespace openmc {
 
 namespace model {
-  extern std::unordered_map<int32_t, std::unordered_map<int32_t, int32_t>> universe_cell_counts;
-  extern std::unordered_map<int32_t, int32_t> universe_level_counts;
+extern std::unordered_map<int32_t, std::unordered_map<int32_t, int32_t>>
+  universe_cell_counts;
+extern std::unordered_map<int32_t, int32_t> universe_level_counts;
 } // namespace model
 
+//! Read geometry from XML file
 void read_geometry_xml();
+
+//! Read geometry from XML node
+//! \param[in] root node of geometry XML element
+void read_geometry_xml(pugi::xml_node root);
 
 //==============================================================================
 //! Replace Universe, Lattice, and Material IDs with indices.
@@ -63,9 +71,13 @@ int32_t find_root_universe();
 
 //==============================================================================
 //! Populate all data structures needed for distribcells.
+//! \param user_distribcells A set of cell indices to create distribcell data
+//!   structures for regardless of whether or not they are part of a tally
+//!   filter.
 //==============================================================================
 
-void prepare_distribcell();
+void prepare_distribcell(
+  const std::vector<int32_t>* user_distribcells = nullptr);
 
 //==============================================================================
 //! Recursively search through the geometry and count cell instances.
@@ -102,8 +114,8 @@ int count_universe_instances(int32_t search_univ, int32_t target_univ_id,
 //!   desired instance of the target cell.
 //==============================================================================
 
-std::string
-distribcell_path(int32_t target_cell, int32_t map, int32_t target_offset);
+std::string distribcell_path(
+  int32_t target_cell, int32_t map, int32_t target_offset);
 
 //==============================================================================
 //! Determine the maximum number of nested coordinate levels in the geometry.
@@ -113,6 +125,14 @@ distribcell_path(int32_t target_cell, int32_t map, int32_t target_offset);
 //==============================================================================
 
 int maximum_levels(int32_t univ);
+
+//==============================================================================
+//! Check whether or not a universe is the root universe using its ID.
+//! \param univ_id The ID of the universe to check.
+//! \return Whether or not it is the root universe.
+//==============================================================================
+
+bool is_root_universe(int32_t univ_id);
 
 //==============================================================================
 //! Deallocates global vectors and maps for cells, universes, and lattices.
