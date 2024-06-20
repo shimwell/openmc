@@ -4,7 +4,8 @@ import glob
 import sys
 import numpy as np
 
-from setuptools import setup, find_packages
+from setuptools import find_packages
+from skbuild import setup
 from Cython.Build import cythonize
 
 
@@ -23,11 +24,11 @@ kwargs = {
     'name': 'openmc',
     'version': version,
     'packages': find_packages(exclude=['tests*']),
-    'scripts': glob.glob('scripts/openmc-*'),
+    'scripts': glob.glob('scripts/openmc-*'), # fails build + ['bin/openmc'],
 
     # Data files and libraries
     'package_data': {
-        'openmc.lib': ['libopenmc.{}'.format(suffix)],
+        # 'openmc.lib': ['libopenmc.{}'.format(suffix)],
         'openmc.data': ['mass_1.mas20.txt', 'BREMX.DAT', 'half_life.json', '*.h5'],
         'openmc.data.effective_dose': ['*.txt']
     },
@@ -75,7 +76,9 @@ kwargs = {
     },
     # Cython is used to add resonance reconstruction and fast float_endf
     'ext_modules': cythonize('openmc/data/*.pyx'),
-    'include_dirs': [np.get_include()]
+    'include_dirs': [np.get_include()],
+    'include_package_data': True,
+    # cmake_args=['-DSOME_FEATURE:BOOL=OFF']
 }
 
 setup(**kwargs)

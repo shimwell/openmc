@@ -1,2 +1,22 @@
 [build-system]
-requires = ["setuptools", "wheel", "numpy", "cython"]
+requires = [
+    "setuptools",
+    "wheel",
+    "numpy",
+    "cython",
+    "scikit-build>=0.17.6",
+    "cmake>=3.10.0",
+    "h5py",
+]
+build-backend = "setuptools.build_meta"
+
+[tool.cibuildwheel]
+skip = "cp36-*"
+
+[tool.cibuildwheel.macos]
+skip = "cp36-* cp37-*"
+before-all = "brew install homebrew/core/hdf5"
+repair-wheel-command = "delocate-wheel --require-archs {delocate_archs} -w {dest_dir} -v {wheel}"
+
+[tool.cibuildwheel.linux]
+manylinux-x86_64-image = "ghcr.io/h5py/manylinux2014_x86_64-hdf5"
