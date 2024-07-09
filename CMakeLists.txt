@@ -41,18 +41,25 @@ endif()
 #   COMMENT
 #     "Making openmc/data/_endf.c from ${CMAKE_CURRENT_SOURCE_DIR}/openmc/data/_endf.pyx"
 #   COMMAND Python::Interpreter -m cython
-#           "${CMAKE_CURRENT_SOURCE_DIR}/openmc/data/_endf.pyx" --output-file "${CMAKE_CURRENT_SOURCE_DIR}/_endf.c"
+#           "${CMAKE_CURRENT_SOURCE_DIR}/openmc/data/_endf.pyx" --output-file "${CMAKE_CURRENT_BINARY_DIR}/_endf.c"
 #   DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/openmc/data/_endf.pyx"
 #   VERBATIM)
-
+# 
 # add_custom_command(
 #   OUTPUT "${CMAKE_CURRENT_SOURCE_DIR}/reconstruct.c"
 #   COMMENT "Making openmc/data/reconstruct.c from ${CMAKE_CURRENT_SOURCE_DIR}/openmc/data/reconstruct.pyx"
 #   COMMAND Python::Interpreter -m cython
-#           "${CMAKE_CURRENT_SOURCE_DIR}/openmc/data/reconstruct.pyx" --output-file "${CMAKE_CURRENT_SOURCE_DIR}/reconstruct.c"
+#           "${CMAKE_CURRENT_SOURCE_DIR}/openmc/data/reconstruct.pyx" --output-file "${CMAKE_CURRENT_BINARY_DIR}/reconstruct.c"
 #   DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/openmc/data/reconstruct.pyx"
 #   VERBATIM)
-# run python -m cython openmc/data/reconstruct.pyx first
+# 
+# python_add_library(endf MODULE "${CMAKE_CURRENT_BINARY_DIR}/_endf.c" WITH_SOABI)
+# python_add_library(reconstruct MODULE "${CMAKE_CURRENT_BINARY_DIR}/reconstruct.c" WITH_SOABI)
+
+# run manually
+# python -m cython openmc/data/*.pyx
+# python -m cython openmc/data/reconstruct.pyx
+# python -m cython openmc/data/_endf.pyx
 python_add_library(endf MODULE "${CMAKE_CURRENT_SOURCE_DIR}/openmc/data/_endf.c" WITH_SOABI)
 python_add_library(reconstruct MODULE "${CMAKE_CURRENT_SOURCE_DIR}/openmc/data/reconstruct.c" WITH_SOABI)
 
