@@ -604,16 +604,16 @@ endif()
 #===============================================================================
 # openmc executable
 #===============================================================================
-add_executable(openmc_exec src/main.cpp)
-add_executable(OpenMC::openmc ALIAS openmc_exec)
-target_compile_options(openmc_exec PRIVATE ${cxxflags})
-target_include_directories(openmc_exec PRIVATE ${CMAKE_BINARY_DIR}/include)
-target_link_libraries(openmc_exec libopenmc)
+add_executable(openmc src/main.cpp)
+add_executable(OpenMC::openmc ALIAS openmc)
+target_compile_options(openmc PRIVATE ${cxxflags})
+target_include_directories(openmc PRIVATE ${CMAKE_BINARY_DIR}/include)
+target_link_libraries(openmc libopenmc)
 
 # Ensure C++17 standard is used and turn off GNU extensions
-target_compile_features(openmc_exec PUBLIC cxx_std_17)
+target_compile_features(openmc PUBLIC cxx_std_17)
 target_compile_features(libopenmc PUBLIC cxx_std_17)
-set_target_properties(openmc_exec libopenmc PROPERTIES CXX_EXTENSIONS OFF)
+set_target_properties(openmc libopenmc PROPERTIES CXX_EXTENSIONS OFF)
 
 #===============================================================================
 # Python package
@@ -633,7 +633,7 @@ configure_file(cmake/OpenMCConfig.cmake.in "${CMAKE_BINARY_DIR}${CMAKE_FILES_DIR
 configure_file(cmake/OpenMCConfigVersion.cmake.in "${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/OpenMCConfigVersion.cmake" @ONLY)
 
 set(INSTALL_CONFIGDIR ${CMAKE_INSTALL_LIBDIR}/cmake/OpenMC)
-install(TARGETS openmc_exec libopenmc
+install(TARGETS openmc libopenmc
   EXPORT openmc-targets
   RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
   LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}

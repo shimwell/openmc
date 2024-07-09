@@ -82,3 +82,4 @@ openmc-voxel-to-vtk = "scripts.openmc_voxel_to_vtk:main"
 [tool.scikit-build]
 cmake.version = ">=3.16"
 build-dir = "build"
+wheel.packages = ["openmc", "build/bin/openmc"]
