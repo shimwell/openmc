@@ -59,6 +59,23 @@ execute_process(
 
 include_directories(${NUMPY_INCLUDE_DIR})
 
+
+find_package(Python REQUIRED)
+execute_process(
+  COMMAND ${Python_EXECUTABLE} -c "import Cython; print(Cython.__version__)"
+  RESULT_VARIABLE CYTHON_FOUND
+  OUTPUT_VARIABLE CYTHON_VERSION
+  ERROR_QUIET
+  OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+
+if(NOT CYTHON_FOUND EQUAL "0")
+  message(FATAL_ERROR "Cython is required, but it was not found.")
+else()
+  message(STATUS "Found Cython version: ${CYTHON_VERSION}")
+endif()
+
+
 option(OPENMC_USE_OPENMP      "Enable shared-memory parallelism with OpenMP"         ON)
 option(OPENMC_BUILD_TESTS     "Build tests"                                          ON)
 option(OPENMC_ENABLE_PROFILE  "Compile with profiling flags"                         OFF)
