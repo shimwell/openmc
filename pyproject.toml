@@ -62,7 +62,7 @@ Repository = "https://github.com/openmc-dev/openmc"
 Issues = "https://github.com/openmc-dev/openmc/issues"
 
 [tool.setuptools.packages.find]
-include = ['openmc*', 'scripts*', 'build/openmc*']
+include = ['openmc*', 'scripts*', 'build/bin/openmc*']
 exclude = ['tests*']
 
 [tool.setuptools.package-data]
