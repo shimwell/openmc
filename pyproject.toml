@@ -1,5 +1,5 @@
 [build-system]
-requires = ["scikit-build-core", "cmake", "setuptools>=42", "wheel", "numpy", "cython"]
+requires = ["scikit-build-core", "cmake", "setuptools>=42", "wheel", "numpy", "Cython"]
 build-backend = "scikit_build_core.build"
 
 [project]
