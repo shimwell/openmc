@@ -35,34 +35,21 @@ if(NOT CYTHON_EXECUTABLE)
   message(FATAL_ERROR "Cython is required, but it was not found.")
 endif()
 
-# could change CMAKE_CURRENT_SOURCE_DIR to CMAKE_CURRENT_BINARY_DIR for endf.c
-# add_custom_command(
-#   OUTPUT "${CMAKE_CURRENT_SOURCE_DIR}/_endf.c"
-#   COMMENT
-#     "Making openmc/data/_endf.c from ${CMAKE_CURRENT_SOURCE_DIR}/openmc/data/_endf.pyx"
-#   COMMAND Python::Interpreter -m cython
-#           "${CMAKE_CURRENT_SOURCE_DIR}/openmc/data/_endf.pyx" --output-file "${CMAKE_CURRENT_BINARY_DIR}/_endf.c"
-#   DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/openmc/data/_endf.pyx"
-#   VERBATIM)
-# 
-# add_custom_command(
-#   OUTPUT "${CMAKE_CURRENT_SOURCE_DIR}/reconstruct.c"
-#   COMMENT "Making openmc/data/reconstruct.c from ${CMAKE_CURRENT_SOURCE_DIR}/openmc/data/reconstruct.pyx"
-#   COMMAND Python::Interpreter -m cython
-#           "${CMAKE_CURRENT_SOURCE_DIR}/openmc/data/reconstruct.pyx" --output-file "${CMAKE_CURRENT_BINARY_DIR}/reconstruct.c"
-#   DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/openmc/data/reconstruct.pyx"
-#   VERBATIM)
-# 
-# python_add_library(endf MODULE "${CMAKE_CURRENT_BINARY_DIR}/_endf.c" WITH_SOABI)
-# python_add_library(reconstruct MODULE "${CMAKE_CURRENT_BINARY_DIR}/reconstruct.c" WITH_SOABI)
-
-# run manually
-# python -m cython openmc/data/*.pyx
-# python -m cython openmc/data/reconstruct.pyx
-# python -m cython openmc/data/_endf.pyx
+# using cython to make the .c files from the .pyx files
+add_custom_command(
+  OUTPUT "${CMAKE_CURRENT_SOURCE_DIR}/openmc/data/_endf.c"
+  COMMENT "Making openmc/data/_endf.c from ${CMAKE_CURRENT_SOURCE_DIR}/openmc/data/_endf.pyx"
+  COMMAND Python::Interpreter -m cython "${CMAKE_CURRENT_SOURCE_DIR}/openmc/data/_endf.pyx"
+  VERBATIM)
+add_custom_command(
+  OUTPUT "${CMAKE_CURRENT_SOURCE_DIR}/openmc/data/reconstruct.c"
+  COMMENT "Making openmc/data/reconstruct.c from ${CMAKE_CURRENT_SOURCE_DIR}/openmc/data/reconstruct.pyx"
+  COMMAND Python::Interpreter -m cython "${CMAKE_CURRENT_SOURCE_DIR}/openmc/data/reconstruct.pyx"
+  VERBATIM)
 python_add_library(endf MODULE "${CMAKE_CURRENT_SOURCE_DIR}/openmc/data/_endf.c" WITH_SOABI)
 python_add_library(reconstruct MODULE "${CMAKE_CURRENT_SOURCE_DIR}/openmc/data/reconstruct.c" WITH_SOABI)
 
+# adding folder containing numpy header file to the include directories
 find_package(Python COMPONENTS Interpreter Development REQUIRED)
 execute_process(
   COMMAND "${Python_EXECUTABLE}" -c "import numpy; print(numpy.get_include())"
