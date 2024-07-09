@@ -39,6 +39,7 @@ dependencies = [
     "lxml",
     "uncertainties",
     "setuptools",
+    "Cython",
 ]
 
 [project.optional-dependencies]
