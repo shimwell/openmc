@@ -25,6 +25,30 @@ endif()
 # Command line options
 #===============================================================================
 
+find_package(
+  Python
+  COMPONENTS Interpreter Development.Module
+  REQUIRED)
+
+find_program(CYTHON_EXECUTABLE NAMES cython cython3)
+if(NOT CYTHON_EXECUTABLE)
+  message(FATAL_ERROR "Cython is required, but it was not found.")
+endif()
+
+
+add_custom_command(
+  OUTPUT endf.c
+  COMMENT
+    "Making openmc/data/endf.c from ${CMAKE_CURRENT_SOURCE_DIR}/openmc/data/_endf.pyx"
+  COMMAND Python::Interpreter -m cython
+          "${CMAKE_CURRENT_SOURCE_DIR}/openmc/data/_endf.pyx" --output-file endf.c
+  DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/openmc/data/_endf.pyx"
+  VERBATIM)
+
+python_add_library(endf MODULE endf.c WITH_SOABI)
+
+
+
 option(OPENMC_USE_OPENMP      "Enable shared-memory parallelism with OpenMP"         ON)
 option(OPENMC_BUILD_TESTS     "Build tests"                                          ON)
 option(OPENMC_ENABLE_PROFILE  "Compile with profiling flags"                         OFF)
@@ -564,16 +588,16 @@ endif()
 #===============================================================================
 # openmc executable
 #===============================================================================
-add_executable(openmc src/main.cpp)
-add_executable(OpenMC::openmc ALIAS openmc)
-target_compile_options(openmc PRIVATE ${cxxflags})
-target_include_directories(openmc PRIVATE ${CMAKE_BINARY_DIR}/include)
-target_link_libraries(openmc libopenmc)
+add_executable(openmc_exec src/main.cpp)
+add_executable(OpenMC::openmc ALIAS openmc_exec)
+target_compile_options(openmc_exec PRIVATE ${cxxflags})
+target_include_directories(openmc_exec PRIVATE ${CMAKE_BINARY_DIR}/include)
+target_link_libraries(openmc_exec libopenmc)
 
 # Ensure C++17 standard is used and turn off GNU extensions
-target_compile_features(openmc PUBLIC cxx_std_17)
+target_compile_features(openmc_exec PUBLIC cxx_std_17)
 target_compile_features(libopenmc PUBLIC cxx_std_17)
-set_target_properties(openmc libopenmc PROPERTIES CXX_EXTENSIONS OFF)
+set_target_properties(openmc_exec libopenmc PROPERTIES CXX_EXTENSIONS OFF)
 
 #===============================================================================
 # Python package
@@ -593,7 +617,7 @@ configure_file(cmake/OpenMCConfig.cmake.in "${CMAKE_BINARY_DIR}${CMAKE_FILES_DIR
 configure_file(cmake/OpenMCConfigVersion.cmake.in "${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/OpenMCConfigVersion.cmake" @ONLY)
 
 set(INSTALL_CONFIGDIR ${CMAKE_INSTALL_LIBDIR}/cmake/OpenMC)
-install(TARGETS openmc libopenmc
+install(TARGETS openmc_exec libopenmc
   EXPORT openmc-targets
   RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
   LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}

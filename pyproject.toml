@@ -1,6 +1,6 @@
 [build-system]
-requires = ["setuptools>=42", "wheel", "numpy", "cython"]
-build-backend = "setuptools.build_meta"
+requires = ["scikit-build-core", "cmake", "setuptools>=42", "wheel", "numpy", "cython"]
+build-backend = "scikit_build_core.build"
 
 [project]
 name = "openmc"
@@ -77,3 +77,7 @@ openmc-track-to-vtk = "scripts.openmc_track_to_vtk:main"
 openmc-update-inputs = "scripts.openmc_update_inputs:main"
 openmc-update-mgxs = "scripts.openmc_update_mgxs:main"
 openmc-voxel-to-vtk = "scripts.openmc_voxel_to_vtk:main"
+
+[tool.scikit-build]
+cmake.version = ">=3.16"
+build-dir = "build"
