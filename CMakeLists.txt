@@ -35,19 +35,35 @@ if(NOT CYTHON_EXECUTABLE)
   message(FATAL_ERROR "Cython is required, but it was not found.")
 endif()
 
+# could change CMAKE_CURRENT_SOURCE_DIR to CMAKE_CURRENT_BINARY_DIR for endf.c
+# add_custom_command(
+#   OUTPUT "${CMAKE_CURRENT_SOURCE_DIR}/_endf.c"
+#   COMMENT
+#     "Making openmc/data/_endf.c from ${CMAKE_CURRENT_SOURCE_DIR}/openmc/data/_endf.pyx"
+#   COMMAND Python::Interpreter -m cython
+#           "${CMAKE_CURRENT_SOURCE_DIR}/openmc/data/_endf.pyx" --output-file "${CMAKE_CURRENT_SOURCE_DIR}/_endf.c"
+#   DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/openmc/data/_endf.pyx"
+#   VERBATIM)
 
-add_custom_command(
-  OUTPUT endf.c
-  COMMENT
-    "Making openmc/data/endf.c from ${CMAKE_CURRENT_SOURCE_DIR}/openmc/data/_endf.pyx"
-  COMMAND Python::Interpreter -m cython
-          "${CMAKE_CURRENT_SOURCE_DIR}/openmc/data/_endf.pyx" --output-file endf.c
-  DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/openmc/data/_endf.pyx"
-  VERBATIM)
+# add_custom_command(
+#   OUTPUT "${CMAKE_CURRENT_SOURCE_DIR}/reconstruct.c"
+#   COMMENT "Making openmc/data/reconstruct.c from ${CMAKE_CURRENT_SOURCE_DIR}/openmc/data/reconstruct.pyx"
+#   COMMAND Python::Interpreter -m cython
+#           "${CMAKE_CURRENT_SOURCE_DIR}/openmc/data/reconstruct.pyx" --output-file "${CMAKE_CURRENT_SOURCE_DIR}/reconstruct.c"
+#   DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/openmc/data/reconstruct.pyx"
+#   VERBATIM)
+# run python -m cython openmc/data/reconstruct.pyx first
+python_add_library(endf MODULE "${CMAKE_CURRENT_SOURCE_DIR}/openmc/data/_endf.c" WITH_SOABI)
+python_add_library(reconstruct MODULE "${CMAKE_CURRENT_SOURCE_DIR}/openmc/data/reconstruct.c" WITH_SOABI)
 
-python_add_library(endf MODULE endf.c WITH_SOABI)
+find_package(Python COMPONENTS Interpreter Development REQUIRED)
+execute_process(
+  COMMAND "${Python_EXECUTABLE}" -c "import numpy; print(numpy.get_include())"
+  OUTPUT_VARIABLE NUMPY_INCLUDE_DIR
+  OUTPUT_STRIP_TRAILING_WHITESPACE
+)
 
-
+include_directories(${NUMPY_INCLUDE_DIR})
 
 option(OPENMC_USE_OPENMP      "Enable shared-memory parallelism with OpenMP"         ON)
 option(OPENMC_BUILD_TESTS     "Build tests"                                          ON)
