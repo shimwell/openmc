@@ -1,8 +1,12 @@
 from abc import ABC, abstractmethod
+from collections.abc import Iterable
 from copy import copy
+from functools import partial
 from math import sqrt, pi, sin, cos, isclose
+from numbers import Real
 import warnings
 import operator
+from typing import Sequence
 
 import numpy as np
 from scipy.spatial import ConvexHull, Delaunay
@@ -42,7 +46,7 @@ class CompositeSurface(ABC):
                 getattr(self, name).boundary_type = boundary_type
 
     def __repr__(self):
-        return "<{} at 0x{:x}>".format(type(self).__name__, id(self))
+        return f"<{type(self).__name__} at 0x{id(self):x}>"
 
     @property
     @abstractmethod
@@ -50,12 +54,12 @@ class CompositeSurface(ABC):
         """Iterable of attribute names corresponding to underlying surfaces."""
 
     @abstractmethod
-    def __pos__(self):
-        """Return the positive half-space of the composite surface."""
-
-    @abstractmethod
-    def __neg__(self):
+    def __neg__(self) -> openmc.Region:
         """Return the negative half-space of the composite surface."""
+
+    def __pos__(self) -> openmc.Region:
+        """Return the positive half-space of the composite surface."""
+        return ~(-self)
 
 
 class CylinderSector(CompositeSurface):
@@ -86,7 +90,7 @@ class CylinderSector(CompositeSurface):
         counterclockwise direction with respect to the first basis axis
         (+y, +z, or +x). Must be greater than :attr:`theta1`.
     center : iterable of float
-       Coordinate for central axes of cylinders in the (y, z), (z, x), or (x, y)
+       Coordinate for central axes of cylinders in the (y, z), (x, z), or (x, y)
        basis. Defaults to (0,0).
     axis : {'x', 'y', 'z'}
         Central axis of the cylinders defining the inner and outer surfaces of
@@ -129,13 +133,13 @@ class CylinderSector(CompositeSurface):
         phi2 = pi / 180 * theta2
 
         # Coords for axis-perpendicular planes
-        p1 = np.array([0., 0., 1.])
+        p1 = np.array([center[0], center[1], 1.])
 
-        p2_plane1 = np.array([r1 * cos(phi1), r1 * sin(phi1), 0.])
-        p3_plane1 = np.array([r2 * cos(phi1), r2 * sin(phi1), 0.])
+        p2_plane1 = np.array([r1 * cos(phi1) + center[0], r1 * sin(phi1) + center[1], 0.])
+        p3_plane1 = np.array([r2 * cos(phi1) + center[0], r2 * sin(phi1) + center[1], 0.])
 
-        p2_plane2 = np.array([r1 * cos(phi2), r1 * sin(phi2), 0.])
-        p3_plane2 = np.array([r2 * cos(phi2), r2 * sin(phi2), 0.])
+        p2_plane2 = np.array([r1 * cos(phi2) + center[0], r1 * sin(phi2)+ center[1], 0.])
+        p3_plane2 = np.array([r2 * cos(phi2) + center[0], r2 * sin(phi2)+ center[1], 0.])
 
         points = [p1, p2_plane1, p3_plane1, p2_plane2, p3_plane2]
         if axis == 'z':
@@ -143,7 +147,7 @@ class CylinderSector(CompositeSurface):
             self.inner_cyl = openmc.ZCylinder(*center, r1, **kwargs)
             self.outer_cyl = openmc.ZCylinder(*center, r2, **kwargs)
         elif axis == 'y':
-            coord_map = [1, 2, 0]
+            coord_map = [0, 2, 1]
             self.inner_cyl = openmc.YCylinder(*center, r1, **kwargs)
             self.outer_cyl = openmc.YCylinder(*center, r2, **kwargs)
         elif axis == 'x':
@@ -151,6 +155,7 @@ class CylinderSector(CompositeSurface):
             self.inner_cyl = openmc.XCylinder(*center, r1, **kwargs)
             self.outer_cyl = openmc.XCylinder(*center, r2, **kwargs)
 
+        # Reorder the points to correspond to the correct central axis
         for p in points:
             p[:] = p[coord_map]
 
@@ -188,8 +193,8 @@ class CylinderSector(CompositeSurface):
             with respect to the first basis axis (+y, +z, or +x). Note that
             negative values translate to an offset in the clockwise direction.
         center : iterable of float
-            Coordinate for central axes of cylinders in the (y, z), (z, x), or (x, y)
-            basis. Defaults to (0,0).
+            Coordinate for central axes of cylinders in the (y, z), (x, z), or
+            (x, y) basis. Defaults to (0,0).
         axis : {'x', 'y', 'z'}
             Central axis of the cylinders defining the inner and outer surfaces
             of the sector. Defaults to 'z'.
@@ -212,17 +217,23 @@ class CylinderSector(CompositeSurface):
         return cls(r1, r2, theta1, theta2, center=center, axis=axis, **kwargs)
 
     def __neg__(self):
-        return -self.outer_cyl & +self.inner_cyl & -self.plane1 & +self.plane2
+        if isinstance(self.inner_cyl, openmc.YCylinder):
+            return -self.outer_cyl & +self.inner_cyl & +self.plane1 & -self.plane2
+        else:
+            return -self.outer_cyl & +self.inner_cyl & -self.plane1 & +self.plane2
 
     def __pos__(self):
-        return +self.outer_cyl | -self.inner_cyl | +self.plane1 | -self.plane2
+        if isinstance(self.inner_cyl, openmc.YCylinder):
+            return +self.outer_cyl | -self.inner_cyl | -self.plane1 | +self.plane2
+        else:
+            return +self.outer_cyl | -self.inner_cyl | +self.plane1 | -self.plane2
 
 
 class IsogonalOctagon(CompositeSurface):
     r"""Infinite isogonal octagon composite surface
 
     An isogonal octagon is composed of eight planar surfaces. The prism is
-    parallel to the x, y, or z axis. The remaining two axes (y and z, z and x,
+    parallel to the x, y, or z axis. The remaining two axes (y and z, x and z,
     or x and y) serve as a basis for constructing the surfaces. Two surfaces
     are parallel to the first basis axis, two surfaces are parallel
     to the second basis axis, and the remaining four surfaces intersect both
@@ -230,7 +241,7 @@ class IsogonalOctagon(CompositeSurface):
 
     This class acts as a proper surface, meaning that unary `+` and `-`
     operators applied to it will produce a half-space. The negative side is
-    defined to be the region inside of the octogonal prism.
+    defined to be the region inside of the octagonal prism.
 
     .. versionadded:: 0.13.1
 
@@ -238,7 +249,7 @@ class IsogonalOctagon(CompositeSurface):
     ----------
     center : iterable of float
         Coordinate for the central axis of the octagon in the
-        (y, z), (z, x), or (x, y) basis.
+        (y, z), (x, z), or (x, y) basis depending on the axis parameter.
     r1 : float
         Half-width of octagon across its basis axis-parallel sides in units
         of cm. Must be less than :math:`r_2\sqrt{2}`.
@@ -279,12 +290,12 @@ class IsogonalOctagon(CompositeSurface):
     def __init__(self, center, r1, r2, axis='z', **kwargs):
         c1, c2 = center
 
-        # Coords for axis-perpendicular planes
-        ctop = c1 + r1
-        cbottom = c1 - r1
+        # Coordinates for axis-perpendicular planes
+        cright = c1 + r1
+        cleft = c1 - r1
 
-        cright = c2 + r1
-        cleft = c2 - r1
+        ctop = c2 + r1
+        cbottom = c2 - r1
 
         # Side lengths
         if r2 > r1 * sqrt(2):
@@ -296,7 +307,7 @@ class IsogonalOctagon(CompositeSurface):
 
         L_basis_ax = (r2 * sqrt(2) - r1)
 
-        # Coords for quadrant planes
+        # Coordinates for quadrant planes
         p1_ur = np.array([L_basis_ax, r1, 0.])
         p2_ur = np.array([r1, L_basis_ax, 0.])
         p3_ur = np.array([r1, L_basis_ax, 1.])
@@ -305,7 +316,16 @@ class IsogonalOctagon(CompositeSurface):
         p2_lr = np.array([L_basis_ax, -r1, 0.])
         p3_lr = np.array([L_basis_ax, -r1, 1.])
 
-        points = [p1_ur, p2_ur, p3_ur, p1_lr, p2_lr, p3_lr]
+        p1_ll = -p1_ur
+        p2_ll = -p2_ur
+        p3_ll = -p3_ur
+
+        p1_ul = -p1_lr
+        p2_ul = -p2_lr
+        p3_ul = -p3_lr
+
+        points = [p1_ur, p2_ur, p3_ur, p1_lr, p2_lr, p3_lr,
+                  p1_ll, p2_ll, p3_ll, p1_ul, p2_ul, p3_ul]
 
         # Orientation specific variables
         if axis == 'z':
@@ -315,40 +335,56 @@ class IsogonalOctagon(CompositeSurface):
             self.right = openmc.XPlane(cright, **kwargs)
             self.left = openmc.XPlane(cleft, **kwargs)
         elif axis == 'y':
-            coord_map = [1, 2, 0]
-            self.top = openmc.XPlane(ctop, **kwargs)
-            self.bottom = openmc.XPlane(cbottom, **kwargs)
-            self.right = openmc.ZPlane(cright, **kwargs)
-            self.left = openmc.ZPlane(cleft, **kwargs)
+            coord_map = [0, 2, 1]
+            self.top = openmc.ZPlane(ctop, **kwargs)
+            self.bottom = openmc.ZPlane(cbottom, **kwargs)
+            self.right = openmc.XPlane(cright, **kwargs)
+            self.left = openmc.XPlane(cleft, **kwargs)
         elif axis == 'x':
             coord_map = [2, 0, 1]
             self.top = openmc.ZPlane(ctop, **kwargs)
             self.bottom = openmc.ZPlane(cbottom, **kwargs)
             self.right = openmc.YPlane(cright, **kwargs)
             self.left = openmc.YPlane(cleft, **kwargs)
+        self.axis = axis
 
-        # Put our coordinates in (x,y,z) order
+        # Put our coordinates in (x,y,z) order and add the offset
         for p in points:
+            p[0] += c1
+            p[1] += c2
             p[:] = p[coord_map]
 
         self.upper_right = openmc.Plane.from_points(p1_ur, p2_ur, p3_ur,
                                                     **kwargs)
         self.lower_right = openmc.Plane.from_points(p1_lr, p2_lr, p3_lr,
                                                     **kwargs)
-        self.lower_left = openmc.Plane.from_points(-p1_ur, -p2_ur, -p3_ur,
+        self.lower_left = openmc.Plane.from_points(p1_ll, p2_ll, p3_ll,
                                                    **kwargs)
-        self.upper_left = openmc.Plane.from_points(-p1_lr, -p2_lr, -p3_lr,
+        self.upper_left = openmc.Plane.from_points(p1_ul, p2_ul, p3_ul,
                                                    **kwargs)
 
     def __neg__(self):
-        return -self.top & +self.bottom & -self.right & +self.left & \
-            +self.upper_right & +self.lower_right & -self.lower_left & \
-            -self.upper_left
+        if self.axis == 'y':
+            region = -self.top & +self.bottom & -self.right & +self.left & \
+                -self.upper_right & -self.lower_right & +self.lower_left & \
+                +self.upper_left
+        else:
+            region = -self.top & +self.bottom & -self.right & +self.left & \
+                +self.upper_right & +self.lower_right & -self.lower_left & \
+                -self.upper_left
+
+        return region
 
     def __pos__(self):
-        return +self.top | -self.bottom | +self.right | -self.left | \
-            -self.upper_right | -self.lower_right | +self.lower_left | \
-            +self.upper_left
+        if self.axis == 'y':
+            region = +self.top | -self.bottom | +self.right | -self.left | \
+                +self.upper_right | +self.lower_right | -self.lower_left | \
+                -self.upper_left
+        else:
+            region = +self.top | -self.bottom | +self.right | -self.left | \
+                -self.upper_right | -self.lower_right | +self.lower_left | \
+                +self.upper_left
+        return region
 
 
 class RightCircularCylinder(CompositeSurface):
@@ -613,7 +649,7 @@ class RectangularParallelepiped(CompositeSurface):
 class XConeOneSided(CompositeSurface):
     """One-sided cone parallel the x-axis
 
-    A one-sided cone is composed of a normal cone surface and an "ambiguity"
+    A one-sided cone is composed of a normal cone surface and a "disambiguation"
     surface that eliminates the ambiguity as to which region of space is
     included. This class acts as a proper surface, meaning that unary `+` and
     `-` operators applied to it will produce a half-space. The negative side is
@@ -630,7 +666,9 @@ class XConeOneSided(CompositeSurface):
     z0 : float, optional
         z-coordinate of the apex. Defaults to 0.
     r2 : float, optional
-        Parameter related to the aperature. Defaults to 1.
+        Parameter related to the aperture [:math:`\\rm cm^2`].
+        It can be interpreted as the increase in the radius squared per cm along
+        the cone's axis of revolution.
     up : bool
         Whether to select the side of the cone that extends to infinity in the
         positive direction of the coordinate axis (the positive half-space of
@@ -643,7 +681,7 @@ class XConeOneSided(CompositeSurface):
     cone : openmc.XCone
         Regular two-sided cone
     plane : openmc.XPlane
-        Ambiguity surface
+        Disambiguation surface
     up : bool
         Whether to select the side of the cone that extends to infinity in the
         positive direction of the coordinate axis (the positive half-space of
@@ -671,7 +709,7 @@ class XConeOneSided(CompositeSurface):
 class YConeOneSided(CompositeSurface):
     """One-sided cone parallel the y-axis
 
-    A one-sided cone is composed of a normal cone surface and an "ambiguity"
+    A one-sided cone is composed of a normal cone surface and a "disambiguation"
     surface that eliminates the ambiguity as to which region of space is
     included. This class acts as a proper surface, meaning that unary `+` and
     `-` operators applied to it will produce a half-space. The negative side is
@@ -688,7 +726,9 @@ class YConeOneSided(CompositeSurface):
     z0 : float, optional
         z-coordinate of the apex. Defaults to 0.
     r2 : float, optional
-        Parameter related to the aperature. Defaults to 1.
+        Parameter related to the aperture [:math:`\\rm cm^2`].
+        It can be interpreted as the increase in the radius squared per cm along
+        the cone's axis of revolution.
     up : bool
         Whether to select the side of the cone that extends to infinity in the
         positive direction of the coordinate axis (the positive half-space of
@@ -701,7 +741,7 @@ class YConeOneSided(CompositeSurface):
     cone : openmc.YCone
         Regular two-sided cone
     plane : openmc.YPlane
-        Ambiguity surface
+        Disambiguation surface
     up : bool
         Whether to select the side of the cone that extends to infinity in the
         positive direction of the coordinate axis (the positive half-space of
@@ -723,7 +763,7 @@ class YConeOneSided(CompositeSurface):
 class ZConeOneSided(CompositeSurface):
     """One-sided cone parallel the z-axis
 
-    A one-sided cone is composed of a normal cone surface and an "ambiguity"
+    A one-sided cone is composed of a normal cone surface and a "disambiguation"
     surface that eliminates the ambiguity as to which region of space is
     included. This class acts as a proper surface, meaning that unary `+` and
     `-` operators applied to it will produce a half-space. The negative side is
@@ -740,7 +780,9 @@ class ZConeOneSided(CompositeSurface):
     z0 : float, optional
         z-coordinate of the apex. Defaults to 0.
     r2 : float, optional
-        Parameter related to the aperature. Defaults to 1.
+        Parameter related to the aperture [:math:`\\rm cm^2`].
+        It can be interpreted as the increase in the radius squared per cm along
+        the cone's axis of revolution.
     up : bool
         Whether to select the side of the cone that extends to infinity in the
         positive direction of the coordinate axis (the positive half-space of
@@ -753,7 +795,7 @@ class ZConeOneSided(CompositeSurface):
     cone : openmc.ZCone
         Regular two-sided cone
     plane : openmc.ZPlane
-        Ambiguity surface
+        Disambiguation surface
     up : bool
         Whether to select the side of the cone that extends to infinity in the
         positive direction of the coordinate axis (the positive half-space of
@@ -835,9 +877,6 @@ class Polygon(CompositeSurface):
 
     def __neg__(self):
         return self._region
-
-    def __pos__(self):
-        return ~self._region
 
     @property
     def _surface_names(self):
@@ -933,19 +972,19 @@ class Polygon(CompositeSurface):
         # Check if polygon is self-intersecting by comparing edges pairwise
         n = len(points)
         for i in range(n):
-            p0 = points[i, :]
-            p1 = points[(i + 1) % n, :]
+            p0 = np.append(points[i, :], 0)
+            p1 = np.append(points[(i + 1) % n, :], 0)
             for j in range(i + 1, n):
-                p2 = points[j, :]
-                p3 = points[(j + 1) % n, :]
+                p2 = np.append(points[j, :], 0)
+                p3 = np.append(points[(j + 1) % n, :], 0)
                 # Compute orientation of p0 wrt p2->p3 line segment
-                cp0 = np.cross(p3-p0, p2-p0)
+                cp0 = np.cross(p3-p0, p2-p0)[-1]
                 # Compute orientation of p1 wrt p2->p3 line segment
-                cp1 = np.cross(p3-p1, p2-p1)
+                cp1 = np.cross(p3-p1, p2-p1)[-1]
                 # Compute orientation of p2 wrt p0->p1 line segment
-                cp2 = np.cross(p1-p2, p0-p2)
+                cp2 = np.cross(p1-p2, p0-p2)[-1]
                 # Compute orientation of p3 wrt p0->p1 line segment
-                cp3 = np.cross(p1-p3, p0-p3)
+                cp3 = np.cross(p1-p3, p0-p3)[-1]
 
                 # Group cross products in an array and find out how many are 0
                 cross_products = np.array([[cp0, cp1], [cp2, cp3]])
@@ -1022,9 +1061,9 @@ class Polygon(CompositeSurface):
         -------
         None
         """
-        # Only attempt the triangulation up to 3 times.
-        if depth > 2:
-            raise RuntimeError('Could not create a valid triangulation after 3'
+        # Only attempt the triangulation up to 5 times.
+        if depth > 4:
+            raise RuntimeError('Could not create a valid triangulation after 5'
                                ' attempts')
 
         tri = Delaunay(points, qhull_options='QJ')
@@ -1032,7 +1071,7 @@ class Polygon(CompositeSurface):
         # included in the triangulation, break it into two line segments.
         n = len(points)
         new_pts = []
-        for i, j in zip(range(n), range(1, n +1)):
+        for i, j in zip(range(n), range(1, n + 1)):
             # If both vertices of any edge are not found in any simplex, insert
             # a new point between them.
             if not any([i in s and j % n in s for s in tri.simplices]):
@@ -1070,7 +1109,8 @@ class Polygon(CompositeSurface):
             return group
         # If group is empty, grab the next simplex in the dictionary and recurse
         if group is None:
-            sidx = next(iter(neighbor_map))
+            # Start with smallest neighbor lists
+            sidx = sorted(neighbor_map.items(), key=lambda item: len(item[1]))[0][0]
             return self._group_simplices(neighbor_map, group=[sidx])
         # Otherwise use the last simplex in the group
         else:
@@ -1080,13 +1120,16 @@ class Polygon(CompositeSurface):
             # For each neighbor check if it is part of the same convex
             # hull as the rest of the group. If yes, recurse. If no, continue on.
             for n in neighbors:
-                if n in group or neighbor_map.get(n, None) is None:
+                if n in group or neighbor_map.get(n) is None:
                     continue
                 test_group = group + [n]
                 test_point_idx = np.unique(self._tri.simplices[test_group, :])
                 test_points = self.points[test_point_idx]
-                # If test_points are convex keep adding to this group
-                if len(test_points) == len(ConvexHull(test_points).vertices):
+                test_hull = ConvexHull(test_points, qhull_options='Qc')
+                pts_on_hull = len(test_hull.vertices) + len(test_hull.coplanar)
+                # If test_points are convex (including coplanar) keep adding to
+                # this group
+                if len(test_points) == pts_on_hull:
                     group = self._group_simplices(neighbor_map, group=test_group)
             return group
 
@@ -1232,7 +1275,7 @@ class CruciformPrism(CompositeSurface):
     multiple distances from the center. Equivalent to the 'gcross' derived
     surface in Serpent.
 
-    .. versionadded:: 0.13.4
+    .. versionadded:: 0.14.0
 
     Parameters
     ----------
@@ -1309,5 +1352,297 @@ class CruciformPrism(CompositeSurface):
             )
         return openmc.Union(regions)
 
-    def __pos__(self):
-        return ~(-self)
+
+# Define function to create a plane on given axis
+def _plane(axis, name, value, boundary_type='transmission', albedo=1.0):
+        cls = getattr(openmc, f'{axis.upper()}Plane')
+        return cls(value, name=f'{name} {axis}',
+                   boundary_type=boundary_type, albedo=albedo)
+
+
+class RectangularPrism(CompositeSurface):
+    """Infinite rectangular prism bounded by four planar surfaces.
+
+    .. versionadded:: 0.14.0
+
+    Parameters
+    ----------
+    width : float
+        Prism width in units of [cm]. The width is aligned with the x, x, or z
+        axes for prisms parallel to the x, y, or z axis, respectively.
+    height : float
+        Prism height in units of [cm]. The height is aligned with the x, y, or z
+        axes for prisms parallel to the x, y, or z axis, respectively.
+    axis : {'x', 'y', 'z'}
+        Axis with which the infinite length of the prism should be aligned.
+    origin : Iterable of two floats
+        Origin of the prism. The two floats correspond to (y,z), (x,z) or (x,y)
+        for prisms parallel to the x, y or z axis, respectively.
+    boundary_type : {'transmission, 'vacuum', 'reflective', 'periodic', 'white'}
+        Boundary condition that defines the behavior for particles hitting the
+        surfaces comprising the rectangular prism.
+    albedo : float, optional
+        Albedo of the prism's surfaces as a ratio of particle weight after
+        interaction with the surface to the initial weight. Values must be
+        positive. Only applicable if the boundary type is 'reflective',
+        'periodic', or 'white'.
+    corner_radius : float
+        Prism corner radius in units of [cm].
+
+    """
+    _surface_names = ('min_x1', 'max_x1', 'min_x2', 'max_x2')
+
+    def __init__(
+            self,
+            width: float,
+            height: float,
+            axis: str = 'z',
+            origin: Sequence[float] = (0., 0.),
+            boundary_type: str = 'transmission',
+            albedo: float = 1.,
+            corner_radius: float = 0.
+        ):
+        check_type('width', width, Real)
+        check_type('height', height, Real)
+        check_type('albedo', albedo, Real)
+        check_type('corner_radius', corner_radius, Real)
+        check_value('axis', axis, ('x', 'y', 'z'))
+        check_type('origin', origin, Iterable, Real)
+
+        if axis == 'x':
+            x1, x2 = 'y', 'z'
+        elif axis == 'y':
+            x1, x2 = 'x', 'z'
+        else:
+            x1, x2 = 'x', 'y'
+
+        # Get cylinder class corresponding to given axis
+        cyl = getattr(openmc, f'{axis.upper()}Cylinder')
+
+        # Create container for boundary arguments
+        bc_args = {'boundary_type': boundary_type, 'albedo': albedo}
+
+        # Create rectangular region
+        self.min_x1 = _plane(x1, 'minimum', -width/2 + origin[0], **bc_args)
+        self.max_x1 = _plane(x1, 'maximum', width/2 + origin[0], **bc_args)
+        self.min_x2 = _plane(x2, 'minimum', -height/2 + origin[1], **bc_args)
+        self.max_x2 = _plane(x2, 'maximum', height/2 + origin[1], **bc_args)
+        if boundary_type == 'periodic':
+            self.min_x1.periodic_surface = self.max_x1
+            self.min_x2.periodic_surface = self.max_x2
+
+        # Handle rounded corners if given
+        if corner_radius > 0.:
+            if boundary_type == 'periodic':
+                raise ValueError('Periodic boundary conditions not permitted when '
+                                'rounded corners are used.')
+
+            args = {'r': corner_radius, 'boundary_type': boundary_type, 'albedo': albedo}
+
+            args[x1 + '0'] = origin[0] - width/2 + corner_radius
+            args[x2 + '0'] = origin[1] - height/2 + corner_radius
+            self.x1_min_x2_min = cyl(name=f'{x1} min {x2} min', **args)
+
+            args[x1 + '0'] = origin[0] - width/2 + corner_radius
+            args[x2 + '0'] = origin[1] + height/2 - corner_radius
+            self.x1_min_x2_max = cyl(name=f'{x1} min {x2} max', **args)
+
+            args[x1 + '0'] = origin[0] + width/2 - corner_radius
+            args[x2 + '0'] = origin[1] - height/2 + corner_radius
+            self.x1_max_x2_min = cyl(name=f'{x1} max {x2} min', **args)
+
+            args[x1 + '0'] = origin[0] + width/2 - corner_radius
+            args[x2 + '0'] = origin[1] + height/2 - corner_radius
+            self.x1_max_x2_max = cyl(name=f'{x1} max {x2} max', **args)
+
+            self.x1_min = _plane(x1, 'min', -width/2 + origin[0] + corner_radius,
+                                 **bc_args)
+            self.x1_max = _plane(x1, 'max', width/2 + origin[0] - corner_radius,
+                                 **bc_args)
+            self.x2_min = _plane(x2, 'min', -height/2 + origin[1] + corner_radius,
+                                 **bc_args)
+            self.x2_max = _plane(x2, 'max', height/2 + origin[1] - corner_radius,
+                                 **bc_args)
+            self._surface_names += (
+                'x1_min_x2_min', 'x1_min_x2_max', 'x1_max_x2_min',
+                'x1_max_x2_max', 'x1_min', 'x1_max', 'x2_min', 'x2_max'
+            )
+
+    def __neg__(self):
+        prism = +self.min_x1 & -self.max_x1 & +self.min_x2 & -self.max_x2
+
+        # Cut out corners if a corner radius was given
+        if hasattr(self, 'x1_min'):
+            corners = (
+                (+self.x1_min_x2_min & -self.x1_min & -self.x2_min) |
+                (+self.x1_min_x2_max & -self.x1_min & +self.x2_max) |
+                (+self.x1_max_x2_min & +self.x1_max & -self.x2_min) |
+                (+self.x1_max_x2_max & +self.x1_max & +self.x2_max)
+            )
+            prism &= ~corners
+
+        return prism
+
+
+class HexagonalPrism(CompositeSurface):
+    """Hexagonal prism comoposed of six planar surfaces
+
+    .. versionadded:: 0.14.0
+
+    Parameters
+    ----------
+    edge_length : float
+        Length of a side of the hexagon in [cm]
+    orientation : {'x', 'y'}
+        An 'x' orientation means that two sides of the hexagon are parallel to
+        the x-axis and a 'y' orientation means that two sides of the hexagon are
+        parallel to the y-axis.
+    origin : Iterable of two floats
+        Origin of the prism.
+    boundary_type : {'transmission, 'vacuum', 'reflective', 'periodic', 'white'}
+        Boundary condition that defines the behavior for particles hitting the
+        surfaces comprising the hexagonal prism.
+    albedo : float, optional
+        Albedo of the prism's surfaces as a ratio of particle weight after
+        interaction with the surface to the initial weight. Values must be
+        positive. Only applicable if the boundary type is 'reflective',
+        'periodic', or 'white'.
+    corner_radius : float
+        Prism corner radius in units of [cm].
+
+    """
+    _surface_names = ('plane_max', 'plane_min', 'upper_right', 'upper_left',
+                      'lower_right', 'lower_left')
+
+    def __init__(
+            self,
+            edge_length: float = 1.,
+            orientation: str = 'y',
+            origin: Sequence[float] = (0., 0.),
+            boundary_type: str = 'transmission',
+            albedo: float = 1.,
+            corner_radius: float = 0.
+    ):
+        check_type('edge_length', edge_length, Real)
+        check_type('albedo', albedo, Real)
+        check_type('corner_radius', corner_radius, Real)
+        check_value('orientation', orientation, ('x', 'y'))
+        check_type('origin', origin, Iterable, Real)
+
+        l = edge_length
+        x, y = origin
+
+        # Create container for boundary arguments
+        bc_args = {'boundary_type': boundary_type, 'albedo': albedo}
+
+        if orientation == 'y':
+            # Left and right planes
+            self.plane_max = openmc.XPlane(x + sqrt(3.)/2*l, **bc_args)
+            self.plane_min = openmc.XPlane(x - sqrt(3.)/2*l, **bc_args)
+            c = sqrt(3.)/3.
+
+            # y = -x/sqrt(3) + a
+            self.upper_right = openmc.Plane(a=c, b=1., d=l+x*c+y, **bc_args)
+
+            # y = x/sqrt(3) + a
+            self.upper_left = openmc.Plane(a=-c, b=1., d=l-x*c+y, **bc_args)
+
+            # y = x/sqrt(3) - a
+            self.lower_right = openmc.Plane(a=-c, b=1., d=-l-x*c+y, **bc_args)
+
+            # y = -x/sqrt(3) - a
+            self.lower_left = openmc.Plane(a=c, b=1., d=-l+x*c+y, **bc_args)
+
+        elif orientation == 'x':
+            self.plane_max = openmc.YPlane(y + sqrt(3.)/2*l, **bc_args)
+            self.plane_min = openmc.YPlane(y - sqrt(3.)/2*l, **bc_args)
+            c = sqrt(3.)
+
+            # Upper-right surface: y = -sqrt(3)*(x - a)
+            self.upper_right = openmc.Plane(a=c, b=1., d=c*l+x*c+y, **bc_args)
+
+            # Lower-right surface: y = sqrt(3)*(x + a)
+            self.lower_right = openmc.Plane(a=-c, b=1., d=-c*l-x*c+y, **bc_args)
+
+            # Lower-left surface: y = -sqrt(3)*(x + a)
+            self.lower_left = openmc.Plane(a=c, b=1., d=-c*l+x*c+y, **bc_args)
+
+            # Upper-left surface: y = sqrt(3)*(x + a)
+            self.upper_left = openmc.Plane(a=-c, b=1., d=c*l-x*c+y, **bc_args)
+
+        # Handle periodic boundary conditions
+        if boundary_type == 'periodic':
+            self.plane_min.periodic_surface = self.plane_max
+            self.upper_right.periodic_surface = self.lower_left
+            self.lower_right.periodic_surface = self.upper_left
+
+        # Handle rounded corners if given
+        if corner_radius > 0.:
+            if boundary_type == 'periodic':
+                raise ValueError('Periodic boundary conditions not permitted '
+                                 'when rounded corners are used.')
+
+            c = sqrt(3.)/2
+            t = l - corner_radius/c
+
+            # Cylinder with corner radius and boundary type pre-applied
+            cyl1 = partial(openmc.ZCylinder, r=corner_radius, **bc_args)
+            cyl2 = partial(openmc.ZCylinder, r=corner_radius/(2*c), **bc_args)
+
+            if orientation == 'x':
+                self.x_min_y_min_in = cyl1(name='x min y min in', x0=x-t/2, y0=y-c*t)
+                self.x_min_y_max_in = cyl1(name='x min y max in', x0=x+t/2, y0=y-c*t)
+                self.x_max_y_min_in = cyl1(name='x max y min in', x0=x-t/2, y0=y+c*t)
+                self.x_max_y_max_in = cyl1(name='x max y max in', x0=x+t/2, y0=y+c*t)
+                self.min_in = cyl1(name='x min in', x0=x-t, y0=y)
+                self.max_in = cyl1(name='x max in', x0=x+t, y0=y)
+
+                self.x_min_y_min_out = cyl2(name='x min y min out', x0=x-l/2, y0=y-c*l)
+                self.x_min_y_max_out = cyl2(name='x min y max out', x0=x+l/2, y0=y-c*l)
+                self.x_max_y_min_out = cyl2(name='x max y min out', x0=x-l/2, y0=y+c*l)
+                self.x_max_y_max_out = cyl2(name='x max y max out', x0=x+l/2, y0=y+c*l)
+                self.min_out = cyl2(name='x min out', x0=x-l, y0=y)
+                self.max_out = cyl2(name='x max out', x0=x+l, y0=y)
+
+            elif orientation == 'y':
+                self.x_min_y_min_in = cyl1(name='x min y min in', x0=x-c*t, y0=y-t/2)
+                self.x_min_y_max_in = cyl1(name='x min y max in', x0=x-c*t, y0=y+t/2)
+                self.x_max_y_min_in = cyl1(name='x max y min in', x0=x+c*t, y0=y-t/2)
+                self.x_max_y_max_in = cyl1(name='x max y max in', x0=x+c*t, y0=y+t/2)
+                self.min_in = cyl1(name='y min in', x0=x, y0=y-t)
+                self.max_in = cyl1(name='y max in', x0=x, y0=y+t)
+
+                self.x_min_y_min_out = cyl2(name='x min y min out', x0=x-c*l, y0=y-l/2)
+                self.x_min_y_max_out = cyl2(name='x min y max out', x0=x-c*l, y0=y+l/2)
+                self.x_max_y_min_out = cyl2(name='x max y min out', x0=x+c*l, y0=y-l/2)
+                self.x_max_y_max_out = cyl2(name='x max y max out', x0=x+c*l, y0=y+l/2)
+                self.min_out = cyl2(name='y min out', x0=x, y0=y-l)
+                self.max_out = cyl2(name='y max out', x0=x, y0=y+l)
+
+            # Add to tuple of surface names
+            for s in ('in', 'out'):
+                self._surface_names += (
+                    f'x_min_y_min_{s}', f'x_min_y_max_{s}',
+                    f'x_max_y_min_{s}', f'x_max_y_max_{s}',
+                    f'min_{s}', f'max_{s}')
+
+    def __neg__(self) -> openmc.Region:
+        prism = (
+            -self.plane_max & +self.plane_min &
+            -self.upper_right & -self.upper_left &
+            +self.lower_right & +self.lower_left
+        )
+
+        # Cut out corners if a corner radius was given
+        if hasattr(self, 'min_in'):
+            corners = (
+                +self.x_min_y_min_in & -self.x_min_y_min_out |
+                +self.x_min_y_max_in & -self.x_min_y_max_out |
+                +self.x_max_y_min_in & -self.x_max_y_min_out |
+                +self.x_max_y_max_in & -self.x_max_y_max_out |
+                +self.min_in & -self.min_out |
+                +self.max_in & -self.max_out
+            )
+            prism &= ~corners
+
+        return prism

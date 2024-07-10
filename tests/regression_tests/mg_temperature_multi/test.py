@@ -108,14 +108,14 @@ def test_mg_temperature_multi():
 
     # Create a region represented as the inside of a rectangular prism
     pitch = 1.26
-    box = openmc.rectangular_prism(pitch, pitch, boundary_type='reflective')
+    box = openmc.model.RectangularPrism(pitch, pitch, boundary_type='reflective')
 
     # Instantiate Cells
     fuel_inner = openmc.Cell(fill=uo2, region=-fuel_ir, name='fuel inner')
     fuel_inner.temperature = 600.0
     fuel_outer = openmc.Cell(fill=uo2, region=+fuel_ir & -fuel_or, name='fuel outer')
     fuel_outer.temperature = 294.0
-    moderator = openmc.Cell(fill=water, region=+fuel_or & box, name='moderator')
+    moderator = openmc.Cell(fill=water, region=+fuel_or & -box, name='moderator')
 
     # Create a geometry with the two cells and export to XML
     geometry = openmc.Geometry([fuel_inner, fuel_outer, moderator])
@@ -133,8 +133,9 @@ def test_mg_temperature_multi():
     # Create an initial uniform spatial source distribution over fissionable zones
     lower_left = (-pitch/2, -pitch/2, -1)
     upper_right = (pitch/2, pitch/2, 1)
-    uniform_dist = openmc.stats.Box(lower_left, upper_right, only_fissionable=True)
-    settings.source = openmc.IndependentSource(space=uniform_dist)
+    uniform_dist = openmc.stats.Box(lower_left, upper_right)
+    settings.source = openmc.IndependentSource(
+        space=uniform_dist, constraints={'fissionable': True})
 
     ###############################################################################
     # Define tallies

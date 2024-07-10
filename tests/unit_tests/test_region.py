@@ -208,7 +208,8 @@ def test_from_expression(reset):
     # Opening parenthesis immediately after halfspace
     r = openmc.Region.from_expression('1(2|-3)', surfs)
     assert str(r) == '(1 (2 | -3))'
-
+    r = openmc.Region.from_expression('-1|(1 2(-3))', surfs)
+    assert str(r) == '(-1 | (1 2 -3))'
 
 def test_translate_inplace():
     sph = openmc.Sphere()
@@ -240,3 +241,13 @@ def test_invalid_operands():
     with pytest.raises(ValueError, match='must be of type Region'):
         openmc.Complement(z)
 
+
+def test_plot():
+    # Create region and plot
+    region = -openmc.Sphere() & +openmc.XPlane()
+    c_before = openmc.Cell()
+    region.plot()
+
+    # Ensure that calling plot doesn't affect cell ID space
+    c_after = openmc.Cell()
+    assert c_after.id - 1 == c_before.id

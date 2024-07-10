@@ -40,13 +40,12 @@ def model():
     geometry = openmc.Geometry([cell_f, cell_w])
 
     settings = openmc.Settings()
-    settings.particles = 500
+    settings.particles = 100
     settings.inactive = 0
-    settings.batches = 2
+    settings.batches = 10
 
     return openmc.Model(geometry, materials, settings)
 
-@pytest.mark.skipif(sys.version_info < (3, 9), reason="Requires Python 3.9+")
 @pytest.mark.parametrize("rate, dest_mat, power, ref_result", [
     (1e-5, None, 0.0, 'no_depletion_only_removal'),
     (-1e-5, None, 0.0, 'no_depletion_only_feed'),
@@ -63,6 +62,7 @@ def test_transfer_rates(run_in_tmpdir, model, rate, dest_mat, power, ref_result)
     transfer_elements = ['Xe']
 
     op = CoupledOperator(model, chain_file)
+    op.round_number = True
     integrator = openmc.deplete.PredictorIntegrator(
         op, [1], power, timestep_units = 'd')
     integrator.add_transfer_rate('f', transfer_elements, rate,
@@ -82,5 +82,5 @@ def test_transfer_rates(run_in_tmpdir, model, rate, dest_mat, power, ref_result)
     res_ref = openmc.deplete.Results(path_reference)
     res_test = openmc.deplete.Results(path_test)
 
-    assert_atoms_equal(res_ref, res_test, 1e-4)
+    assert_atoms_equal(res_ref, res_test, 1e-6)
     assert_reaction_rates_equal(res_ref, res_test)
