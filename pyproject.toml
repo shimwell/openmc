@@ -36,6 +36,7 @@ dependencies = [
     "lxml",
     "uncertainties",
     "setuptools",
+    "mpi4py-mpich",
 ]
 
 [project.optional-dependencies]
@@ -75,7 +76,9 @@ openmc-update-inputs = "scripts.openmc_update_inputs:main"
 openmc-update-mgxs = "scripts.openmc_update_mgxs:main"
 openmc-voxel-to-vtk = "scripts.openmc_voxel_to_vtk:main"
 
-[tool.scikit-build]
-cmake.version = ">=3.16"
-build-dir = "build"
-wheel.packages = ["openmc", "build/bin/openmc"]
+[tool.cibuildwheel]
+build = "cp311-manylinux_x86_64"
+manylinux-x86_64-image= "manylinux_2_28"
+
+[tool.cibuildwheel.linux]
+before-build = "bash cibw_before_build.sh"
