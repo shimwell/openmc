@@ -1,6 +1,11 @@
 #!/bin/bash
 set -eu
 
+dnf install -y epel-release
+dnf config-manager --enable epel
+dnf update --nogpgcheck
+dnf install -y sudo cmake eigen3-devel gcc gcc-c++ wget hdf5-devel
+
 # pip install numpy==1.25.1 cython==0.29.36 # required for MOAB install (silly)
 
 # It's important to use LLVM clang rather than Apple clang
@@ -51,3 +56,5 @@ cmake -S . -B bld \
     -DCMAKE_BUILD_TESTS=OFF \
     -DOPENMC_USE_DAGMC=ON
 cmake --build bld -j 8
+
+echo "LD_LIBRARY_PATH: ${LD_LIBRARY_PATH}"
