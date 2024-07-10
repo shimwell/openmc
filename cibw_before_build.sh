@@ -10,9 +10,9 @@ set -eu
 dnf install -y epel-release
 dnf config-manager --enable epel
 
-# dnf search netcdf
+dnf search python3
 
 dnf install -y sudo curl cmake eigen3-devel gcc gcc-c++ wget \
                hdf5-devel mpich mpich-devel netcdf-devel netcdf-mpich-devel \
-               metis python3 python3-devel python3-pip
+               metis python3.11 python3.11-devel python3.11-pip
 pip install cython
