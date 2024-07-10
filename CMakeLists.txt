@@ -59,6 +59,11 @@ execute_process(
 
 include_directories(${NUMPY_INCLUDE_DIR})
 
+# to install after cloning the repo
+# pip install .
+# or to see the wheel
+# pip wheel . --no-clean --verbose
+# to install from repo remotely
 # apt-get -y update
 # apt-get -y install python3 python3-pip git libhdf5-dev
 # pip install cython
