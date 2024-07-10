@@ -76,6 +76,46 @@ if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE RelWithDebInfo CACHE STRING "Choose the type of build" FORCE)
 endif()
 
+
+find_package(
+  Python
+  COMPONENTS Interpreter Development.Module
+  REQUIRED)
+
+find_program(CYTHON_EXECUTABLE NAMES cython cython3)
+if(NOT CYTHON_EXECUTABLE)
+  message(FATAL_ERROR "Cython is required, but it was not found.")
+endif()
+
+# using cython to make the .c files from the .pyx files
+add_custom_command(
+  OUTPUT "${CMAKE_CURRENT_SOURCE_DIR}/openmc/data/_endf.c"
+  COMMENT "Making openmc/data/_endf.c from ${CMAKE_CURRENT_SOURCE_DIR}/openmc/data/_endf.pyx"
+  COMMAND Python::Interpreter -m cython "${CMAKE_CURRENT_SOURCE_DIR}/openmc/data/_endf.pyx"
+  VERBATIM)
+add_custom_command(
+  OUTPUT "${CMAKE_CURRENT_SOURCE_DIR}/openmc/data/reconstruct.c"
+  COMMENT "Making openmc/data/reconstruct.c from ${CMAKE_CURRENT_SOURCE_DIR}/openmc/data/reconstruct.pyx"
+  COMMAND Python::Interpreter -m cython "${CMAKE_CURRENT_SOURCE_DIR}/openmc/data/reconstruct.pyx"
+  VERBATIM)
+python_add_library(endf MODULE "${CMAKE_CURRENT_SOURCE_DIR}/openmc/data/_endf.c" WITH_SOABI)
+python_add_library(reconstruct MODULE "${CMAKE_CURRENT_SOURCE_DIR}/openmc/data/reconstruct.c" WITH_SOABI)
+
+# adding folder containing numpy header file to the include directories
+find_package(Python COMPONENTS Interpreter Development REQUIRED)
+execute_process(
+  COMMAND "${Python_EXECUTABLE}" -c "import numpy; print(numpy.get_include())"
+  OUTPUT_VARIABLE NUMPY_INCLUDE_DIR
+  OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+
+include_directories(${NUMPY_INCLUDE_DIR})
+
+
+
+
+
+
 #===============================================================================
 # OpenMP for shared-memory parallelism (and GPU support some day!)
 #===============================================================================
