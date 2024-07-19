@@ -78,4 +78,15 @@ openmc = "openmc.openmc_exec:main"
 [tool.scikit-build]
 cmake.verbose = true
 # cmake args can be passed in here or in the command line via exports or inline with the pip install
-cmake.args = ["-DCMAKE_BUILD_TYPE=RELEASE"]
+cmake.args = [
+    "-DCMAKE_BUILD_TYPE=RELEASE",
+    "-DOPENMC_USE_DAGMC=ON",
+    "-DDAGMC_ROOT=~/openmc-dependancies/DAGMC/install",
+    "-DOPENMC_USE_MPI=ON",
+    "-DHDF5_PREFER_PARALLEL=ON",
+    "-DCPP20=ON",
+    "-DBUILD_TESTING=OFF",
+    "-DXTENSOR_USE_TBB=OFF",
+    "-DXTENSOR_USE_OPENMP=ON",
+    "-DXTENSOR_USE_XSIMD=OFF"
+]
