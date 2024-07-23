@@ -108,7 +108,10 @@ jobs:
                               libnetcdf-dev \
                               libpnetcdf-dev \
                               libhdf5-serial-dev \
-                              libeigen3-dev
+                              libeigen3-dev \
+                              cmake \
+                              g++ \
+                              make
 
       - name: Optional apt dependencies for MPI
         shell: bash
@@ -120,12 +123,52 @@ jobs:
           sudo update-alternatives --set mpirun /usr/bin/mpirun.mpich
           sudo update-alternatives --set mpi-x86_64-linux-gnu /usr/include/x86_64-linux-gnu/mpich
 
+      - name: install python upgrades
+        shell: bash
+        run: |
+          pip install --upgrade pip
+          pip install --upgrade pytest
+          pip install --upgrade numpy
+
       - name: Optional apt dependencies for vectfit
         shell: bash
         if: ${{ matrix.vectfit == 'y' }}
-        run: sudo apt install -y libblas-dev liblapack-dev
+        run: |
+          sudo apt install -y libblas-dev liblapack-dev
+          PYBIND_BRANCH='master'
+          PYBIND_REPO='https://github.com/pybind/pybind11'
+          XTL_BRANCH='0.6.13'
+          XTL_REPO='https://github.com/xtensor-stack/xtl'
+          XTENSOR_BRANCH='0.21.3'
+          XTENSOR_REPO='https://github.com/xtensor-stack/xtensor'
+          XTENSOR_PYTHON_BRANCH='0.24.1'
+          XTENSOR_PYTHON_REPO='https://github.com/xtensor-stack/xtensor-python'
+          XTENSOR_BLAS_BRANCH='0.17.1'
+          XTENSOR_BLAS_REPO='https://github.com/xtensor-stack/xtensor-blas'
+          cd $HOME
+          git clone -b $PYBIND_BRANCH $PYBIND_REPO
+          cd pybind11 && mkdir build && cd build && cmake .. && sudo make install
+          pip install $HOME/pybind11
+          cd $HOME
+          git clone -b $XTL_BRANCH $XTL_REPO
+          cd xtl && mkdir build && cd build && cmake .. && sudo make install
+          cd $HOME
+          git clone -b $XTENSOR_BRANCH $XTENSOR_REPO
+          cd xtensor && mkdir build && cd build && cmake .. && sudo make install
+          cd $HOME
+          git clone -b $XTENSOR_PYTHON_BRANCH $XTENSOR_PYTHON_REPO
+          cd xtensor-python && mkdir build && cd build && cmake .. && sudo make install
+          cd $HOME
+          git clone -b $XTENSOR_BLAS_BRANCH $XTENSOR_BLAS_REPO
+          cd xtensor-blas && mkdir build && cd build && cmake .. && sudo make install
+          # Install wheel (remove when vectfit supports installation with build isolation)
+          pip install wheel
+          # Install vectfit
+          cd $HOME
+          git clone https://github.com/liangjg/vectfit.git
+          pip install --no-build-isolation ./vectfit
 
-      - name: install
+      - name: install NJOY
         shell: bash
         run: |
           echo "$HOME/NJOY2016/build" >> $GITHUB_PATH
@@ -134,7 +177,139 @@ jobs:
           cd NJOY2016
           mkdir build && cd build
           cmake -Dstatic=on .. && make 2>/dev/null && sudo make install
-          $GITHUB_WORKSPACE/tools/ci/gha-install.sh
+
+      - name: install DAGMC
+        if: ${{ matrix.dagmc == 'y' }}
+        env:
+          MOAB_BRANCH='Version5.1.0'
+          MOAB_INSTALL_DIR=$HOME/MOAB/
+          DAGMC_BRANCH='develop'
+          MOAB_REPO='https://bitbucket.org/fathomteam/moab/'
+          DAGMC_REPO='https://github.com/svalinn/dagmc'
+          DAGMC_INSTALL_DIR=$HOME/DAGMC/
+        run: |
+          cd $HOME
+          mkdir MOAB && cd MOAB
+          git clone -b $MOAB_BRANCH $MOAB_REPO
+          mkdir build && cd build
+          cmake ../moab -DENABLE_HDF5=ON -DENABLE_NETCDF=ON -DBUILD_SHARED_LIBS=ON -DCMAKE_INSTALL_PREFIX=$MOAB_INSTALL_DIR -DENABLE_BLASLAPACK=OFF
+          make -j && make -j install
+          rm -rf $HOME/MOAB/moab $HOME/MOAB/build
+          cd $HOME
+          mkdir DAGMC && cd DAGMC
+          git clone -b $DAGMC_BRANCH $DAGMC_REPO
+          mkdir build && cd build
+          cmake ../dagmc -DBUILD_TALLY=ON -DCMAKE_INSTALL_PREFIX=$DAGMC_INSTALL_DIR -DBUILD_STATIC_LIBS=OFF -DMOAB_DIR=$MOAB_INSTALL_DIR
+          make -j install
+          rm -rf $HOME/DAGMC/dagmc $HOME/DAGMC/build
+
+      - name: install NCRYSTAL
+        if: ${{ matrix.ncrystal == 'y' }}
+        run: |
+          cd $HOME
+          #Use the NCrystal develop branch (in the near future we can move this to master):
+          git clone https://github.com/mctools/ncrystal --branch develop --single-branch --depth 1 ncrystal_src
+          SRC_DIR="$PWD/ncrystal_src"
+          BLD_DIR="$PWD/ncrystal_bld"
+          INST_DIR="$PWD/ncrystal_inst"
+          PYTHON=$(which python3)
+          CPU_COUNT=1
+          mkdir "$BLD_DIR"
+          cd ncrystal_bld
+          cmake \
+              "${SRC_DIR}" \
+              -DBUILD_SHARED_LIBS=ON \
+              -DNCRYSTAL_NOTOUCH_CMAKE_BUILD_TYPE=ON \
+              -DNCRYSTAL_MODIFY_RPATH=OFF \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DNCRYSTAL_ENABLE_EXAMPLES=OFF \
+              -DNCRYSTAL_ENABLE_SETUPSH=OFF \
+              -DNCRYSTAL_ENABLE_DATA=EMBED \
+              -DCMAKE_INSTALL_PREFIX="${INST_DIR}" \
+              -DPython3_EXECUTABLE="$PYTHON"
+          make -j${CPU_COUNT:-1}
+          make install
+          #Note: There is no "make test" or "make ctest" functionality for NCrystal
+          #      yet. If it appears in the future, we should add it here.
+          # Output the configuration to the log
+          "${INST_DIR}/bin/ncrystal-config" --setup
+          # Change environmental variables
+          eval $( "${INST_DIR}/bin/ncrystal-config" --setup )
+          # Check installation worked
+          nctool --test
+
+      - name: install LIBMESH
+        if: ${{ matrix.libmesh == 'y' }}
+        run: |
+          pushd $HOME
+          mkdir LIBMESH && cd LIBMESH
+          git clone https://github.com/libmesh/libmesh -b v1.7.1 --recurse-submodules
+          mkdir build && cd build
+          export METHODS="opt"
+          if [[ $MPI == 'y' ]]; then
+              ../libmesh/configure --prefix=$HOME/LIBMESH CXX=mpicxx CC=mpicc FC=mpifort F77=mpif77 \
+                  --enable-exodus --disable-netcdf-4 --disable-eigen --disable-lapack
+          else
+              ../libmesh/configure --prefix=$HOME/LIBMESH --enable-exodus --disable-netcdf-4 --disable-eigen --disable-lapack --disable-mpi
+          fi
+          make -j4 install
+          export LIBMESH_PC=$HOME/LIBMESH/lib/pkgconfig/
+          rm -rf $HOME/LIBMESH/build
+          popd
+
+      - name: install MCPL
+        run: |
+          cd $HOME
+          git clone https://github.com/mctools/mcpl
+          cd mcpl
+          mkdir build && cd build
+          cmake .. && make 2>/dev/null && sudo make install
+
+      - name: install MPI
+        if: ${{ matrix.mpi == 'y' }}
+        run: |
+          # For MPI configurations, make sure mpi4py and h5py are built against the
+          # correct version of MPI
+          pip install --no-binary=mpi4py mpi4py
+          export CC=mpicc
+          export HDF5_MPI=ON
+          export HDF5_DIR=/usr/lib/x86_64-linux-gnu/hdf5/mpich
+          pip install wheel "cython<3.0"
+          pip install --no-binary=h5py --no-build-isolation h5py
+
+      - name: Build and Install
+        run: |
+          cmake_args="-DOPENMC_ENABLE_COVERAGE=on .."
+          if [ "${{ env.OMP }}" == "y" ]; then
+            cmake_args="$cmake_args -DOPENMC_USE_OPENMP=ON"
+          else
+            cmake_args="$cmake_args -DOPENMC_USE_OPENMP=OFF"
+          fi
+          if [ "${{ env.MPI }}" == "y" ]; then
+            cmake_args="$cmake_args -DOPENMC_USE_MPI=ON"
+          else
+            cmake_args="$cmake_args -DOPENMC_USE_MPI=OFF"
+          fi
+          if [ "${{ env.PHDF5 }}" == "y" ]; then
+            cmake_args="$cmake_args -DHDF5_PREFER_PARALLEL=ON"
+          else
+            cmake_args="$cmake_args -DHDF5_PREFER_PARALLEL=OFF"
+          fi
+          if [ "${{ env.DAGMC }}" == "y" ]; then
+            cmake_args="$cmake_args -DOPENMC_USE_DAGMC=ON -DCMAKE_PREFIX_PATH=~/DAGMC"
+          fi
+          if [ "${{ env.NCRYSTAL }}" == "y" ]; then
+            ncrystal_path="$HOME/ncrystal_inst/lib/cmake"
+            cmake_args="$cmake_args -DOPENMC_USE_NCRYSTAL=ON -DCMAKE_PREFIX_PATH=$ncrystal_path"
+          fi
+          if [ "${{ env.LIBMESH }}" == "y" ]; then
+            libmesh_path="$HOME/LIBMESH"
+            cmake_args="$cmake_args -DOPENMC_USE_LIBMESH=ON -DCMAKE_PREFIX_PATH=$libmesh_path"
+          fi
+          echo "Running CMake with arguments: $cmake_args"
+          cmake $cmake_args
+          make -j4
+          sudo make install
 
       - name: cache-xs
         uses: actions/cache@v4
@@ -144,15 +319,39 @@ jobs:
             ~/endf-b-vii.1
           key: ${{ runner.os }}-build-xs-cache
 
-      - name: before
+      - name: Download HDF5 data
         shell: bash
-        run: $GITHUB_WORKSPACE/tools/ci/gha-before-script.sh
+        run: |
+          if [[ ! -e $HOME/nndc_hdf5/cross_sections.xml ]]; then
+              wget -q -O - https://anl.box.com/shared/static/teaup95cqv8s9nn56hfn7ku8mmelr95p.xz | tar -C $HOME -xJ
+          fi
+          ENDF=$HOME/endf-b-vii.1
+          if [[ ! -d $ENDF/neutrons || ! -d $ENDF/photoat || ! -d $ENDF/atomic_relax ]]; then
+              wget -q -O - https://anl.box.com/shared/static/4kd2gxnf4gtk4w1c8eua5fsua22kvgjb.xz | tar -C $HOME -xJ
+          fi
 
       - name: test
         shell: bash
         run: |
           CTEST_OUTPUT_ON_FAILURE=1 make test -C $GITHUB_WORKSPACE/build/
-          $GITHUB_WORKSPACE/tools/ci/gha-script.sh
+          args=" "
+          # Check for MPI
+          if [[ $MPI == 'y' ]]; then
+            args="${args} --mpi "
+          fi
+          # Check for event-based
+          if [[ $EVENT == 'y' ]]; then
+            args="${args} --event "
+          fi
+          # Check NCrystal installation
+          if [[ $NCRYSTAL = 'y' ]]; then
+            # Change environmental variables
+            eval $( "${HOME}/ncrystal_inst/bin/ncrystal-config" --setup )
+            nctool --test
+          fi
+          # Run regression and unit tests
+          pytest --cov=openmc -v $args tests
+
 
       - name: after_success
         shell: bash
