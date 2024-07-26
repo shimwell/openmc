@@ -163,7 +163,9 @@ if(NOT DEFINED HDF5_PREFER_PARALLEL)
   endif()
 endif()
 
-find_package(HDF5 QUIET REQUIRED COMPONENTS C HL)
+find_package(HDF5 QUIET COMPONENTS C HL)
+
+include(FetchContent)
 
 if(NOT HDF5_FOUND)
     message(STATUS "HDF5 not found, fetching HDF5...")
