@@ -163,7 +163,23 @@ if(NOT DEFINED HDF5_PREFER_PARALLEL)
   endif()
 endif()
 
-find_package(HDF5 REQUIRED COMPONENTS C HL)
+find_package(HDF5 QUIET REQUIRED COMPONENTS C HL)
+
+if(NOT HDF5_FOUND)
+    message(STATUS "HDF5 not found, fetching HDF5...")
+
+    FetchContent_Declare(
+        hdf5
+        GIT_REPOSITORY https://github.com/HDFGroup/hdf5.git
+        GIT_TAG        hdf5-1_12_0
+    )
+
+    FetchContent_MakeAvailable(hdf5)
+
+    # Set HDF5 variables manually
+    set(HDF5_INCLUDE_DIRS ${hdf5_SOURCE_DIR}/src ${hdf5_BINARY_DIR})
+    set(HDF5_LIBRARIES hdf5)
+endif()
 
 # Remove HDF5 transitive dependencies that are system libraries
 list(FILTER HDF5_LIBRARIES EXCLUDE REGEX ".*lib(pthread|dl|m).*")
