@@ -15,7 +15,7 @@ from .data import ATOMIC_SYMBOL, K_BOLTZMANN, EV_PER_MEV
 from .endf import (
     Evaluation, SUM_RULES, get_head_record, get_tab1_record, get_evaluations)
 from .fission_energy import FissionEnergyRelease
-from .function import Tabulated1D, Sum, ResonancesWithBackground
+from .function import Tabulated1D, Sum
 from .grid import linearize, thin
 from .njoy import make_ace
 from .product import Product
@@ -752,18 +752,6 @@ class IncidentNeutron(EqualityMixin):
         for mf, mt, nc, mod in ev.reaction_list:
             if mf == 3:
                 data.reactions[mt] = Reaction.from_endf(ev, mt)
-
-        # Replace cross sections for elastic, capture, fission
-        try:
-            if any(isinstance(r, res._RESOLVED) for r in data.resonances):
-                for mt in (2, 102, 18):
-                    if mt in data.reactions:
-                        rx = data.reactions[mt]
-                        rx.xs['0K'] = ResonancesWithBackground(
-                            data.resonances, rx.xs['0K'], mt)
-        except ValueError:
-            # Thrown if multiple resolved ranges (e.g. Pu239 in ENDF/B-VII.1)
-            pass
 
         # If first-chance, second-chance, etc. fission are present, check
         # whether energy distributions were specified in MF=5. If not, copy the
