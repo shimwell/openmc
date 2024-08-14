@@ -3,7 +3,6 @@
 import os
 import numpy as np
 from setuptools import setup, Extension
-from Cython.Build import cythonize
 
 
 class OpenMCExtension(Extension):
