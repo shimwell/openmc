@@ -336,6 +336,7 @@ endif()
 if(SKBUILD)
   set(CMAKE_INSTALL_RPATH "$ORIGIN")
   set(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
+  set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/openmc/lib)
 endif()
 
 #===============================================================================

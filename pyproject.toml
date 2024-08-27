@@ -2,6 +2,9 @@
 requires = ["setuptools", "wheel", "numpy", "cython", "scikit-build-core"]
 build-backend = "scikit_build_core.build"
 
+[tool.scikit-build-core]
+generator = "Ninja"
+
 [project]
 name = "openmc"
 authors = [
@@ -61,11 +64,13 @@ Issues = "https://github.com/openmc-dev/openmc/issues"
 [tool.setuptools.packages.find]
 include = ['openmc*', 'scripts*']
 exclude = ['tests*']
+packages = ["find:"]
 
 [tool.setuptools.package-data]
 "openmc.data.effective_dose" = ["*.txt"]
 "openmc.data" = ["*.txt", "*.DAT", "*.json", "*.h5"]
 "openmc.lib" = ["libopenmc.dylib", "libopenmc.so"]
+"lib" = ["libopenmc.so"]
 
 [project.scripts]
 openmc-ace-to-hdf5 = "scripts.openmc_ace_to_hdf5:main"
@@ -89,3 +94,6 @@ before-all = """
     yum install -y hdf5 hdf5-devel libpng-devel cmake eigen3-devel gcc gcc-c++ wget
 """
 manylinux-x86_64-image = "manylinux_2_28"
+
+[tool.setuptools.extension]
+libopenmc = {sources = [], libraries = ["openmc"], library-dirs = ["lib"], runtime-library-dirs = ["lib"]}
