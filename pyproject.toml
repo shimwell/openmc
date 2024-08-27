@@ -70,7 +70,6 @@ packages = ["find:"]
 "openmc.data.effective_dose" = ["*.txt"]
 "openmc.data" = ["*.txt", "*.DAT", "*.json", "*.h5"]
 "openmc.lib" = ["libopenmc.dylib", "libopenmc.so"]
-"lib" = ["libopenmc.so"]
 
 [project.scripts]
 openmc-ace-to-hdf5 = "scripts.openmc_ace_to_hdf5:main"
@@ -96,4 +95,4 @@ before-all = """
 manylinux-x86_64-image = "manylinux_2_28"
 
 [tool.setuptools.extension]
-libopenmc = {sources = [], libraries = ["openmc"], library-dirs = ["lib"], runtime-library-dirs = ["lib"]}
+libopenmc = {sources = [], libraries = ["openmc"], library-dirs = ["openmc/lib"], runtime-library-dirs = ["openmc/lib"]}

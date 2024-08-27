@@ -13,12 +13,19 @@ class OpenMCExtension(Extension):
 lib_dir = os.path.join('openmc', 'lib')
 libopenmc_path = os.path.join(lib_dir, 'libopenmc.so')
 
+# Ensure the library exists
+if not os.path.exists(libopenmc_path):
+    raise FileNotFoundError(f"Required library {libopenmc_path} not found")
+
 kwargs = {
     'ext_modules': [OpenMCExtension('libopenmc')],
     'include_dirs': [np.get_include()],
     'package_data': {
-        'openmc': [os.path.join('lib', 'libopenmc.so')],
+        'openmc.lib': ['libopenmc.so'],
     },
+    'data_files': [
+        (lib_dir, [libopenmc_path]),
+    ],
 }
 
 setup(**kwargs)
