@@ -336,7 +336,6 @@ endif()
 if(SKBUILD)
   set(CMAKE_INSTALL_RPATH "$ORIGIN")
   set(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
-  set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/openmc/lib)
 endif()
 
 #===============================================================================
@@ -582,7 +581,6 @@ add_executable(openmc src/main.cpp)
 add_executable(OpenMC::openmc ALIAS openmc)
 target_compile_options(openmc PRIVATE ${cxxflags})
 target_include_directories(openmc PRIVATE ${CMAKE_BINARY_DIR}/include)
-target_include_directories(openmc PRIVATE ${CMAKE_SOURCE_DIR}/include)
 target_link_libraries(openmc libopenmc)
 
 # Ensure C++17 standard is used and turn off GNU extensions
