@@ -334,7 +334,7 @@ if("${isSystemDir}" STREQUAL "-1")
 endif()
 
 if(SKBUILD)
-  set(CMAKE_INSTALL_RPATH "$ORIGIN")
+  set(CMAKE_INSTALL_RPATH "$ORIGIN/lib")
   set(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
 endif()
 
