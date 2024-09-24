@@ -1,6 +1,6 @@
 [build-system]
-requires = ["setuptools", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["setuptools", "wheel", "numpy", "cython", "scikit-build-core"]
+build-backend = "scikit_build_core.build"
 
 [project]
 name = "openmc"
@@ -75,3 +75,17 @@ openmc-track-to-vtk = "scripts.openmc_track_to_vtk:main"
 openmc-update-inputs = "scripts.openmc_update_inputs:main"
 openmc-update-mgxs = "scripts.openmc_update_mgxs:main"
 openmc-voxel-to-vtk = "scripts.openmc_voxel_to_vtk:main"
+openmc = "openmc.openmc_exec:main"
+
+[tool.scikit-build]
+build.verbose = true
+# cmake args can be passed in here or in the command line via exports or inline with the pip install
+cmake.args = ["-DCMAKE_BUILD_TYPE=RELEASE"]
+
+[tool.cibuildwheel]
+skip = "*-win_*"
+before-all = """
+    yum install -y epel-release
+    yum install -y hdf5 hdf5-devel libpng-devel cmake eigen3-devel gcc gcc-c++ wget
+"""
+manylinux-x86_64-image = "manylinux_2_28"

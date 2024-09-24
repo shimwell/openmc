@@ -16,6 +16,11 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 # Set module path
 set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules)
 
+# Conditionally find Python if building with scikit-build-core
+if(SKBUILD)
+  find_package(Python COMPONENTS Interpreter Development.Module REQUIRED)
+endif()
+
 # Enable correct usage of CXX_EXTENSIONS
 if (CMAKE_VERSION VERSION_GREATER_EQUAL 3.22)
   cmake_policy(SET CMP0128 NEW)
@@ -35,6 +40,7 @@ option(OPENMC_USE_MPI         "Enable MPI"                                      
 option(OPENMC_USE_MCPL        "Enable MCPL"                                          OFF)
 option(OPENMC_USE_NCRYSTAL    "Enable support for NCrystal scattering"               OFF)
 option(OPENMC_USE_UWUW        "Enable UWUW"                                          OFF)
+
 
 # Warnings for deprecated options
 foreach(OLD_OPT IN ITEMS "openmp" "profile" "coverage" "dagmc" "libmesh")
@@ -327,6 +333,11 @@ if("${isSystemDir}" STREQUAL "-1")
   set(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_FULL_LIBDIR}")
 endif()
 
+if(SKBUILD)
+  set(CMAKE_INSTALL_RPATH "$ORIGIN/lib")
+  set(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
+endif()
+
 #===============================================================================
 # libopenmc
 #===============================================================================
@@ -614,3 +625,8 @@ install(FILES man/man1/openmc.1 DESTINATION ${CMAKE_INSTALL_MANDIR}/man1)
 install(FILES LICENSE DESTINATION "${CMAKE_INSTALL_DOCDIR}" RENAME copyright)
 install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 install(FILES "${CMAKE_BINARY_DIR}/include/openmc/version.h" DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/openmc)
+
+if(SKBUILD)
+  install(TARGETS openmc RUNTIME DESTINATION openmc/bin)
+  install(TARGETS libopenmc LIBRARY DESTINATION openmc/bin)
+endif()
