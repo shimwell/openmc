@@ -96,7 +96,7 @@ RUN yum install -y epel-release && \
     yum clean all
 
 # Set up environment variables for shared libraries
-ENV LD_LIBRARY_PATH=/usr/local/lib:/usr/local/lib64:$LD_LIBRARY_PATH
+ENV LD_LIBRARY_PATH=/usr/local/lib64:$LD_LIBRARY_PATH
 
 # Compiler configuration stage: gcc
 FROM base AS compiler-gcc
