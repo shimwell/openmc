@@ -370,7 +370,7 @@ ARG XTENSOR_PYTHON_TAG
 RUN git clone --depth 1 -b ${XTENSOR_PYTHON_TAG} https://github.com/xtensor-stack/xtensor-python.git xtensor-python && \
     cd xtensor-python && \
     mkdir build && cd build && \
-    python -m pip install pybind11 numpy && \
+    python -m pip install numpy && \
     cmake .. \
         -DCMAKE_INSTALL_PREFIX=/usr/local \
         -DNUMPY_INCLUDE_DIRS=$(python -c "import numpy; print(numpy.get_include())") && \
