@@ -381,6 +381,7 @@ RUN git clone --depth 1 -b ${XTENSOR_PYTHON_TAG} https://github.com/xtensor-stac
 
 # OpenMC stage
 FROM python-dependencies AS openmc
+ENV PYTHONPATH="/opt/python/${Python_ABI}/lib/python3.12/site-packages"
 
 # Build and install vectfit
 ARG VECTFIT_TAG
