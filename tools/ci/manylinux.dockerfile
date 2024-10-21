@@ -331,6 +331,7 @@ ARG Python_ABI
 
 # Use Python from manylinux as the default Python
 ENV PATH="/opt/python/${Python_ABI}/bin:${PATH}"
+RUN ln -sf /opt/python/${Python_ABI}/bin/python3 /usr/bin/python
 
 # Build and install NCrystal
 ARG NCrystal_TAG
