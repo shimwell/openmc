@@ -330,7 +330,6 @@ FROM dependencies AS python-dependencies
 ARG Python_ABI
 
 # Use Python from manylinux as the default Python
-ENV PYTHONHOME="/opt/python/${Python_ABI}"
 ENV PATH="/opt/python/${Python_ABI}/bin:${PATH}"
 
 # Build and install NCrystal
@@ -378,18 +377,17 @@ RUN git clone --depth 1 -b ${XTENSOR_PYTHON_TAG} https://github.com/xtensor-stac
     cd ../.. && \
     rm -rf xtensor-python
 
-
-# OpenMC stage
-FROM python-dependencies AS openmc
-ENV PYTHONPATH="/opt/python/${Python_ABI}/lib/python3.12/site-packages"
-
 # Build and install vectfit
 ARG VECTFIT_TAG
 RUN git clone --depth 1 -b ${VECTFIT_TAG} https://github.com/liangjg/vectfit.git vectfit && \
     cd vectfit && \
-    python -m pip -vvv install . && \
+    python -m pip install . && \
     cd .. && \
     rm -rf vectfit
+
+
+# OpenMC stage
+FROM python-dependencies AS openmc
 
 ARG COMPILER
 ARG Python_ABI
@@ -423,6 +421,9 @@ RUN export SKBUILD_CMAKE_ARGS="-DOPENMC_USE_MPI=$([ ${COMPILER} == 'openmpi' ] &
 # Install OpenMC wheel
 RUN python -m pip install \
         "$(echo $HOME/openmc/dist/*.whl)[$([ ${COMPILER} == 'openmpi' ] && echo 'depletion-mpi,')test,ci,vtk]"
+
+# Set Python environment
+ENV PYTHONHOME="/opt/python/${Python_ABI}"
 
 # Test OpenMC
 RUN cd $HOME/openmc && \
