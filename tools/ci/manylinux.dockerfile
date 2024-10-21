@@ -386,7 +386,7 @@ FROM python-dependencies AS openmc
 ARG VECTFIT_TAG
 RUN git clone --depth 1 -b ${VECTFIT_TAG} https://github.com/liangjg/vectfit.git vectfit && \
     cd vectfit && \
-    python -m pip install . && \
+    python -m pip -vvv install . && \
     cd .. && \
     rm -rf vectfit
 
