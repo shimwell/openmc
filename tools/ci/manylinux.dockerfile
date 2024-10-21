@@ -378,6 +378,10 @@ RUN git clone --depth 1 -b ${XTENSOR_PYTHON_TAG} https://github.com/xtensor-stac
     cd ../.. && \
     rm -rf xtensor-python
 
+
+# OpenMC stage
+FROM python-dependencies AS openmc
+
 # Build and install vectfit
 ARG VECTFIT_TAG
 RUN git clone --depth 1 -b ${VECTFIT_TAG} https://github.com/liangjg/vectfit.git vectfit && \
@@ -385,10 +389,6 @@ RUN git clone --depth 1 -b ${VECTFIT_TAG} https://github.com/liangjg/vectfit.git
     python -m pip install . && \
     cd .. && \
     rm -rf vectfit
-
-
-# OpenMC stage
-FROM python-dependencies AS openmc
 
 ARG COMPILER
 ARG Python_ABI
