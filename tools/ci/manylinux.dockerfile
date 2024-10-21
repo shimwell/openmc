@@ -96,7 +96,7 @@ RUN yum install -y epel-release && \
     yum clean all
 
 # Set up environment variables for shared libraries
-ENV LD_LIBRARY_PATH=/usr/local/lib64:$LD_LIBRARY_PATH
+ENV LD_LIBRARY_PATH=/usr/local/lib:/usr/local/lib64:$LD_LIBRARY_PATH
 
 # Compiler configuration stage: gcc
 FROM base AS compiler-gcc
@@ -370,7 +370,7 @@ ARG XTENSOR_PYTHON_TAG
 RUN git clone --depth 1 -b ${XTENSOR_PYTHON_TAG} https://github.com/xtensor-stack/xtensor-python.git xtensor-python && \
     cd xtensor-python && \
     mkdir build && cd build && \
-    python -m pip install numpy && \
+    python -m pip install pybind11 numpy && \
     cmake .. \
         -DCMAKE_INSTALL_PREFIX=/usr/local \
         -DNUMPY_INCLUDE_DIRS=$(python -c "import numpy; print(numpy.get_include())") && \
@@ -425,7 +425,7 @@ RUN python -m pip install \
 
 # Test OpenMC
 RUN cd $HOME/openmc && \
-    eval $(ncrystal-config  --setup) && \
+    eval $(ncrystal-config --setup) && \
     nctool --test && \
     pytest --cov=openmc -v $([ ${COMPILER} == 'openmpi' ] && echo '--mpi') --event tests
 
