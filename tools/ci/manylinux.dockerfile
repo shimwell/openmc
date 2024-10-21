@@ -98,6 +98,7 @@ RUN yum install -y epel-release && \
 # Set up environment variables for shared libraries
 ENV LD_LIBRARY_PATH=/usr/local/lib64:$LD_LIBRARY_PATH
 
+
 # Compiler configuration stage: gcc
 FROM base AS compiler-gcc
 
@@ -330,8 +331,8 @@ FROM dependencies AS python-dependencies
 ARG Python_ABI
 
 # Use Python from manylinux as the default Python
-ENV PYTHONHOME="/opt/python/${Python_ABI}"
 ENV PATH="/opt/python/${Python_ABI}/bin:${PATH}"
+RUN ln -sf /opt/python/${Python_ABI}/bin/python3 /usr/bin/python
 
 # Build and install NCrystal
 ARG NCrystal_TAG
