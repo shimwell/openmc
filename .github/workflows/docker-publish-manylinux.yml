@@ -64,12 +64,6 @@ jobs:
           build-args: >
             MANYLINUX_IMAGE=${{ matrix.manylinux_image }},
             COMPILER=${{ matrix.compiler }}
-
-      - name: Setup tmate debug session
-        if: ${{ failure() }}
-        uses: mxschmitt/action-tmate@v3
-        timeout-minutes: 200
-
   push_stable_ci_img:
     needs: [build-dependency-and-test-img]
     runs-on: ubuntu-latest
