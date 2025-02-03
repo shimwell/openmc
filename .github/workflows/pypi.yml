@@ -47,7 +47,7 @@ jobs:
             HDF5_ROOT=$(brew --prefix hdf5)
           CIBW_BUILD_FRONTEND: "build"
         with:
-          package-dir: openmc
+          package-dir: .
           output-dir: wheelhouse
 
       - name: Publish a Python distribution to TestPyPI
