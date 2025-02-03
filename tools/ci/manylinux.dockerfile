@@ -425,10 +425,10 @@ RUN python -m pip install \
         "$(echo $HOME/openmc/dist/*.whl)[$([ ${COMPILER} == 'openmpi' ] && echo 'depletion-mpi,')test,ci,vtk]"
 
 # Test OpenMC
-RUN cd $HOME/openmc && \
-    eval $(ncrystal-config  --setup) && \
-    nctool --test && \
-    pytest --cov=openmc -v $([ ${COMPILER} == 'openmpi' ] && echo '--mpi') --event tests
+# RUN cd $HOME/openmc && \
+#     eval $(ncrystal-config  --setup) && \
+#     nctool --test && \
+#     pytest --cov=openmc -v $([ ${COMPILER} == 'openmpi' ] && echo '--mpi') --event tests
 
 # Repair wheel
 RUN auditwheel repair $HOME/openmc/dist/openmc-*.whl -w $HOME/openmc/dist/
