@@ -55,12 +55,12 @@ ARG NETCDF_TAG="v4.9.2"
 ARG MOAB_TAG="5.5.1"
 ARG EMBREE_TAG="v4.3.3"
 ARG DD_TAG="v1.1.0"
-ARG DAGMC_TAG="v3.2.3"
+ARG DAGMC_TAG="v3.2.4"
 ARG NCrystal_TAG="v3.9.7"
 ARG PYBIND_TAG="v2.13.6"
 ARG XTENSOR_PYTHON_TAG="0.27.0"
 ARG VECTFIT_TAG="master"
-ARG LIBMESH_TAG="v1.7.2"
+ARG LIBMESH_TAG="v1.7.6"
 ARG MCPL_TAG="v1.6.2"
 
 
@@ -72,7 +72,7 @@ ENV TZ=America/Chicago
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
 # Set Home directory
-ENV HOME /root
+ENV HOME=/root
 WORKDIR $HOME
 
 # Setup Epel repository and install build dependencies
@@ -287,22 +287,22 @@ RUN git clone --depth 1 -b ${DAGMC_TAG} https://github.com/svalinn/DAGMC.git dag
     rm -rf dagmc
 
 # Build and install libMesh
-ARG LIBMESH_TAG
-RUN git clone --depth 1 -b ${LIBMESH_TAG} https://github.com/libMesh/libmesh.git libmesh && \
-    cd libmesh && \
-    git submodule update --init --recursive && \
-    mkdir build && cd build && \
-    export METHODS="opt" && \
-    ../configure \
-        $([ ${COMPILER} = 'openmpi' ] && echo '--enable-mpi' || echo '--disable-mpi') \
-        --prefix=/usr/local \
-        --enable-exodus \
-        --disable-netcdf-4 \
-        --disable-eigen \
-        --disable-lapack && \
-    make -j$(nproc) && make install && \
-    cd ../.. && \
-    rm -rf libmesh
+# ARG LIBMESH_TAG
+# RUN git clone --depth 1 -b ${LIBMESH_TAG} https://github.com/libMesh/libmesh.git libmesh && \
+#     cd libmesh && \
+#     git submodule update --init --recursive && \
+#     mkdir build && cd build && \
+#     export METHODS="opt" && \
+#     ../configure \
+#         $([ ${COMPILER} = 'openmpi' ] && echo '--enable-mpi' || echo '--disable-mpi') \
+#         --prefix=/usr/local \
+#         --enable-exodus \
+#         --disable-netcdf-4 \
+#         --disable-eigen \
+#         --disable-lapack && \
+#     make -j$(nproc) && make install && \
+#     cd ../.. && \
+#     rm -rf libmesh
 
 # Build and install MCPL
 ARG MCPL_TAG
@@ -379,12 +379,12 @@ RUN git clone --depth 1 -b ${XTENSOR_PYTHON_TAG} https://github.com/xtensor-stac
     rm -rf xtensor-python
 
 # Build and install vectfit
-ARG VECTFIT_TAG
-RUN git clone --depth 1 -b ${VECTFIT_TAG} https://github.com/liangjg/vectfit.git vectfit && \
-    cd vectfit && \
-    python -m pip install . && \
-    cd .. && \
-    rm -rf vectfit
+# ARG VECTFIT_TAG
+# RUN git clone --depth 1 -b ${VECTFIT_TAG} https://github.com/liangjg/vectfit.git vectfit && \
+#     cd vectfit && \
+#     python -m pip install . && \
+#     cd .. && \
+#     rm -rf vectfit
 
 
 # OpenMC stage
@@ -412,7 +412,8 @@ RUN export SKBUILD_CMAKE_ARGS="-DOPENMC_USE_MPI=$([ ${COMPILER} == 'openmpi' ] &
                         -DOPENMC_ENABLE_PROFILE=${OPENMC_ENABLE_PROFILE}; \
                         -DOPENMC_ENABLE_COVERAGE=${OPENMC_ENABLE_COVERAGE}; \
                         -DOPENMC_USE_DAGMC=${OPENMC_USE_DAGMC}; \
-                        -DOPENMC_USE_LIBMESH=${OPENMC_USE_LIBMESH}; \
+                        -DOPENMC_USE_LIBMESH=OFF; \
+                        # -DOPENMC_USE_LIBMESH=${OPENMC_USE_LIBMESH}; \
                         -DOPENMC_USE_MCPL=${OPENMC_USE_MCPL}; \
                         -DOPENMC_USE_NCRYSTAL=${OPENMC_USE_NCRYSTAL}; \
                         -DOPENMC_USE_UWUW=${OPENMC_USE_UWUW}" && \
