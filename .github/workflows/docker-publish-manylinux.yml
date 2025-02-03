@@ -3,10 +3,6 @@ name: Build & Publish Manylinux Images
 on:
   # allows us to run workflows manually
   workflow_dispatch:
-  pull_request:
-    branches:
-      - develop
-      - master
   push:
     paths:
       - "tools/ci/manylinux.dockerfile"
