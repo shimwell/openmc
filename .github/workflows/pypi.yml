@@ -20,10 +20,10 @@ jobs:
         include:
           - os: ubuntu-latest
             arch: manylinux_x86_64
-          - os: macos-13
-            arch: macosx_x86_64
-          - os: macos-14
-            arch: macosx_arm64
+          # - os: macos-13
+          #   arch: macosx_x86_64
+          # - os: macos-14
+          #   arch: macosx_arm64
 
     steps:
       - name: Checkout repository
@@ -49,7 +49,6 @@ jobs:
         with:
           package-dir: openmc
           output-dir: wheelhouse
-          config-file: "{package}/pyproject.toml"
 
       - name: Publish a Python distribution to TestPyPI
         uses: pypa/gh-action-pypi-publish@release/v1
