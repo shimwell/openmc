@@ -386,7 +386,7 @@ ARG VECTFIT_TAG
 #     cd .. && \
 #     rm -rf vectfit
 
-RUN pip install encodings
+ENV PYTHONHOME=""
 
 # OpenMC stage
 FROM python-dependencies AS openmc
