@@ -38,9 +38,9 @@ ARG OPENMC_BUILD_TESTS="ON"
 ARG OPENMC_ENABLE_PROFILE="OFF"
 ARG OPENMC_ENABLE_COVERAGE="OFF"
 ARG OPENMC_USE_DAGMC="ON"
-ARG OPENMC_USE_LIBMESH="ON"
-ARG OPENMC_USE_MCPL="ON"
-ARG OPENMC_USE_NCRYSTAL="ON"
+ARG OPENMC_USE_LIBMESH="OFF"
+ARG OPENMC_USE_MCPL="OFF"
+ARG OPENMC_USE_NCRYSTAL="OFF"
 ARG OPENMC_USE_UWUW="OFF"
 
 # Configure dependencies tags
@@ -334,49 +334,49 @@ ENV PYTHONHOME="/opt/python/${Python_ABI}"
 ENV PATH="/opt/python/${Python_ABI}/bin:${PATH}"
 
 # Build and install NCrystal
-ARG NCrystal_TAG
-RUN git clone --depth 1 -b ${NCrystal_TAG} https://github.com/mctools/ncrystal.git ncrystal && \
-    cd ncrystal && \
-    mkdir build && cd build && \
-    cmake .. \
-        -DCMAKE_INSTALL_PREFIX=/usr/local \
-        -DBUILD_SHARED_LIBS=ON \
-        -DNCRYSTAL_NOTOUCH_CMAKE_BUILD_TYPE=ON \
-        -DNCRYSTAL_MODIFY_RPATH=OFF \
-        -DCMAKE_BUILD_TYPE=Release \
-        -DNCRYSTAL_ENABLE_EXAMPLES=OFF \
-        -DNCRYSTAL_ENABLE_SETUPSH=OFF \
-        -DNCRYSTAL_ENABLE_DATA=EMBED \
-        -DPython3_EXECUTABLE=$(which python) && \
-    make -j$(nproc) && make install && \
-    cd ../.. && \
-    rm -rf ncrystal
+# ARG NCrystal_TAG
+# RUN git clone --depth 1 -b ${NCrystal_TAG} https://github.com/mctools/ncrystal.git ncrystal && \
+#     cd ncrystal && \
+#     mkdir build && cd build && \
+#     cmake .. \
+#         -DCMAKE_INSTALL_PREFIX=/usr/local \
+#         -DBUILD_SHARED_LIBS=ON \
+#         -DNCRYSTAL_NOTOUCH_CMAKE_BUILD_TYPE=ON \
+#         -DNCRYSTAL_MODIFY_RPATH=OFF \
+#         -DCMAKE_BUILD_TYPE=Release \
+#         -DNCRYSTAL_ENABLE_EXAMPLES=OFF \
+#         -DNCRYSTAL_ENABLE_SETUPSH=OFF \
+#         -DNCRYSTAL_ENABLE_DATA=EMBED \
+#         -DPython3_EXECUTABLE=$(which python) && \
+#     make -j$(nproc) && make install && \
+#     cd ../.. && \
+#     rm -rf ncrystal
 
 # Build and install pybind
-ARG PYBIND_TAG
-RUN git clone --depth 1 -b ${PYBIND_TAG} https://github.com/pybind/pybind11.git pybind11 && \
-    cd pybind11 && \
-    mkdir build && cd build && \
-    cmake .. \
-        -DCMAKE_INSTALL_PREFIX=/usr/local && \
-    make -j$(nproc) && make install && \
-    cd .. && \
-    python -m pip install . && \
-    cd .. && \
-    rm -rf pybind11 
+# ARG PYBIND_TAG
+# RUN git clone --depth 1 -b ${PYBIND_TAG} https://github.com/pybind/pybind11.git pybind11 && \
+#     cd pybind11 && \
+#     mkdir build && cd build && \
+#     cmake .. \
+#         -DCMAKE_INSTALL_PREFIX=/usr/local && \
+#     make -j$(nproc) && make install && \
+#     cd .. && \
+#     python -m pip install . && \
+#     cd .. && \
+#     rm -rf pybind11 
 
-# Build and install xtensor-python
-ARG XTENSOR_PYTHON_TAG
-RUN git clone --depth 1 -b ${XTENSOR_PYTHON_TAG} https://github.com/xtensor-stack/xtensor-python.git xtensor-python && \
-    cd xtensor-python && \
-    mkdir build && cd build && \
-    python -m pip install numpy && \
-    cmake .. \
-        -DCMAKE_INSTALL_PREFIX=/usr/local \
-        -DNUMPY_INCLUDE_DIRS=$(python -c "import numpy; print(numpy.get_include())") && \
-    make -j$(nproc) && make install && \
-    cd ../.. && \
-    rm -rf xtensor-python
+# # Build and install xtensor-python
+# ARG XTENSOR_PYTHON_TAG
+# RUN git clone --depth 1 -b ${XTENSOR_PYTHON_TAG} https://github.com/xtensor-stack/xtensor-python.git xtensor-python && \
+#     cd xtensor-python && \
+#     mkdir build && cd build && \
+#     python -m pip install numpy && \
+#     cmake .. \
+#         -DCMAKE_INSTALL_PREFIX=/usr/local \
+#         -DNUMPY_INCLUDE_DIRS=$(python -c "import numpy; print(numpy.get_include())") && \
+#     make -j$(nproc) && make install && \
+#     cd ../.. && \
+#     rm -rf xtensor-python
 
 # Build and install vectfit
 ARG VECTFIT_TAG
