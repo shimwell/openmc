@@ -19,5 +19,11 @@ if [[ $NCRYSTAL = 'y' ]]; then
   nctool --test
 fi
 
+# Rename openmc to openmc-test
+mv openmc openmc-test
+
 # Run regression and unit tests
 pytest --cov=openmc -v $args tests
+
+# Rename to openmc back
+mv openmc-test openmc

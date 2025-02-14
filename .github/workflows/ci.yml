@@ -110,6 +110,7 @@ jobs:
           COMMIT_MESSAGE=$(git log $BRANCH_SHA -1 --pretty=%B | tr '\n' ' ')
           echo ${COMMIT_MESSAGE}
           echo "COMMIT_MESSAGE=${COMMIT_MESSAGE}" >> $GITHUB_ENV
+          echo "LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH" >> $GITHUB_ENV
 
       - name: Apt dependencies
         shell: bash
