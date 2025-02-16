@@ -1,5 +1,5 @@
 [build-system]
-requires = ["scikit-build-core", "ncrystal-core"]
+requires = ["scikit-build-core"]
 build-backend = "scikit_build_core.build"
 
 [project]
@@ -51,7 +51,6 @@ docs = [
 test = ["packaging", "pytest", "pytest-cov", "colorama", "openpyxl"]
 ci = ["cpp-coveralls", "coveralls"]
 vtk = ["vtk"]
-ncrystal = ["ncrystal"]
 
 [project.urls]
 Homepage = "https://openmc.org"
