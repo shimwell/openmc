@@ -1,4 +1,5 @@
 import os
+import sys
 import glob
 import importlib.metadata
 from openmc.arithmetic import *

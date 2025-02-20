@@ -25,6 +25,8 @@
 
 # Configure base image
 ARG MANYLINUX_IMAGE=manylinux_2_28_x86_64
+# ARG MANYLINUX_IMAGE=manylinux_2_24_x86_64
+# ARG MANYLINUX_IMAGE=manylinux2014_x86_64
 
 # Configure Compiler to use (gcc or openmpi)
 ARG COMPILER="gcc"
@@ -85,7 +87,10 @@ RUN yum install -y epel-release && \
         gcc-c++ \
         gcc-gfortran \
         make \
-        python3.11-devel \
+        python3.12-devel \
+        # python3.10-devel \
+        # python3.10-dev \
+        # python3.10-venv \
         zlib-devel \
         curl-devel \
         eigen3-devel \
@@ -185,16 +190,16 @@ RUN git clone --depth 1 -b ${CATCH2_TAG} https://github.com/catchorg/Catch2.git 
     rm -rf catch2
 
 # Build and install NJOY2016
-ARG NJOY2016_TAG
-RUN git clone --depth 1 -b ${NJOY2016_TAG} https://github.com/njoy/njoy2016.git njoy && \
-    cd njoy && \
-    mkdir build && cd build && \
-    cmake .. \
-        -DCMAKE_INSTALL_PREFIX=/usr/local \
-        -Dstatic=ON && \
-    make -j$(nproc) && make install && \
-    cd ../.. && \
-    rm -rf njoy
+# ARG NJOY2016_TAG
+# RUN git clone --depth 1 -b ${NJOY2016_TAG} https://github.com/njoy/njoy2016.git njoy && \
+#     cd njoy && \
+#     mkdir build && cd build && \
+#     cmake .. \
+#         -DCMAKE_INSTALL_PREFIX=/usr/local \
+#         -Dstatic=ON && \
+#     make -j$(nproc) && make install && \
+#     cd ../.. && \
+#     rm -rf njoy
 
 # Build and install HDF5
 ARG HDF5_TAG
@@ -287,33 +292,33 @@ RUN git clone --depth 1 -b ${DAGMC_TAG} https://github.com/svalinn/DAGMC.git dag
     rm -rf dagmc
 
 # Build and install libMesh
-ARG LIBMESH_TAG
-RUN git clone --depth 1 -b ${LIBMESH_TAG} https://github.com/libMesh/libmesh.git libmesh && \
-    cd libmesh && \
-    git submodule update --init --recursive && \
-    mkdir build && cd build && \
-    export METHODS="opt" && \
-    ../configure \
-        $([ ${COMPILER} = 'openmpi' ] && echo '--enable-mpi' || echo '--disable-mpi') \
-        --prefix=/usr/local \
-        --enable-exodus \
-        --disable-netcdf-4 \
-        --disable-eigen \
-        --disable-lapack && \
-    make -j$(nproc) && make install && \
-    cd ../.. && \
-    rm -rf libmesh
+# ARG LIBMESH_TAG
+# RUN git clone --depth 1 -b ${LIBMESH_TAG} https://github.com/libMesh/libmesh.git libmesh && \
+#     cd libmesh && \
+#     git submodule update --init --recursive && \
+#     mkdir build && cd build && \
+#     export METHODS="opt" && \
+#     ../configure \
+#         $([ ${COMPILER} = 'openmpi' ] && echo '--enable-mpi' || echo '--disable-mpi') \
+#         --prefix=/usr/local \
+#         --enable-exodus \
+#         --disable-netcdf-4 \
+#         --disable-eigen \
+#         --disable-lapack && \
+#     make -j$(nproc) && make install && \
+#     cd ../.. && \
+#     rm -rf libmesh
 
 # Build and install MCPL
-ARG MCPL_TAG
-RUN git clone --depth 1 -b ${MCPL_TAG} https://github.com/mctools/mcpl.git mcpl && \
-    cd mcpl && \
-    mkdir build && cd build && \
-    cmake .. \
-        -DCMAKE_INSTALL_PREFIX=/usr/local && \
-    make -j$(nproc) && make install && \
-    cd ../.. && \
-    rm -rf mcpl
+# ARG MCPL_TAG
+# RUN git clone --depth 1 -b ${MCPL_TAG} https://github.com/mctools/mcpl.git mcpl && \
+#     cd mcpl && \
+#     mkdir build && cd build && \
+#     cmake .. \
+#         -DCMAKE_INSTALL_PREFIX=/usr/local && \
+#     make -j$(nproc) && make install && \
+#     cd ../.. && \
+#     rm -rf mcpl
 
 # Download and extract HDF5 data
 # RUN wget -q -O - https://anl.box.com/shared/static/teaup95cqv8s9nn56hfn7ku8mmelr95p.xz | tar -C $HOME -xJ
@@ -330,11 +335,12 @@ FROM dependencies AS python-dependencies
 ARG Python_ABI
 
 # Use Python from manylinux as the default Python
-ENV PYTHONHOME="/opt/python/${Python_ABI}"
+ENV PYTHONHOME=""
+# ENV PYTHONHOME="/opt/python/${Python_ABI}"
 ENV PATH="/opt/python/${Python_ABI}/bin:${PATH}"
 
 # Build and install NCrystal
-ARG NCrystal_TAG
+# ARG NCrystal_TAG
 # RUN git clone --depth 1 -b ${NCrystal_TAG} https://github.com/mctools/ncrystal.git ncrystal && \
 #     cd ncrystal && \
 #     mkdir build && cd build && \
@@ -412,9 +418,9 @@ RUN export SKBUILD_CMAKE_ARGS="-DOPENMC_USE_MPI=$([ ${COMPILER} == 'openmpi' ] &
                         -DOPENMC_ENABLE_PROFILE=${OPENMC_ENABLE_PROFILE}; \
                         -DOPENMC_ENABLE_COVERAGE=${OPENMC_ENABLE_COVERAGE}; \
                         -DOPENMC_USE_DAGMC=${OPENMC_USE_DAGMC}; \
-                        -DOPENMC_USE_LIBMESH=${OPENMC_USE_LIBMESH}; \
-                        -DOPENMC_USE_MCPL=${OPENMC_USE_MCPL}; \
-                        -DOPENMC_USE_NCRYSTAL=${OPENMC_USE_NCRYSTAL}; \
+                        # -DOPENMC_USE_LIBMESH=${OPENMC_USE_LIBMESH}; \
+                        # -DOPENMC_USE_MCPL=${OPENMC_USE_MCPL}; \
+                        # -DOPENMC_USE_NCRYSTAL=${OPENMC_USE_NCRYSTAL}; \
                         -DOPENMC_USE_UWUW=${OPENMC_USE_UWUW}" && \
     cd $HOME/openmc && \
     python -m build . -w
@@ -433,6 +439,7 @@ RUN python -m pip install \
 RUN auditwheel repair $HOME/openmc/dist/openmc-*.whl -w $HOME/openmc/dist/
 
 # Test repaired wheel
-RUN python -m pip uninstall openmc -y && \
-    python -m pip install $HOME/openmc/dist/*manylinux**.whl && \
-    openmc --version
+RUN python -m pip uninstall openmc -y
+RUN ls $HOME/openmc/dist/*manylinux**.whl
+RUN python -m pip install $HOME/openmc/dist/*manylinux**.whl
+RUN openmc --version
