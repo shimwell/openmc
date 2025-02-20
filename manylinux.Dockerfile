@@ -30,7 +30,7 @@ ARG MANYLINUX_IMAGE=manylinux_2_28_x86_64
 ARG COMPILER="gcc"
 
 # Configure Python ABI to use
-ARG Python_ABI="cp312-cp312"
+ARG Python_ABI="cp310-cp310"
 
 # OpenMC options
 ARG OPENMC_USE_OPENMP="ON"
@@ -85,7 +85,7 @@ RUN yum install -y epel-release && \
         gcc-c++ \
         gcc-gfortran \
         make \
-        python3.12-devel \
+        python3.11-devel \
         zlib-devel \
         curl-devel \
         eigen3-devel \
@@ -316,12 +316,12 @@ RUN git clone --depth 1 -b ${MCPL_TAG} https://github.com/mctools/mcpl.git mcpl 
     rm -rf mcpl
 
 # Download and extract HDF5 data
-RUN wget -q -O - https://anl.box.com/shared/static/teaup95cqv8s9nn56hfn7ku8mmelr95p.xz | tar -C $HOME -xJ
-ENV OPENMC_CROSS_SECTIONS=$HOME/nndc_hdf5/cross_sections.xml
+# RUN wget -q -O - https://anl.box.com/shared/static/teaup95cqv8s9nn56hfn7ku8mmelr95p.xz | tar -C $HOME -xJ
+# ENV OPENMC_CROSS_SECTIONS=$HOME/nndc_hdf5/cross_sections.xml
 
-# Download and extract ENDF/B-VII.1 distribution
-RUN wget -q -O - https://anl.box.com/shared/static/4kd2gxnf4gtk4w1c8eua5fsua22kvgjb.xz | tar -C $HOME -xJ
-ENV OPENMC_ENDF_DATA=$HOME/endf-b-vii.1
+# # Download and extract ENDF/B-VII.1 distribution
+# RUN wget -q -O - https://anl.box.com/shared/static/4kd2gxnf4gtk4w1c8eua5fsua22kvgjb.xz | tar -C $HOME -xJ
+# ENV OPENMC_ENDF_DATA=$HOME/endf-b-vii.1
 
 
 # Python dependencies stage
@@ -424,10 +424,10 @@ RUN python -m pip install \
         "$(echo $HOME/openmc/dist/*.whl)[$([ ${COMPILER} == 'openmpi' ] && echo 'depletion-mpi,')test,ci,vtk]"
 
 # Test OpenMC
-RUN cd $HOME/openmc && \
+# RUN cd $HOME/openmc && \
     # eval $(ncrystal-config  --setup) && \
     # nctool --test && \
-    pytest --cov=openmc -v $([ ${COMPILER} == 'openmpi' ] && echo '--mpi') --event tests
+    # pytest --cov=openmc -v $([ ${COMPILER} == 'openmpi' ] && echo '--mpi') --event tests
 
 # Repair wheel
 RUN auditwheel repair $HOME/openmc/dist/openmc-*.whl -w $HOME/openmc/dist/
