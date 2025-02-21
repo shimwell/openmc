@@ -65,3 +65,6 @@ logging.level = "INFO"
 wheel.install-dir = "openmc"
 wheel.packages = ["openmc"]
 sdist.include = ["*.h5"]
+
+[project.scripts]
+openmc = "openmc._cli_openmc:main"
