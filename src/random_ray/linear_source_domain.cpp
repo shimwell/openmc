@@ -43,6 +43,9 @@ void LinearSourceDomain::update_neutron_source(double k_eff)
 #pragma omp parallel for
   for (int64_t sr = 0; sr < n_source_regions_; sr++) {
     int material = source_regions_.material(sr);
+    if (material == MATERIAL_VOID) {
+      continue;
+    }
     MomentMatrix invM = source_regions_.mom_matrix(sr).inverse();
 
     for (int g_out = 0; g_out < negroups_; g_out++) {
@@ -75,13 +78,19 @@ void LinearSourceDomain::update_neutron_source(double k_eff)
       source_regions_.source(sr, g_out) =
         (scatter_flat + fission_flat * inverse_k_eff) / sigma_t;
 
-      // Compute the linear source terms
-      // In the first 10 iterations when the centroids and spatial moments
-      // are not well known, we will leave the source gradients as zero
-      // so as to avoid causing any numerical instability.
-      if (simulation::current_batch > 10) {
+      // Compute the linear source terms. In the first 10 iterations when the
+      // centroids and spatial moments are not well known, we will leave the
+      // source gradients as zero so as to avoid causing any numerical
+      // instability. If a negative source is encountered, this region must be
+      // very small/noisy or have poorly developed spatial moments, so we zero
+      // the source gradients (effectively making this a flat source region
+      // temporarily), so as to improve stability.
+      if (simulation::current_batch > 10 &&
+          source_regions_.source(sr, g_out) >= 0.0) {
         source_regions_.source_gradients(sr, g_out) =
           invM * ((scatter_linear + fission_linear * inverse_k_eff) / sigma_t);
+      } else {
+        source_regions_.source_gradients(sr, g_out) = {0.0, 0.0, 0.0};
       }
     }
   }
@@ -118,10 +127,13 @@ void LinearSourceDomain::normalize_scalar_flux_and_volumes(
     source_regions_.centroid_t(sr) += source_regions_.centroid_iteration(sr);
     source_regions_.mom_matrix_t(sr) += source_regions_.mom_matrix(sr);
     source_regions_.volume_t(sr) += source_regions_.volume(sr);
+    source_regions_.volume_sq_t(sr) += source_regions_.volume_sq(sr);
     source_regions_.volume_naive(sr) =
       source_regions_.volume(sr) * normalization_factor;
     source_regions_.volume(sr) =
       source_regions_.volume_t(sr) * volume_normalization_factor;
+    source_regions_.volume_sq(sr) =
+      source_regions_.volume_sq_t(sr) / source_regions_.volume_t(sr);
     if (source_regions_.volume_t(sr) > 0.0) {
       double inv_volume = 1.0 / source_regions_.volume_t(sr);
       source_regions_.centroid(sr) = source_regions_.centroid_t(sr);
@@ -135,8 +147,13 @@ void LinearSourceDomain::normalize_scalar_flux_and_volumes(
 void LinearSourceDomain::set_flux_to_flux_plus_source(
   int64_t sr, double volume, int g)
 {
-  source_regions_.scalar_flux_new(sr, g) /= volume;
-  source_regions_.scalar_flux_new(sr, g) += source_regions_.source(sr, g);
+  int material = source_regions_.material(sr);
+  if (material == MATERIAL_VOID) {
+    FlatSourceDomain::set_flux_to_flux_plus_source(sr, volume, g);
+  } else {
+    source_regions_.scalar_flux_new(sr, g) /= volume;
+    source_regions_.scalar_flux_new(sr, g) += source_regions_.source(sr, g);
+  }
   source_regions_.flux_moments_new(sr, g) *= (1.0 / volume);
 }
 

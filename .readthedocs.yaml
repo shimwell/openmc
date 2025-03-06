@@ -9,7 +9,9 @@ build:
     - cmake
     - libhdf5-dev
     - libpng-dev
-
+  jobs:
+    post_checkout:
+      - git fetch --unshallow || true
 sphinx:
   configuration: docs/source/conf.py
 
