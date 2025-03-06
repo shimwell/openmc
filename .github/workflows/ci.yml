@@ -64,7 +64,7 @@ jobs:
       mpi=${{ matrix.mpi }}, dagmc=${{ matrix.dagmc }},
       libmesh=${{ matrix.libmesh }}, event=${{ matrix.event }}
       vectfit=${{ matrix.vectfit }})"
-    continue-on-error: true
+
     env:
       MPI: ${{ matrix.mpi }}
       PHDF5: ${{ matrix.mpi }}
