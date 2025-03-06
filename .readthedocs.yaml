@@ -6,7 +6,6 @@ build:
     python: "3.12"
   apt_packages:
     - g++
-    - cmake
     - libhdf5-dev
     - libpng-dev
   jobs:
