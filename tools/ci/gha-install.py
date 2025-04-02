@@ -4,7 +4,12 @@ import subprocess
 
 
 def install(omp=False, mpi=False, phdf5=False, dagmc=False, libmesh=False, ncrystal=False):
-    # List to store the CMake arguments
+    # Create build directory and change to it
+    shutil.rmtree('build', ignore_errors=True)
+    os.mkdir('build')
+    os.chdir('build')
+
+    # Build in debug mode by default with support for MCPL
     cmake_args = ['-DCMAKE_BUILD_TYPE=Debug', '-DOPENMC_USE_MCPL=on']
 
     # Turn off OpenMP if specified
@@ -33,9 +38,6 @@ def install(omp=False, mpi=False, phdf5=False, dagmc=False, libmesh=False, ncrys
         cmake_args.append('-DOPENMC_USE_LIBMESH=ON')
         libmesh_path = os.environ.get('HOME') + '/LIBMESH'
         cmake_args.append('-DCMAKE_PREFIX_PATH=' + libmesh_path)
-
-    if ncrystal:
-        cmake_args.append('-DOPENMC_USE_NCRYSTAL=ON')
 
     # Build in coverage mode for coverage testing
     cmake_args.append('-DOPENMC_ENABLE_COVERAGE=on')
@@ -67,11 +69,10 @@ def main():
     mpi = (os.environ.get('MPI') == 'y')
     phdf5 = (os.environ.get('PHDF5') == 'y')
     dagmc = (os.environ.get('DAGMC') == 'y')
-    ncrystal = (os.environ.get('NCRYSTAL') == 'y')
     libmesh = (os.environ.get('LIBMESH') == 'y')
 
     # Build and install
-    install(omp, mpi, phdf5, dagmc, libmesh, ncrystal)
+    install(omp, mpi, phdf5, dagmc, libmesh)
 
 if __name__ == '__main__':
     main()
