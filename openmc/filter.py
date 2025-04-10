@@ -1111,7 +1111,7 @@ class RealFilter(Filter):
 
         for pair0, pair1 in zip(bins[:-1], bins[1:]):
             # Successive pairs should be ordered
-            if pair1[1] < pair0[1]:
+            if pair1[1] <= pair0[1]:
                 raise ValueError('Values {} and {} appear to be out of order'
                                  .format(pair1[1], pair0[1]))
 
