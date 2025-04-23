@@ -81,7 +81,7 @@ WORKDIR $HOME
 RUN yum install -y epel-release && \
     yum config-manager --enable epel && \
     yum install -y \ 
-        cmake-3.26.5 \
+        cmake \
         wget \
         git \
         gcc \
@@ -103,7 +103,7 @@ RUN yum install -y epel-release && \
     yum clean all
 
 # Set up environment variables for shared libraries
-ENV LD_LIBRARY_PATH=/usr/local/lib:/usr/local/lib64:$LD_LIBRARY_PATH
+ENV LD_LIBRARY_PATH=/usr/lib:/usr/lib64:$LD_LIBRARY_PATH
 
 ENV CC=gcc
 ENV CXX=g++
@@ -122,26 +122,19 @@ ENV LD_LIBRARY_PATH=/usr/lib64/openmpi/lib:$LD_LIBRARY_PATH
 
 ARG COMPILER
 
-
-RUN pipx uninstall cmake
-RUN pipx install cmake==3.31.6
-
 # Build and install HDF5
 ARG HDF5_TAG
 RUN git clone --depth 1 -b ${HDF5_TAG} https://github.com/HDFGroup/hdf5.git hdf5 && \
     cd hdf5 && \
     mkdir build && cd build && \
     cmake .. \
-        -DCMAKE_INSTALL_PREFIX=/usr/local \
+        -DCMAKE_INSTALL_PREFIX=/usr \
         -DHDF5_ENABLE_PARALLEL=$([ ${COMPILER} == "openmpi" ] && echo "ON" || echo "OFF") \
         -DHDF5_BUILD_HL_LIB=ON \
         -DBUILD_SHARED_LIBS=ON && \
     make -j$(nproc) && make install && \
     cd ../.. && \
     rm -rf hdf5
-
-RUN pipx uninstall cmake
-RUN pipx install cmake==3.31.6
 
 # Build and install NetCDF
 ARG NETCDF_TAG
@@ -155,10 +148,6 @@ RUN git clone --depth 1 -b ${NETCDF_TAG} https://github.com/Unidata/netcdf-c.git
         -DENABLE_TESTS=OFF && \
     make -j$(nproc) && make install
 
-RUN pipx uninstall cmake
-RUN pipx install cmake==3.31.6
-
-ENV NETCDF_DIR=/usr/local
 
 # Build and install MOAB
 ARG MOAB_TAG
@@ -166,12 +155,12 @@ RUN git clone https://bitbucket.org/ahnaf-tahmid-chowdhury/moab.git moab && \
     cd moab && \
     git checkout c10c1ef343cbd45bd61bec626eb77a9c4741cd68 && \
     mkdir build && cd build && \
-    export NETCDF_DIR=/usr/local && \
+    export NETCDF_DIR=/usr && \
     cmake .. \
-        -DCMAKE_INSTALL_PREFIX=/usr/local \
+        -DCMAKE_INSTALL_PREFIX=/usr \
         -DENABLE_MPI=$([ ${COMPILER} == "openmpi" ] && echo "ON" || echo "OFF") \
         -DENABLE_HDF5=ON \
-        -DHDF5_ROOT=/usr/local \
+        -DHDF5_ROOT=/usr \
         -DENABLE_NETCDF=ON \
         -DNETCDF_ROOT=/usr \
         -DBUILD_SHARED_LIBS=ON \
@@ -188,7 +177,7 @@ RUN git clone --depth 1 -b ${GSL_LITE_TAG} https://github.com/gsl-lite/gsl-lite.
     cd gsl-lite && \
     mkdir build && cd build && \
     cmake .. \
-        -DCMAKE_INSTALL_PREFIX=/usr/local && \
+        -DCMAKE_INSTALL_PREFIX=/usr && \
     make -j$(nproc) && make install && \
     cd ../.. && \
     rm -rf gsl-lite
@@ -199,7 +188,7 @@ RUN git clone --depth 1 -b ${XTL_TAG} https://github.com/xtensor-stack/xtl.git x
     cd xtl && \
     mkdir build && cd build && \
     cmake .. \
-        -DCMAKE_INSTALL_PREFIX=/usr/local && \
+        -DCMAKE_INSTALL_PREFIX=/usr && \
     make -j$(nproc) && make install && \
     cd ../.. && \
     rm -rf xtl
@@ -210,7 +199,7 @@ RUN git clone --depth 1 -b ${XTENSOR_TAG} https://github.com/xtensor-stack/xtens
     cd xtensor && \
     mkdir build && cd build && \
     cmake .. \
-        -DCMAKE_INSTALL_PREFIX=/usr/local && \
+        -DCMAKE_INSTALL_PREFIX=/usr && \
     make -j$(nproc) && make install && \
     cd ../.. && \
     rm -rf xtensor
@@ -231,7 +220,7 @@ RUN git clone --depth 1 -b ${CATCH2_TAG} https://github.com/catchorg/Catch2.git 
     cd catch2 && \
     mkdir build && cd build && \
     cmake .. \
-        -DCMAKE_INSTALL_PREFIX=/usr/local && \
+        -DCMAKE_INSTALL_PREFIX=/usr && \
     make -j$(nproc) && make install && \
     cd ../.. && \
     rm -rf catch2
@@ -242,7 +231,7 @@ RUN git clone --depth 1 -b ${CATCH2_TAG} https://github.com/catchorg/Catch2.git 
 #     cd njoy && \
 #     mkdir build && cd build && \
 #     cmake .. \
-#         -DCMAKE_INSTALL_PREFIX=/usr/local \
+#         -DCMAKE_INSTALL_PREFIX=/usr \
 #         -Dstatic=ON && \
 #     make -j$(nproc) && make install && \
 #     cd ../.. && \
@@ -254,7 +243,7 @@ RUN git clone --depth 1 -b ${EMBREE_TAG} https://github.com/embree/embree.git em
     cd embree && \
     mkdir build && cd build && \
     cmake .. \
-        -DCMAKE_INSTALL_PREFIX=/usr/local \
+        -DCMAKE_INSTALL_PREFIX=/usr \
         -DEMBREE_TASKING_SYSTEM=INTERNAL \
         -DEMBREE_ISPC_SUPPORT=OFF \
         -DEMBREE_TUTORIALS=OFF && \
@@ -262,13 +251,18 @@ RUN git clone --depth 1 -b ${EMBREE_TAG} https://github.com/embree/embree.git em
     cd ../.. && \
     rm -rf embree
 
+RUN pipx uninstall cmake
+RUN pipx install cmake==3.31.6
+
 # Build and install Double Down
 ARG DD_TAG
 RUN git clone --depth 1 -b ${DD_TAG} https://github.com/pshriwise/double-down.git dd && \
     cd dd && \
     mkdir build && cd build && \
     cmake .. \
-        -DCMAKE_INSTALL_PREFIX=/usr/local && \
+        -DHDF5_ROOT=/usr \
+        -DHDF5_DIR=/usr/lib64/cmake/hdf5 \
+        -DCMAKE_INSTALL_PREFIX=/usr && \
     make -j$(nproc) && make install && \
     cd ../.. && \
     rm -rf dd
@@ -279,9 +273,9 @@ RUN git clone --depth 1 -b ${DAGMC_TAG} https://github.com/svalinn/DAGMC.git dag
     cd dagmc && \
     mkdir build && cd build && \
     cmake .. \
-        -DCMAKE_INSTALL_PREFIX=/usr/local \
-        -DMOAB_DIR=/usr/local \
-        -Ddd_ROOT=/usr/local \
+        -DCMAKE_INSTALL_PREFIX=/usr \
+        -DMOAB_DIR=/usr \
+        -Ddd_ROOT=/usr \
         -DBUILD_TALLY=ON \
         -DBUILD_UWUW=ON \
         -DDOUBLE_DOWN=ON \
@@ -300,7 +294,7 @@ RUN git clone --depth 1 -b ${DAGMC_TAG} https://github.com/svalinn/DAGMC.git dag
 #     export METHODS="opt" && \
 #     ../configure \
 #         $([ ${COMPILER} = 'openmpi' ] && echo '--enable-mpi' || echo '--disable-mpi') \
-#         --prefix=/usr/local \
+#         --prefix=/usr \
 #         --enable-exodus \
 #         --disable-netcdf-4 \
 #         --disable-eigen \
@@ -315,7 +309,7 @@ RUN git clone --depth 1 -b ${DAGMC_TAG} https://github.com/svalinn/DAGMC.git dag
 #     cd mcpl && \
 #     mkdir build && cd build && \
 #     cmake .. \
-#         -DCMAKE_INSTALL_PREFIX=/usr/local && \
+#         -DCMAKE_INSTALL_PREFIX=/usr && \
 #     make -j$(nproc) && make install && \
 #     cd ../.. && \
 #     rm -rf mcpl
@@ -338,24 +332,6 @@ ENV PYTHONHOME=""
 # ENV PYTHONHOME="/opt/python/${Python_ABI}"
 ENV PATH="/opt/python/${Python_ABI}/bin:${PATH}"
 
-# Build and install NCrystal
-# ARG NCrystal_TAG
-# RUN git clone --depth 1 -b ${NCrystal_TAG} https://github.com/mctools/ncrystal.git ncrystal && \
-#     cd ncrystal && \
-#     mkdir build && cd build && \
-#     cmake .. \
-#         -DCMAKE_INSTALL_PREFIX=/usr/local \
-#         -DBUILD_SHARED_LIBS=ON \
-#         -DNCRYSTAL_NOTOUCH_CMAKE_BUILD_TYPE=ON \
-#         -DNCRYSTAL_MODIFY_RPATH=OFF \
-#         -DCMAKE_BUILD_TYPE=Release \
-#         -DNCRYSTAL_ENABLE_EXAMPLES=OFF \
-#         -DNCRYSTAL_ENABLE_SETUPSH=OFF \
-#         -DNCRYSTAL_ENABLE_DATA=EMBED \
-#         -DPython3_EXECUTABLE=$(which python) && \
-#     make -j$(nproc) && make install && \
-#     cd ../.. && \
-#     rm -rf ncrystal
 
 # Build and install pybind
 # ARG PYBIND_TAG
@@ -363,7 +339,7 @@ ENV PATH="/opt/python/${Python_ABI}/bin:${PATH}"
 #     cd pybind11 && \
 #     mkdir build && cd build && \
 #     cmake .. \
-#         -DCMAKE_INSTALL_PREFIX=/usr/local && \
+#         -DCMAKE_INSTALL_PREFIX=/usr && \
 #     make -j$(nproc) && make install && \
 #     cd .. && \
 #     python -m pip install . && \
@@ -377,7 +353,7 @@ ENV PATH="/opt/python/${Python_ABI}/bin:${PATH}"
 #     mkdir build && cd build && \
 #     python -m pip install numpy && \
 #     cmake .. \
-#         -DCMAKE_INSTALL_PREFIX=/usr/local \
+#         -DCMAKE_INSTALL_PREFIX=/usr \
 #         -DNUMPY_INCLUDE_DIRS=$(python -c "import numpy; print(numpy.get_include())") && \
 #     make -j$(nproc) && make install && \
 #     cd ../.. && \
