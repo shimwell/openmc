@@ -54,7 +54,7 @@ ARG CATCH2_TAG="v3.7.1"
 ARG NJOY2016_TAG="2016.76"
 ARG HDF5_TAG="hdf5_1.14.4.3"
 ARG NETCDF_TAG="v4.9.3"
-ARG MOAB_TAG="5.5.1"
+ARG MOAB_TAG="5.5.0"
 ARG EMBREE_TAG="v4.3.3"
 ARG DD_TAG="v1.1.0"
 ARG DAGMC_TAG="v3.2.4"
@@ -81,7 +81,6 @@ WORKDIR $HOME
 RUN yum install -y epel-release && \
     yum config-manager --enable epel && \
     yum install -y \ 
-        cmake \
         wget \
         git \
         gcc \
@@ -101,6 +100,9 @@ RUN yum install -y epel-release && \
         openmpi-devel \
         fmt-devel && \
     yum clean all
+
+RUN pipx uninstall cmake
+RUN pipx install cmake==3.31.6
 
 # Set up environment variables for shared libraries
 ENV LD_LIBRARY_PATH=/usr/lib:/usr/lib64:$LD_LIBRARY_PATH
@@ -133,8 +135,7 @@ RUN git clone --depth 1 -b ${HDF5_TAG} https://github.com/HDFGroup/hdf5.git hdf5
         -DHDF5_BUILD_HL_LIB=ON \
         -DBUILD_SHARED_LIBS=ON && \
     make -j$(nproc) && make install && \
-    cd ../.. && \
-    rm -rf hdf5
+    cd ../..
 
 # Build and install NetCDF
 ARG NETCDF_TAG
@@ -151,11 +152,28 @@ RUN git clone --depth 1 -b ${NETCDF_TAG} https://github.com/Unidata/netcdf-c.git
 
 # Build and install MOAB
 ARG MOAB_TAG
-RUN git clone https://bitbucket.org/ahnaf-tahmid-chowdhury/moab.git moab && \
+# RUN git clone https://bitbucket.org/ahnaf-tahmid-chowdhury/moab.git moab && \
+#     cd moab && \
+#     git checkout c10c1ef343cbd45bd61bec626eb77a9c4741cd68 && \
+#     mkdir build && cd build && \
+#     export NETCDF_DIR=/usr && \
+#     cmake .. \
+#         -DCMAKE_INSTALL_PREFIX=/usr \
+#         -DENABLE_MPI=$([ ${COMPILER} == "openmpi" ] && echo "ON" || echo "OFF") \
+#         -DENABLE_HDF5=ON \
+#         -DHDF5_ROOT=/usr \
+#         -DENABLE_NETCDF=ON \
+#         -DNETCDF_ROOT=/usr \
+#         -DBUILD_SHARED_LIBS=ON \
+#         -DENABLE_BLASLAPACK=OFF \
+#         -DENABLE_PYMOAB=OFF && \
+#     make -j$(nproc) && make install && \
+#     cd ../.. && \
+#     rm -rf moab
+
+RUN git clone --depth 1 -b ${MOAB_TAG} https://bitbucket.org/fathomteam/moab.git moab && \
     cd moab && \
-    git checkout c10c1ef343cbd45bd61bec626eb77a9c4741cd68 && \
     mkdir build && cd build && \
-    export NETCDF_DIR=/usr && \
     cmake .. \
         -DCMAKE_INSTALL_PREFIX=/usr \
         -DENABLE_MPI=$([ ${COMPILER} == "openmpi" ] && echo "ON" || echo "OFF") \
@@ -169,7 +187,6 @@ RUN git clone https://bitbucket.org/ahnaf-tahmid-chowdhury/moab.git moab && \
     make -j$(nproc) && make install && \
     cd ../.. && \
     rm -rf moab
-
 
 # Build and install gsl-lite
 ARG GSL_LITE_TAG
@@ -251,8 +268,6 @@ RUN git clone --depth 1 -b ${EMBREE_TAG} https://github.com/embree/embree.git em
     cd ../.. && \
     rm -rf embree
 
-RUN pipx uninstall cmake
-RUN pipx install cmake==3.31.6
 
 # Build and install Double Down
 ARG DD_TAG
@@ -260,8 +275,6 @@ RUN git clone --depth 1 -b ${DD_TAG} https://github.com/pshriwise/double-down.gi
     cd dd && \
     mkdir build && cd build && \
     cmake .. \
-        -DHDF5_ROOT=/usr \
-        -DHDF5_DIR=/usr \
         -DCMAKE_INSTALL_PREFIX=/usr && \
     make -j$(nproc) && make install && \
     cd ../.. && \
