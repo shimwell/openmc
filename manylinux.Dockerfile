@@ -261,7 +261,7 @@ RUN git clone --depth 1 -b ${DD_TAG} https://github.com/pshriwise/double-down.gi
     mkdir build && cd build && \
     cmake .. \
         -DHDF5_ROOT=/usr \
-        -DHDF5_DIR=/usr/lib64/cmake/hdf5 \
+        -DHDF5_DIR=/usr \
         -DCMAKE_INSTALL_PREFIX=/usr && \
     make -j$(nproc) && make install && \
     cd ../.. && \
