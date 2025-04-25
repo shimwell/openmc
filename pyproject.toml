@@ -8,7 +8,7 @@ authors = [
     {name = "The OpenMC Development Team", email = "openmc@anl.gov"},
 ]
 description = "OpenMC"
-dynamic = ["version"]
+version = "0.15.3"
 requires-python = ">=3.10"
 license = {file = "LICENSE"}
 classifiers = [
