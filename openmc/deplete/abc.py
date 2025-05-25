@@ -126,8 +126,9 @@ class TransportOperator(ABC):
 
     Parameters
     ----------
-    chain_file : str
-        Path to the depletion chain XML file
+    chain_file : PathLike
+        Path to the depletion chain XML file that will be used in depletion
+        simulation or an instance of an openmc.deplete.Chain object.
     fission_q : dict, optional
         Dictionary of nuclides and their fission Q values [eV]. If not given,
         values will be pulled from the ``chain_file``.
@@ -148,8 +149,13 @@ class TransportOperator(ABC):
     def __init__(self, chain_file, fission_q=None, prev_results=None):
         self.output_dir = '.'
 
-        # Read depletion chain
-        self.chain = Chain.from_xml(chain_file, fission_q)
+        if isinstance(chain_file, PathLike):
+            # Read depletion chain
+            self.chain = Chain.from_xml(chain_file, fission_q)
+        elif isinstance(chain_file, Chain):
+            # Use depletion chain directly
+            self.chain = chain_file
+
         if prev_results is None:
             self.prev_res = None
         else:

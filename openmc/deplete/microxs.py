@@ -84,10 +84,16 @@ def get_microxs_and_flux(
     """
     # Save any original tallies on the model
     original_tallies = model.tallies
-
-    # Determine what reactions and nuclides are available in chain
-    chain_file = _resolve_chain_file_path(chain_file)
-    chain = Chain.from_xml(chain_file)
+    if isinstance(chain_file, (str, PathLike)):
+        chain_file_path = _resolve_chain_file_path(chain_file)
+        chain = Chain.from_xml(chain_file_path)
+    elif isinstance(chain_file, Chain):
+        chain = chain_file
+    else:
+        raise TypeError(
+            "chain_file must be a string, PathLike, or Chain instance"
+        )
+    
     if reactions is None:
         reactions = chain.reactions
     if not nuclides:
@@ -222,7 +228,7 @@ class MicroXS:
         cls,
         energies: Sequence[float] | str,
         multigroup_flux: Sequence[float],
-        chain_file: PathLike | None = None,
+        chain_file: PathLike | Chain | None = None,
         temperature: float = 293.6,
         nuclides: Sequence[str] | None = None,
         reactions: Sequence[str] | None = None,
@@ -242,9 +248,10 @@ class MicroXS:
             Energy group boundaries in [eV] or the name of the group structure
         multi_group_flux : iterable of float
             Energy-dependent multigroup flux values
-        chain_file : str, optional
+        chain_file : PathLike, optional
             Path to the depletion chain XML file that will be used in depletion
-            simulation.  Defaults to ``openmc.config['chain_file']``.
+            simulation or an instance of an openmc.deplete.Chain object.
+            Defaults to ``openmc.config['chain_file']``.
         temperature : int, optional
             Temperature for cross section evaluation in [K].
         nuclides : list of str, optional
@@ -262,6 +269,8 @@ class MicroXS:
         """
 
         check_type("temperature", temperature, (int, float))
+        check_type("chain_file", chain_file, (PathLike, Chain))
+        
         # if energy is string then use group structure of that name
         if isinstance(energies, str):
             energies = GROUP_STRUCTURES[energies]
@@ -275,8 +284,11 @@ class MicroXS:
         if len(multigroup_flux) != len(energies) - 1:
             raise ValueError('Length of flux array should be len(energies)-1')
 
-        chain_file_path = _resolve_chain_file_path(chain_file)
-        chain = Chain.from_xml(chain_file_path)
+        if isinstance(chain_file, PathLike):
+            chain_file_path = _resolve_chain_file_path(chain_file)
+            chain = Chain.from_xml(chain_file_path)
+        else:  # chain_file is of type Chain
+            chain = chain_file
 
         cross_sections = _find_cross_sections(model=None)
         nuclides_with_data = _get_nuclides_with_data(cross_sections)
