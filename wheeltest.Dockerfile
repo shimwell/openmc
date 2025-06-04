@@ -13,7 +13,7 @@ RUN apt update -y && apt upgrade -y && \
     apt install -y software-properties-common && \
     add-apt-repository ppa:deadsnakes/ppa && \
     apt update -y && \
-    apt install -y python${python_version} python${python_version}-venv python3-pip
+    apt install -y python${python_version} python${python_version}-venv python3-pip python${python_version}-dev
 
 RUN apt install libhdf5-dev -y
 
