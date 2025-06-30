@@ -69,8 +69,9 @@ def get_microxs_and_flux(
     ----------
     model : openmc.Model
         OpenMC model object. Must contain geometry, materials, and settings.
-    domains : list of openmc.Material or openmc.Cell or openmc.Universe, or openmc.MeshBase, or openmc.Filter
-        Domains in which to tally reaction rates, or a spatial tally filter.
+    domains : list of openmc.Material or openmc.Cell or openmc.Universe, or
+        openmc.MeshBase, or openmc.Filter Domains in which to tally reaction
+        rates, or a spatial tally filter.
     nuclides : list of str
         Nuclides to get cross sections for. If not specified, all burnable
         nuclides from the depletion chain file are used.
@@ -226,6 +227,75 @@ def get_microxs_and_flux(
 
     return fluxes, micros
 
+def get_microxs_from_multigroup2(
+    materials: openmc.Materials,
+    multigroup_fluxes: Sequence[Sequence[float]],
+    energy_group_structures: Sequence[Sequence[float] | str],
+    chain_file: cv.PathLike | Chain | None = None,
+    reactions: Sequence[str] | None = None,
+    **init_kwargs: dict,
+) -> list[MicroXS]:
+
+    # defaulting to not print terminal output during openmc.lib init
+    if init_kwargs == {}:
+        init_kwargs = {"output": False}
+
+        # Check material field
+    for i, material in enumerate(materials):
+        if not isinstance(material, openmc.Material):
+            raise TypeError(f"Entry {i}: 'material' must be an openmc.Material object")
+
+        # Check temperature and volume are set
+        if material.temperature is None:
+            raise ValueError(
+                f"Entry {i}: Material temperature must be set before depletion"
+            )
+
+    chain = _get_chain(chain_file)
+
+    cross_sections = _find_cross_sections(model=None)
+    nuclides_with_data = _get_nuclides_with_data(cross_sections)
+
+   # Gets all the nuclides within the user specified materials
+    nuclides = []
+    for material in materials:
+        for material_nuclides in material.get_nuclides():
+            if material_nuclides not in nuclides:
+                nuclides.append(material_nuclides)
+
+    # Get reaction MT values. If no reactions specified, default to the
+    # reactions available in the chain file
+    if reactions is None:
+        reactions = chain.reactions
+
+
+    # Create a material with all nuclides that have cross section data
+    mat_all_nucs = openmc.Material()
+    for nuc in nuclides:
+        if nuc in nuclides_with_data:
+            mat_all_nucs.add_nuclide(nuc, 1.0)
+    mat_all_nucs.set_density("atom/b-cm", 1.0)
+
+    # Create simple model containing the above material
+    surf1 = openmc.Sphere(boundary_type="vacuum")
+    surf1_cell = openmc.Cell(fill=mat_all_nucs, region=-surf1)
+    model = openmc.Model()
+    model.geometry = openmc.Geometry([surf1_cell])
+    model.settings = openmc.Settings(particles=1, batches=1, output={"summary": False})
+
+    _, micros_xs = get_microxs_and_flux(
+        model = model,
+        domains = materials,
+        nuclides = mat_all_nucs.get_nuclides(),
+        reactions = reactions,
+        energies = energy_group_structures,
+        reaction_rate_mode = "flux",
+        chain_file = chain_file,
+        path_statepoint = None
+        run_kwargs=init_kwargs
+    )
+
+    return micros_xs
 
 def get_microxs_from_multigroup(
     materials: openmc.Materials,
