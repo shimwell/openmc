@@ -2,8 +2,8 @@
 # Dockerfile for building the OpenMC project with support for various dependencies
 # and configurations. This Dockerfile allows you to build OpenMC with support
 # for GCC or OpenMPI compilers, along with several libraries like NJOY2016, HDF5,
-# NetCDF, MOAB, EMBREE, Double Down, DAGMC, NCrystal, PyBind11, Xtensor, Vectfit,
-# libMesh, and MCPL. Each of these dependencies is installed from their respective
+# NetCDF, MOAB, EMBREE, Double Down, DAGMC, PyBind11, Xtensor, Vectfit and
+# libMesh. Each of these dependencies is installed from their respective
 # repositories and tags.
 
 # The build process is split into stages:
@@ -41,8 +41,6 @@ ARG OPENMC_ENABLE_PROFILE="OFF"
 ARG OPENMC_ENABLE_COVERAGE="OFF"
 ARG OPENMC_USE_DAGMC="ON"
 ARG OPENMC_USE_LIBMESH="ON"
-ARG OPENMC_USE_MCPL="ON"
-ARG OPENMC_USE_NCRYSTAL="OFF"
 ARG OPENMC_USE_UWUW="OFF"
 
 # Configure dependencies tags
@@ -58,12 +56,10 @@ ARG MOAB_TAG="5.5.0"
 ARG EMBREE_TAG="v4.3.3"
 ARG DD_TAG="v1.1.0"
 ARG DAGMC_TAG="v3.2.4"
-ARG NCrystal_TAG="v3.9.7"
 ARG PYBIND_TAG="v2.13.6"
 ARG XTENSOR_PYTHON_TAG="0.27.0"
 ARG VECTFIT_TAG="master"
 ARG LIBMESH_TAG="v1.7.7"
-ARG MCPL_TAG="v1.6.2"
 
 
 # Base stage
@@ -316,16 +312,6 @@ RUN git clone --depth 1 -b ${DAGMC_TAG} https://github.com/svalinn/DAGMC.git dag
 #     cd ../.. && \
 #     rm -rf libmesh
 
-# Build and install MCPL
-# ARG MCPL_TAG
-# RUN git clone --depth 1 -b ${MCPL_TAG} https://github.com/mctools/mcpl.git mcpl && \
-#     cd mcpl && \
-#     mkdir build && cd build && \
-#     cmake .. \
-#         -DCMAKE_INSTALL_PREFIX=/usr && \
-#     make -j$(nproc) && make install && \
-#     cd ../.. && \
-#     rm -rf mcpl
 
 # Download and extract HDF5 data
 # RUN wget -q -O - https://anl.box.com/shared/static/teaup95cqv8s9nn56hfn7ku8mmelr95p.xz | tar -C $HOME -xJ
@@ -391,8 +377,6 @@ ARG OPENMC_ENABLE_PROFILE
 ARG OPENMC_ENABLE_COVERAGE
 ARG OPENMC_USE_DAGMC
 ARG OPENMC_USE_LIBMESH
-ARG OPENMC_USE_MCPL
-ARG OPENMC_USE_NCRYSTAL
 ARG OPENMC_USE_UWUW
 
 # Copy OpenMC source to docker image
@@ -406,8 +390,6 @@ RUN export SKBUILD_CMAKE_ARGS="-DOPENMC_USE_MPI=$([ ${COMPILER} == 'openmpi' ] &
                         -DOPENMC_ENABLE_COVERAGE=${OPENMC_ENABLE_COVERAGE}; \
                         -DOPENMC_USE_DAGMC=${OPENMC_USE_DAGMC}; \
                         # -DOPENMC_USE_LIBMESH=${OPENMC_USE_LIBMESH}; \
-                        # -DOPENMC_USE_MCPL=${OPENMC_USE_MCPL}; \
-                        # -DOPENMC_USE_NCRYSTAL=${OPENMC_USE_NCRYSTAL}; \
                         -DOPENMC_USE_UWUW=${OPENMC_USE_UWUW}" && \
     cd $HOME/openmc && \
     python -m build . -w
