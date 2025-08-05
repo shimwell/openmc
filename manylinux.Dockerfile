@@ -32,7 +32,7 @@ ARG MANYLINUX_IMAGE=manylinux_2_28_x86_64
 ARG COMPILER="gcc"
 
 # Configure Python ABI to use
-ARG Python_ABI="cp310-cp310"
+ARG Python_ABI="cp312-cp312"
 
 # OpenMC options
 ARG OPENMC_USE_OPENMP="ON"
