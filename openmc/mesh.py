@@ -841,6 +841,32 @@ class StructuredMesh(MeshBase):
                 f"with dimensions {self.dimension}"
             )
 
+def closest_index_to_point(self, x: float, y: float, z: float) -> int:
+    """Find the index of the mesh element closest to a given point.
+
+    Parameters
+    ----------
+    x : float
+        The x coordinate of the point in Cartesian coordinates.
+    y : float
+        The y coordinate of the point in Cartesian coordinates.
+    z : float
+        The z coordinate of the point in Cartesian coordinates.
+
+    Returns
+    -------
+    int
+        The index of the closest mesh element.
+    """
+
+    coord_arry = np.array([x,y,z])
+
+    squared_distance = np.sum((self.centroid - coord_arry) ** 2, axis=3)
+
+    min_indices = np.unravel_index(np.argmin(squared_distance), squared_distance.shape)
+
+    return min_indices
+
 
 class HasBoundingBox(Protocol):
     """Object that has a ``bounding_box`` attribute."""
