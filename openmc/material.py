@@ -2075,7 +2075,7 @@ class Materials(cv.CheckedList):
         micros = []
         fluxes = []
 
-        with openmc.lib.TemporarySession():
+        with openmc.lib.TemporarySession() as session:
             for material, flux, energy in zip(
                 self, multigroup_fluxes, energy_group_structures
             ):
@@ -2086,6 +2086,7 @@ class Materials(cv.CheckedList):
                     chain_file=chain,
                     temperature=temperature,
                     reactions=reactions,
+                    session=session
                 )
                 micros.append(micro_xs)
                 fluxes.append(material.volume)
