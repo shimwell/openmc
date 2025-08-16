@@ -2086,7 +2086,7 @@ class Materials(cv.CheckedList):
                     chain_file=chain,
                     temperature=temperature,
                     reactions=reactions,
-                    session=session
+                    session=session,
                 )
                 micros.append(micro_xs)
                 fluxes.append(material.volume)
