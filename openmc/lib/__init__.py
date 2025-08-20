@@ -13,20 +13,21 @@ functions or objects in :mod:`openmc.lib`, for example:
 """
 
 from ctypes import CDLL, c_bool, c_int
-import importlib.resources
 import os
-import sys
-
-
-# Determine shared-library suffix
-if sys.platform == 'darwin':
-    _suffix = 'dylib'
-else:
-    _suffix = 'so'
 
 if os.environ.get('READTHEDOCS', None) != 'True':
+    # Load libNCrystal first if it exists
+    try:
+        import subprocess
+        ncrystal_path = subprocess.check_output(["ncrystal-config", "--show", "libpath"], text=True).strip()
+        if os.path.isfile(ncrystal_path):
+            CDLL(ncrystal_path, mode=os.RTLD_GLOBAL)
+    except Exception:
+        pass # NCrystal is not installed
+
     # Open shared library
-    _filename = importlib.resources.files(__name__) / f'libopenmc.{_suffix}'
+    import openmc
+    _filename = openmc.lib[0]
     _dll = CDLL(str(_filename))  # TODO: Remove str() when Python 3.12+
 else:
     # For documentation builds, we don't actually have the shared library
