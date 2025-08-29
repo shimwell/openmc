@@ -228,6 +228,11 @@ void read_ce_cross_sections(const vector<vector<double>>& nuc_temps,
     }
     std::sort(new_tables.begin(), new_tables.end());
 
+    // Ensure data::thermal_scatt is sized so we can assign by index
+    if (data::thermal_scatt.empty()) {
+      data::thermal_scatt.resize(data::thermal_scatt_map.size());
+    }
+
     // Load new thermal tables for this material in alphabetical order
     for (const auto& name : new_tables) {
       LibraryKey key {Library::Type::thermal, name};
@@ -238,8 +243,10 @@ void read_ce_cross_sections(const vector<vector<double>>& nuc_temps,
       check_data_version(file_id);
       hid_t group = open_group(file_id, name.c_str());
       int i_table = data::thermal_scatt_map.at(name);
-      data::thermal_scatt.push_back(
-        make_unique<ThermalScattering>(group, thermal_temps[i_table]));
+      if (!data::thermal_scatt[i_table]) {
+        data::thermal_scatt[i_table] =
+          make_unique<ThermalScattering>(group, thermal_temps[i_table]);
+      }
       close_group(group);
       file_close(file_id);
       thermal_loaded.insert(name);
