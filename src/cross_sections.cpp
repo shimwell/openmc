@@ -25,6 +25,7 @@
 #include <cstdlib> // for getenv
 #include <filesystem>
 #include <unordered_set>
+#include <algorithm> // added for sorting
 
 namespace openmc {
 
@@ -183,94 +184,83 @@ void read_cross_sections_xml(pugi::xml_node root)
 void read_ce_cross_sections(const vector<vector<double>>& nuc_temps,
   const vector<vector<double>>& thermal_temps)
 {
-  std::unordered_set<std::string> already_read;
+  // Load CE nuclides alphabetically (deterministic log ordering) but
+  // restore per-material finalize() behavior matching original code.
 
-  // Construct a vector of nuclide names because we haven't loaded nuclide data
-  // yet, but we need to know the name of the i-th nuclide
+  // Construct name lookup vectors
   vector<std::string> nuclide_names(data::nuclide_map.size());
   vector<std::string> thermal_names(data::thermal_scatt_map.size());
-  for (const auto& kv : data::nuclide_map) {
-    nuclide_names[kv.second] = kv.first;
-  }
-  for (const auto& kv : data::thermal_scatt_map) {
-    thermal_names[kv.second] = kv.first;
-  }
+  for (const auto& kv : data::nuclide_map) nuclide_names[kv.second] = kv.first;
+  for (const auto& kv : data::thermal_scatt_map) thermal_names[kv.second] = kv.first;
 
-  // Read cross sections
+  // Gather unique nuclide names and sort
+  std::unordered_set<std::string> nuclide_seen;
+  std::vector<std::string> nuclide_list;
   for (const auto& mat : model::materials) {
     for (int i_nuc : mat->nuclide_) {
-      // Find name of corresponding nuclide. Because we haven't actually loaded
-      // data, we don't have the name available, so instead we search through
-      // all key/value pairs in nuclide_map
-      std::string& name = nuclide_names[i_nuc];
-
-      // If we've already read this nuclide, skip it
-      if (already_read.find(name) != already_read.end())
-        continue;
-
-      const auto& temps = nuc_temps[i_nuc];
-      int err = openmc_load_nuclide(name.c_str(), temps.data(), temps.size());
-      if (err < 0)
-        throw std::runtime_error {openmc_err_msg};
-
-      already_read.insert(name);
+      const std::string& name = nuclide_names[i_nuc];
+      if (nuclide_seen.insert(name).second) nuclide_list.push_back(name);
     }
   }
+  std::sort(nuclide_list.begin(), nuclide_list.end());
 
-  // Perform final tasks -- reading S(a,b) tables, normalizing densities
+  for (const auto& name : nuclide_list) {
+    auto i_nuc = data::nuclide_map.at(name);
+    const auto& temps = nuc_temps[i_nuc];
+    int err = openmc_load_nuclide(name.c_str(), temps.data(), temps.size());
+    if (err < 0) throw std::runtime_error {openmc_err_msg};
+  }
+
+  // Prepare for thermal scattering loading. We still want deterministic logs
+  // but must finalize each material immediately after its tables (original behavior).
+  // We'll therefore load thermal tables on first encounter while iterating
+  // materials, choosing alphabetical order only among the *new* tables for
+  // that material.
+  std::unordered_set<std::string> thermal_loaded;
+
   for (auto& mat : model::materials) {
+    // Collect any new thermal tables for this material
+    std::vector<std::string> new_tables;
     for (const auto& table : mat->thermal_tables_) {
-      // Get name of S(a,b) table
       int i_table = table.index_table;
-      std::string& name = thermal_names[i_table];
+      const std::string& name = thermal_names[i_table];
+      if (thermal_loaded.find(name) == thermal_loaded.end()) new_tables.push_back(name);
+    }
+    std::sort(new_tables.begin(), new_tables.end());
 
-      if (already_read.find(name) == already_read.end()) {
-        LibraryKey key {Library::Type::thermal, name};
-        int idx = data::library_map[key];
-        std::string& filename = data::libraries[idx].path_;
+    // Load new thermal tables for this material in alphabetical order
+    for (const auto& name : new_tables) {
+      LibraryKey key {Library::Type::thermal, name};
+      int idx = data::library_map[key];
+      std::string& filename = data::libraries[idx].path_;
+      write_message(6, "Reading {} from {}", name, filename);
+      hid_t file_id = file_open(filename, 'r');
+      check_data_version(file_id);
+      hid_t group = open_group(file_id, name.c_str());
+      int i_table = data::thermal_scatt_map.at(name);
+      data::thermal_scatt.push_back(
+        make_unique<ThermalScattering>(group, thermal_temps[i_table]));
+      close_group(group);
+      file_close(file_id);
+      thermal_loaded.insert(name);
+    }
 
-        write_message(6, "Reading {} from {}", name, filename);
-
-        // Open file and make sure version matches
-        hid_t file_id = file_open(filename, 'r');
-        check_data_version(file_id);
-
-        // Read thermal scattering data from HDF5
-        hid_t group = open_group(file_id, name.c_str());
-        data::thermal_scatt.push_back(
-          make_unique<ThermalScattering>(group, thermal_temps[i_table]));
-        close_group(group);
-        file_close(file_id);
-
-        // Add name to dictionary
-        already_read.insert(name);
-      }
-    } // thermal_tables_
-
-    // Finish setting up materials (normalizing densities, etc.)
+    // Finalize this material now (original placement)
     mat->finalize();
-  } // materials
+  }
 
   if (settings::photon_transport &&
       settings::electron_treatment == ElectronTreatment::TTB) {
-    // Take logarithm of energies since they are log-log interpolated
     data::ttb_e_grid = xt::log(data::ttb_e_grid);
   }
 
-  // Show minimum/maximum temperature
-  write_message(
-    4, "Minimum neutron data temperature: {} K", data::temperature_min);
-  write_message(
-    4, "Maximum neutron data temperature: {} K", data::temperature_max);
+  write_message(4, "Minimum neutron data temperature: {} K", data::temperature_min);
+  write_message(4, "Maximum neutron data temperature: {} K", data::temperature_max);
 
-  // If the user wants multipole, make sure we found a multipole library.
   if (settings::temperature_multipole) {
     bool mp_found = false;
     for (const auto& nuc : data::nuclides) {
-      if (nuc->multipole_) {
-        mp_found = true;
-        break;
-      }
+      if (nuc->multipole_) { mp_found = true; break; }
     }
     if (mpi::master && !mp_found) {
       warning("Windowed multipole functionality is turned on, but no multipole "
