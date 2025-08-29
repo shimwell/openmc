@@ -184,8 +184,9 @@ void read_cross_sections_xml(pugi::xml_node root)
 void read_ce_cross_sections(const vector<vector<double>>& nuc_temps,
   const vector<vector<double>>& thermal_temps)
 {
-  // Load CE nuclides alphabetically (deterministic log ordering) but
-  // restore per-material finalize() behavior matching original code.
+  // Restore original nuclide loading order (first-use order) to preserve
+  // index alignment between data::nuclide_map and data::nuclides while
+  // retaining deterministic alphabetical handling only for thermal tables.
 
   // Construct name lookup vectors
   vector<std::string> nuclide_names(data::nuclide_map.size());
@@ -193,31 +194,25 @@ void read_ce_cross_sections(const vector<vector<double>>& nuc_temps,
   for (const auto& kv : data::nuclide_map) nuclide_names[kv.second] = kv.first;
   for (const auto& kv : data::thermal_scatt_map) thermal_names[kv.second] = kv.first;
 
-  // Gather unique nuclide names and sort
-  std::unordered_set<std::string> nuclide_seen;
-  std::vector<std::string> nuclide_list;
+  // ---------------------------------------------------------------------------
+  // Load nuclides in original first-encounter order (required by push_back logic
+  // in openmc_load_nuclide to match pre-assigned indices in nuclide_map).
+  std::unordered_set<std::string> nuclide_loaded;
   for (const auto& mat : model::materials) {
     for (int i_nuc : mat->nuclide_) {
       const std::string& name = nuclide_names[i_nuc];
-      if (nuclide_seen.insert(name).second) nuclide_list.push_back(name);
+      if (nuclide_loaded.find(name) != nuclide_loaded.end()) continue;
+      const auto& temps = nuc_temps[i_nuc];
+      int err = openmc_load_nuclide(name.c_str(), temps.data(), temps.size());
+      if (err < 0) throw std::runtime_error {openmc_err_msg};
+      nuclide_loaded.insert(name);
     }
   }
-  std::sort(nuclide_list.begin(), nuclide_list.end());
 
-  for (const auto& name : nuclide_list) {
-    auto i_nuc = data::nuclide_map.at(name);
-    const auto& temps = nuc_temps[i_nuc];
-    int err = openmc_load_nuclide(name.c_str(), temps.data(), temps.size());
-    if (err < 0) throw std::runtime_error {openmc_err_msg};
-  }
-
-  // Prepare for thermal scattering loading. We still want deterministic logs
-  // but must finalize each material immediately after its tables (original behavior).
-  // We'll therefore load thermal tables on first encounter while iterating
-  // materials, choosing alphabetical order only among the *new* tables for
-  // that material.
+  // ---------------------------------------------------------------------------
+  // Thermal scattering: deterministic alphabetical logs while preserving
+  // per-material finalize timing.
   std::unordered_set<std::string> thermal_loaded;
-
   for (auto& mat : model::materials) {
     // Collect any new thermal tables for this material
     std::vector<std::string> new_tables;
@@ -233,7 +228,6 @@ void read_ce_cross_sections(const vector<vector<double>>& nuc_temps,
       data::thermal_scatt.resize(data::thermal_scatt_map.size());
     }
 
-    // Load new thermal tables for this material in alphabetical order
     for (const auto& name : new_tables) {
       LibraryKey key {Library::Type::thermal, name};
       int idx = data::library_map[key];
@@ -252,7 +246,6 @@ void read_ce_cross_sections(const vector<vector<double>>& nuc_temps,
       thermal_loaded.insert(name);
     }
 
-    // Finalize this material now (original placement)
     mat->finalize();
   }
 
