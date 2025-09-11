@@ -818,7 +818,8 @@ class Material(IDManagerMixin):
                                       cross_sections):
             self.add_nuclide(*nuclide)
 
-    def add_elements_from_formula(self, formula: str, percent_type: str = 'ao',
+    def add_elements_from_formula(self, formula: str, percent: float,
+                                  percent_type: str = 'ao',
                                   enrichment: float | None = None,
                                   enrichment_target: str | None = None,
                                   enrichment_type: str | None = None):
@@ -832,9 +833,12 @@ class Material(IDManagerMixin):
             Formula to add, e.g., 'C2O', 'C6H12O6', or (NH4)2SO4.
             Note this is case sensitive, elements must start with an uppercase
             character. Multiplier numbers must be integers.
+        percent : float
+            Atom or weight percent of formula in material as a whole
         percent_type : {'ao', 'wo'}, optional
-            'ao' for atom percent and 'wo' for weight percent. Defaults to atom
-            percent.
+            'ao' for atom percent and 'wo' for weight percent of the formula in
+            the material. Defaults to atom percent. The weight percent of each
+            element in the formula is always in atom percent.
         enrichment : float, optional
             Enrichment of an enrichment_target nuclide in percent (ao or wo).
             If enrichment_target is not supplied then it is enrichment for U235
