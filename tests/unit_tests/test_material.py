@@ -1,3 +1,5 @@
+import math
+
 from collections import defaultdict
 from pathlib import Path
 
@@ -754,6 +756,39 @@ def test_material_deplete():
     # Check that Co58 is halved in the second step which is one halflife later
     assert np.allclose(Co58_mat_1_step_1 * 0.5, Co58_mat_1_step_2)
 
+
+
+def test_two_formulas_sixty_forty_atom_percent():
+    """Two formulas at 60 at% (H2O) and 40 at% (Al3Fe4) yield correct per-element atom fractions."""
+    m = openmc.Material()
+    m.add_elements_from_formula('H2O', 0.6, 'ao')
+    m.add_elements_from_formula('Al3Fe4', 0.4, 'ao')
+
+    # Aggregate by element from nuclides, atom basis
+    observed = {}
+    for t in m.get_nuclides():
+        if t.percent_type == 'ao':
+            element = t.name.rstrip('0123456789')
+            observed[element] = observed.get(element, 0.0) + t.percent
+
+    # Expected:
+    # H2O: total atoms = 3 -> H: 2/3, O: 1/3, then scaled by 0.6
+    #   H: 0.6 * (2/3) = 0.4
+    #   O: 0.6 * (1/3) = 0.2
+    # Al3Fe4: total atoms = 7 -> Al: 3/7, Fe: 4/7, then scaled by 0.4
+    #   Al: 0.4 * (3/7) ≈ 0.1714285714
+    #   Fe: 0.4 * (4/7) ≈ 0.2285714286
+    expected = {
+        'H': 0.6 * (2/3),
+        'O': 0.6 * (1/3),
+        'Al': 0.4 * (3/7),
+        'Fe': 0.4 * (4/7),
+    }
+
+    assert set(observed) == set(expected)
+    for el in expected:
+        assert observed[el] == pytest.approx(expected[el], rel=1e-12, abs=1e-12)
+    assert math.fsum(observed.values()) == pytest.approx(1.0, abs=1e-12)
 
 def test_mean_free_path():
 

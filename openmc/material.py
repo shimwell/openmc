@@ -818,7 +818,7 @@ class Material(IDManagerMixin):
                                       cross_sections):
             self.add_nuclide(*nuclide)
 
-    def add_elements_from_formula(self, formula: str, percent: float,
+    def add_elements_from_formula(self, formula: str, percent: float = 1.0,
                                   percent_type: str = 'ao',
                                   enrichment: float | None = None,
                                   enrichment_target: str | None = None,
@@ -837,8 +837,10 @@ class Material(IDManagerMixin):
             Atom or weight percent of formula in material as a whole
         percent_type : {'ao', 'wo'}, optional
             'ao' for atom percent and 'wo' for weight percent of the formula in
-            the material. Defaults to atom percent. The weight percent of each
-            element in the formula is always in atom percent.
+            the material. Defaults to atom percent. The argument controls the
+            percent_type of the formula in the material not the elements in the
+            formula. The weight percent of each element in the formula is
+            always in atom percent.
         enrichment : float, optional
             Enrichment of an enrichment_target nuclide in percent (ao or wo).
             If enrichment_target is not supplied then it is enrichment for U235
@@ -858,6 +860,9 @@ class Material(IDManagerMixin):
 
         """
         cv.check_type('formula', formula, str)
+        cv.check_type('percent', percent, Real)
+        cv.check_greater_than('percent', percent, 0.0, equality=True)
+        cv.check_value('percent type', percent_type, {'ao', 'wo'})
 
         if '.' in formula:
             msg = 'Non-integer multiplier values are not accepted. The ' \
@@ -906,20 +911,28 @@ class Material(IDManagerMixin):
                 for symbol, value in stack_top.items():
                     mat_stack[-1][symbol] += int(multi2 or 1) * value
 
-        # Normalizing percentages
-        percents = mat_stack[0].values()
-        norm_percents = [float(i) / sum(percents) for i in percents]
+        # Normalizing shares within the formula (atom- or weight-basis)
         elements = mat_stack[0].keys()
+        counts = [mat_stack[0][el] for el in elements]
 
-        # Adds each element and percent to the material
-        for element, percent in zip(elements, norm_percents):
+        if percent_type == 'ao':
+            total = float(sum(counts))
+            norm_shares = [c / total for c in counts]
+        else:  # 'wo' -> distribute by mass within the formula
+            masses = [mat_stack[0][el] * openmc.data.atomic_weight(el) for el in elements]
+            total = float(sum(masses))
+            norm_shares = [m / total for m in masses]
+
+        # Adds each element and share to the material
+        for element, share in zip(elements, norm_shares):
+            elem_share = percent * share
             if enrichment_target is not None and element == re.sub(r'\d+$', '', enrichment_target):
-                self.add_element(element, percent, percent_type, enrichment,
+                self.add_element(element, elem_share, 'ao', enrichment,
                                  enrichment_target, enrichment_type)
             elif enrichment is not None and enrichment_target is None and element == 'U':
-                self.add_element(element, percent, percent_type, enrichment)
+                self.add_element(element, elem_share, 'ao', enrichment)
             else:
-                self.add_element(element, percent, percent_type)
+                self.add_element(element, elem_share, 'ao')
 
     def add_s_alpha_beta(self, name: str, fraction: float = 1.0):
         r"""Add an :math:`S(\alpha,\beta)` table to the material
