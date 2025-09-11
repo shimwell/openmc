@@ -363,6 +363,40 @@ def atomic_weight(element):
         raise ValueError(f"No naturally-occurring isotopes for element '{element}'.")
 
 
+def atomic_weight_enriched(element: str,
+                           enrichment: float | None = None,
+                           enrichment_target: str | None = None,
+                           enrichment_type: str | None = None) -> float:
+    """Return (optionally enriched) atomic weight using Material logic.
+
+    This delegates enrichment handling to the existing Material.add_element
+    implementation (which already encodes uranium shortcut rules and
+    two‑isotope enrichment semantics) by constructing a transient Material
+    with a single element and returning its average molar mass.
+
+    Parameters
+    ----------
+    element : str
+        Element symbol or name.
+    enrichment : float, optional
+        Enrichment percentage (see Material.add_element).
+    enrichment_target : str, optional
+        Target isotope name.
+    enrichment_type : {'ao','wo'}, optional
+        Interpretation of enrichment percentage.
+
+    Returns
+    -------
+    float
+        Atomic weight (amu) of the (possibly enriched) element.
+    """
+    from ..material import Material  # local import to avoid circular at module load
+    m = Material()
+    # We give 1.0 arbitrary percent (ao) as basis; average_molar_mass then equals atomic weight
+    m.add_element(element, 1.0, 'ao', enrichment, enrichment_target, enrichment_type)
+    return m.average_molar_mass
+
+
 def half_life(isotope):
     """Return half-life of isotope in seconds or None if isotope is stable
 
