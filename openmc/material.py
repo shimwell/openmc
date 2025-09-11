@@ -919,19 +919,34 @@ class Material(IDManagerMixin):
             total = float(sum(counts))
             norm_shares = [c / total for c in counts]
         else:  # 'wo' -> distribute by mass within the formula
-            masses = [mat_stack[0][el] * openmc.data.atomic_weight(el) for el in elements]
+            # Use a temporary Material per element (with enrichment args) and
+            # its average_molar_mass to derive effective atomic weights.
+            if enrichment_target:
+                _Z, _, _ = openmc.data.zam(enrichment_target)
+                target_element = openmc.data.ATOMIC_SYMBOL[_Z]
+            else:
+                target_element = None
+            masses = []
+            for el in elements:
+                count = mat_stack[0][el]
+                tmp_mat = Material()  # just made to compute molar mass
+                if target_element is not None and el == target_element and enrichment is not None:
+                    tmp_mat.add_element(el, 1.0, 'ao', enrichment, enrichment_target, enrichment_type)
+                else:
+                    tmp_mat.add_element(el, 1.0, 'ao')
+                eff_aw = tmp_mat.average_molar_mass
+                masses.append(count * eff_aw)
             total = float(sum(masses))
             norm_shares = [m / total for m in masses]
 
         # Adds each element and share to the material
         for element, share in zip(elements, norm_shares):
             elem_share = percent * share
-            if enrichment_target is not None and element == re.sub(r'\d+$', '', enrichment_target):
+            if enrichment_target is not None and target_element is not None and element == target_element and enrichment is not None:
                 self.add_element(element, elem_share, 'ao', enrichment,
                                  enrichment_target, enrichment_type)
-            elif enrichment is not None and enrichment_target is None and element == 'U':
-                self.add_element(element, elem_share, 'ao', enrichment)
             else:
+                # All other elements added with natural composition
                 self.add_element(element, elem_share, 'ao')
 
     def add_s_alpha_beta(self, name: str, fraction: float = 1.0):
