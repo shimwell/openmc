@@ -60,6 +60,74 @@ def get_radionuclides(model: openmc.Model, chain_file: PathLike | Chain | None =
     return list(radionuclides)
 
 
+def time_correction_factors_vectorized(
+        nuclides: list[str],
+        timesteps: Sequence[float] | Sequence[tuple[float, str]],
+        source_rates: float | Sequence[float],
+        timestep_units: str = 's'
+) -> dict[str, np.ndarray]:
+    """Calculate time correction factors for the D1S method (vectorized version).
+
+    This function determines the time correction factor that should be applied
+    to photon tallies as part of the D1S method. This is a vectorized version
+    that pre-computes exponential terms for better performance.
+
+    Parameters
+    ----------
+    nuclides : list of str
+        The name of the nuclide to find the time correction for, e.g., 'Ni65'
+    timesteps : iterable of float or iterable of tuple
+        Array of timesteps. Note that values are not cumulative. The units are
+        specified by the `timestep_units` argument when `timesteps` is an
+        iterable of float. Alternatively, units can be specified for each step
+        by passing a sequence of (value, unit) tuples.
+    source_rates : float or iterable of float
+        Source rate in [neutron/sec] for each interval in `timesteps`
+    timestep_units : {'s', 'min', 'h', 'd', 'a'}, optional
+        Units for values specified in the `timesteps` argument. 's' means
+        seconds, 'min' means minutes, 'h' means hours, and 'a' means Julian
+        years.
+
+    Returns
+    -------
+    dict
+        Dictionary mapping nuclide to an array of time correction factors for
+        each time.
+
+    """
+
+    # Determine normalized timesteps and source rates
+    timesteps, source_rates = _normalize_timesteps(
+        timesteps, source_rates, timestep_units)
+
+    # Convert to numpy arrays for faster access
+    timesteps = np.asarray(timesteps)
+    source_rates = np.asarray(source_rates)
+
+    # Calculate decay rate for each nuclide (cache log(2))
+    log_2 = log(2.0)
+    decay_rate = np.array([log_2 / half_life(x) for x in nuclides])
+
+    n_timesteps = len(timesteps) + 1
+    n_nuclides = len(nuclides)
+
+    # Create a 2D array for the time correction factors
+    h = np.zeros((n_timesteps, n_nuclides))
+
+    # Vectorized computation - precompute all exponential terms
+    # Shape: (n_timesteps, n_nuclides)
+    decay_dt_matrix = decay_rate[np.newaxis, :] * timesteps[:, np.newaxis]
+    g_matrix = np.exp(-decay_dt_matrix)
+    one_minus_g_matrix = -np.expm1(-decay_dt_matrix)
+    
+    # Apply recurrence relation step by step (cannot be fully vectorized due to dependency)
+    for i in range(len(timesteps)):
+        # Eq. (4) in doi:10.1016/j.fusengdes.2019.111399
+        h[i + 1] = source_rates[i] * one_minus_g_matrix[i] + h[i] * g_matrix[i]
+
+    return {nuclides[i]: h[:, i] for i in range(n_nuclides)}
+
+
 def time_correction_factors(
         nuclides: list[str],
         timesteps: Sequence[float] | Sequence[tuple[float, str]],
