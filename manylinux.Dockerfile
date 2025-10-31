@@ -396,7 +396,7 @@ RUN export SKBUILD_CMAKE_ARGS="-DOPENMC_USE_MPI=$([ ${COMPILER} == 'openmpi' ] &
 
 # Install OpenMC wheel
 RUN python -m pip install \
-        "$(echo $HOME/openmc/dist/*.whl)[$([ ${COMPILER} == 'openmpi' ] && echo 'depletion-mpi,')test,ci,vtk]"
+        "$(echo $HOME/openmc/dist/*.whl)[$([ ${COMPILER} == 'openmpi' ] && echo 'depletion-mpi,')test,ci]"
 
 # Test OpenMC
 # RUN cd $HOME/openmc && \

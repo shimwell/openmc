@@ -56,12 +56,12 @@ umesh_from_sp = statepoint.meshes[1] # note to self we can add a function to ope
 centroids = umesh_from_sp.centroids
 mesh_vols = umesh_from_sp.volumes
 
-
-umesh_from_sp.write_data_to_vtk(
-    datasets={'mean': my_tally.mean.flatten()},
-    filename = "shape_alpha_production_on_mesh.vtu",
-)
-umesh_from_sp.write_data_to_vtk(
-    datasets={'mean': my_tally.mean.flatten()},
-    filename = "shape_alpha_production_on_mesh.vtk",
-)
+#TODO bring back once we have hdfvtk support in openmc
+# umesh_from_sp.write_data_to_vtk(
+#     datasets={'mean': my_tally.mean.flatten()},
+#     filename = "shape_alpha_production_on_mesh.vtu",
+# )
+# umesh_from_sp.write_data_to_vtk(
+#     datasets={'mean': my_tally.mean.flatten()},
+#     filename = "shape_alpha_production_on_mesh.vtk",
+# )
