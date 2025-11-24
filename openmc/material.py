@@ -577,7 +577,7 @@ class Material(IDManagerMixin):
 
         self._nuclides.append(NuclideTuple(nuclide, percent, percent_type))
 
-    def add_components(self, components: dict, percent_type: str = 'ao'):
+    def add_components(self, components: dict):
         """ Add multiple elements or nuclides to a material
 
         .. versionadded:: 0.13.1
@@ -585,20 +585,19 @@ class Material(IDManagerMixin):
         Parameters
         ----------
         components : dict of str to float or dict
-            Dictionary mapping element or nuclide names to their atom or weight
-            percent. To specify enrichment of an element, the entry of
+            Dictionary mapping element or nuclide names to their percent.
+            To specify percent_type enrichment of an element, the entry of
             ``components`` for that element must instead be a dictionary
             containing the keyword arguments as well as a value for
             ``'percent'``
-        percent_type : {'ao', 'wo'}
-            'ao' for atom percent and 'wo' for weight percent
 
         Examples
         --------
         >>> mat = openmc.Material()
         >>> components  = {'Li': {'percent': 1.0,
         >>>                       'enrichment': 60.0,
-        >>>                       'enrichment_target': 'Li7'},
+        >>>                       'enrichment_target': 'Li7',
+        >>>                       'percent_type': 'wo'},
         >>>                'Fl': 1.0,
         >>>                'Be6': 0.5}
         >>> mat.add_components(components)
@@ -615,8 +614,6 @@ class Material(IDManagerMixin):
                 if 'percent' not in params:
                     raise ValueError("An entry in the dictionary does not have "
                                      "a required key: 'percent'")
-
-            params['percent_type'] = percent_type
 
             # check if nuclide
             if not component.isalpha():

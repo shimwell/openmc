@@ -31,10 +31,12 @@ def test_add_nuclide():
         m.add_nuclide('H1', 1.0, 'oa')
 
 def test_add_components():
-    """Test adding multipe elements or nuclides at once"""
+    """Test adding multiple elements or nuclides at once"""
     m = openmc.Material()
-    components = {'H1': 2.0,
-                  'O16': 1.0,
+    components = {'H1': {'percent': 2.0,
+                         'percent_type': 'wo'},
+                  'O16': {'percent': 1.0,
+                         'percent_type': 'ao'},
                   'Zr': 1.0,
                   'O': 1.0,
                   'Ag110_m1': 1.0,
@@ -71,11 +73,12 @@ def test_add_components():
     with pytest.raises(ValueError):
         m.add_components({'n': 1.0})  # check to avoid n for neutron being accepted
     with pytest.raises(TypeError):
-        m.add_components({'H1': '1.0'})
+        m.add_components({'H1': '1.0'})  # Should fail as percent is not a float
     with pytest.raises(TypeError):
-        m.add_components({1.0: 'H1'}, percent_type = 'wo')
+        m.add_components({1.0: 'H1'})  # Should fail as key is not a string
     with pytest.raises(ValueError):
-        m.add_components({'H1': 1.0}, percent_type = 'oa')
+         # Should fail as percent_type is not valid
+        m.add_components({'H1': {'percent': 1.0, 'percent_type': 'oa'}})
 
 def test_nuclides_to_ignore(run_in_tmpdir):
     """Test nuclides_to_ignore when exporting a material to XML"""
