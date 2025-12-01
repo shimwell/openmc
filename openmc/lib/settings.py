@@ -1,4 +1,4 @@
-from ctypes import c_int, c_int32, c_int64, c_double, c_char_p, c_bool, POINTER, c_uint64, byref
+from ctypes import c_int, c_int32, c_int64, c_uint64, c_double, c_char_p, c_bool, POINTER, byref
 
 from . import _dll
 from .core import _DLLGlobal
