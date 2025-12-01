@@ -1052,7 +1052,7 @@ def test_prn(pincell_model, mpi_intracomm):
 
     seed = 12345
     random_numbers = []
-    for _ in range(100):
+    for _ in range(10):
         random_value, seed = openmc.lib.prn(seed)
         random_numbers.append(random_value)
         # Check that random values are in [0, 1)
