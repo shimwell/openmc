@@ -143,4 +143,9 @@ extern "C" void openmc_set_stride(uint64_t new_stride)
   prn_stride = new_stride;
 }
 
+extern "C" double openmc_prn(uint64_t* seed)
+{
+  return prn(seed);
+}
+
 } // namespace openmc

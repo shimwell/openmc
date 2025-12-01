@@ -112,5 +112,13 @@ extern "C" uint64_t openmc_get_stride();
 
 extern "C" void openmc_set_stride(uint64_t new_stride);
 
+//==============================================================================
+//! Generate a pseudo-random number using OpenMC's RNG.
+//! @param seed Pseudorandom number seed pointer
+//! @return A random number between 0 and 1
+//==============================================================================
+
+extern "C" double openmc_prn(uint64_t* seed);
+
 } // namespace openmc
 #endif // OPENMC_RANDOM_LCG_H
