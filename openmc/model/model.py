@@ -546,6 +546,13 @@ class Model:
                 depletion_operator.cleanup_when_done = True
                 depletion_operator.finalize()
 
+    def _link_geometry_to_filters(self):
+        """Establishes a link between distribcell filters and the geometry"""
+        for tally in self.tallies:
+            for f in tally.filters:
+                if isinstance(f, openmc.DistribcellFilter):
+                    f._geometry = self.geometry
+
     def export_to_xml(self, directory: PathLike = '.', remove_surfs: bool = False,
                       nuclides_to_ignore: Iterable[str] | None = None):
         """Export model to separate XML files.
@@ -586,6 +593,8 @@ class Model:
             self.tallies.export_to_xml(d)
         if self.plots:
             self.plots.export_to_xml(d)
+
+        self._link_geometry_to_filters()
 
     def export_to_model_xml(self, path: PathLike = 'model.xml', remove_surfs: bool = False,
                             nuclides_to_ignore: Iterable[str] | None = None):
@@ -665,6 +674,8 @@ class Model:
                     plots_element, level=1, trailing_indent=False)
                 fh.write(ET.tostring(plots_element, encoding="unicode"))
             fh.write("</model>\n")
+
+        self._link_geometry_to_filters()
 
     def import_properties(self, filename: PathLike):
         """Import physical properties
@@ -1026,6 +1037,7 @@ class Model:
         width: Sequence[float] | None = None,
         pixels: int | Sequence[int] = 40000,
         basis: str = 'xy',
+        color_overlaps: bool = False,
         **init_kwargs
     ) -> np.ndarray:
         """Generate an ID map for domains based on the plot parameters
@@ -1054,6 +1066,10 @@ class Model:
             total and the image aspect ratio based on the width argument.
         basis : {'xy', 'yz', 'xz'}, optional
             Basis of the plot.
+        color_overlaps : bool, optional
+            Whether to assign unique IDs (-3) to overlapping regions. If False,
+            overlapping regions will be assigned the ID of the lowest-numbered
+            cell that occupies that region. Defaults to False.
         **init_kwargs
             Keyword arguments passed to :meth:`Model.init_lib`.
 
@@ -1078,6 +1094,7 @@ class Model:
         plot_obj.h_res = pixels[0]
         plot_obj.v_res = pixels[1]
         plot_obj.basis = basis
+        plot_obj.color_overlaps = color_overlaps
 
         # Silence output by default. Also set arguments to start in volume
         # calculation mode to avoid loading cross sections
@@ -1159,7 +1176,7 @@ class Model:
                 self.settings.plot_seed = seed
 
             # Create plot object matching passed arguments
-            plot = openmc.Plot()
+            plot = openmc.SlicePlot()
             plot.origin = origin
             plot.width = width
             plot.pixels = pixels
@@ -1276,8 +1293,8 @@ class Model:
             tol = plane_tolerance
             for particle in particles:
                 if (slice_value - tol < particle.r[z] < slice_value + tol):
-                    xs.append(particle.r[x])
-                    ys.append(particle.r[y])
+                    xs.append(particle.r[x] * axis_scaling_factor[axis_units])
+                    ys.append(particle.r[y] * axis_scaling_factor[axis_units])
             axes.scatter(xs, ys, **source_kwargs)
 
         return axes
