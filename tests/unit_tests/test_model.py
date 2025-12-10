@@ -659,6 +659,55 @@ def test_model_plot():
     plt.close('all')
 
 
+def test_model_voxel_plot(run_in_tmpdir):
+    """Test the Model.voxel_plot() method"""
+    
+    # Create a simple sphere geometry
+    mat = openmc.Material(material_id=1, name='test_material')
+    mat.set_density('g/cm3', 1.0)
+    mat.add_element('H', 1.0)
+    
+    sphere = openmc.Sphere(r=5.0, boundary_type='vacuum')
+    cell = openmc.Cell(fill=mat, region=-sphere)
+    geometry = openmc.Geometry([cell])
+    
+    settings = openmc.Settings(particles=100, batches=5)
+    model = openmc.Model(geometry=geometry, settings=settings)
+    
+    # Test 1: Generate VTI file (default)
+    vti_path = model.voxel_plot(pixels=1000, output='test_voxel.vti')
+    assert vti_path.exists()
+    assert vti_path.suffix == '.vti'
+    assert vti_path.name == 'test_voxel.vti'
+    
+    # Test 2: Generate H5 file
+    h5_path = model.voxel_plot(pixels=1000, output='test_voxel.h5')
+    assert h5_path.exists()
+    assert h5_path.suffix == '.h5'
+    assert h5_path.name == 'test_voxel.h5'
+    
+    # Test 3: Use explicit pixel dimensions (tuple)
+    vti_path2 = model.voxel_plot(pixels=(10, 10, 10), output='explicit.vti')
+    assert vti_path2.exists()
+    
+    # Test 4: Test with color_by material
+    mat_path = model.voxel_plot(
+        pixels=1000, 
+        color_by='material', 
+        output='material_voxel.vti'
+    )
+    assert mat_path.exists()
+    
+    # Test 5: Invalid file extension should raise ValueError
+    with pytest.raises(ValueError, match="must be '.h5' or '.vti'"):
+        model.voxel_plot(output='bad_extension.png')
+    
+    # Test 6: Test default output filename
+    default_path = model.voxel_plot(pixels=1000)
+    assert default_path.exists()
+    assert default_path.name == 'voxel_plot.vti'
+
+
 def test_model_id_map_initialization(run_in_tmpdir):
     model = openmc.examples.pwr_assembly()
     model.init_lib(output=False)

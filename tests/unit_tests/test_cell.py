@@ -384,3 +384,36 @@ def test_plot(run_in_tmpdir):
     # ensure that calling the plot method doesn't
     # affect the universe ID space
     assert u_before.id + 1 == u_after.id
+
+
+def test_voxel_plot(run_in_tmpdir):
+    """Test Cell.voxel_plot() method"""
+    
+    # Create a material
+    mat = openmc.Material(material_id=1, name='test_mat')
+    mat.set_density('g/cm3', 1.0)
+    mat.add_element('H', 1.0)
+    
+    # Create a simple cell with a sphere
+    sphere = openmc.Sphere(r=5.0, boundary_type='vacuum')
+    c = openmc.Cell(fill=mat, region=-sphere)
+    
+    # Create a universe before the voxel_plot
+    u_before = openmc.Universe()
+    
+    # Test VTI generation
+    vti_path = c.voxel_plot(pixels=1000, output='cell_test.vti')
+    assert vti_path.exists()
+    assert vti_path.suffix == '.vti'
+    
+    # Test H5 generation
+    h5_path = c.voxel_plot(pixels=1000, output='cell_test.h5')
+    assert h5_path.exists()
+    assert h5_path.suffix == '.h5'
+    
+    # Create a universe after the voxel_plot
+    u_after = openmc.Universe()
+    
+    # Ensure that calling the voxel_plot method doesn't
+    # affect the universe ID space
+    assert u_before.id + 1 == u_after.id

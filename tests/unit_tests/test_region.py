@@ -255,3 +255,33 @@ def test_plot():
     # Ensure that calling plot doesn't affect cell ID space
     c_after = openmc.Cell()
     assert c_after.id - 1 == c_before.id
+
+
+def test_voxel_plot(run_in_tmpdir):
+    """Test Region.voxel_plot() method"""
+    
+    # Create a region (intersection of sphere and half-space)
+    sphere = openmc.Sphere(r=5.0, boundary_type='vacuum')
+    plane = openmc.ZPlane(z0=0.0)
+    region = -sphere & +plane  # Upper hemisphere
+    
+    # Track cell IDs before voxel_plot
+    c_before = openmc.Cell()
+    
+    # Test VTI generation
+    vti_path = region.voxel_plot(pixels=1000, output='region_test.vti')
+    assert vti_path.exists()
+    assert vti_path.suffix == '.vti'
+    
+    # Test H5 generation
+    h5_path = region.voxel_plot(pixels=1000, output='region_test.h5')
+    assert h5_path.exists()
+    assert h5_path.suffix == '.h5'
+    
+    # Ensure that calling voxel_plot doesn't affect cell ID space
+    c_after = openmc.Cell()
+    assert c_after.id - 1 == c_before.id
+    
+    # Test that color_by parameter produces a warning
+    with pytest.warns(UserWarning, match="won't be applied"):
+        region.voxel_plot(pixels=1000, output='region_warning.vti', color_by='material')

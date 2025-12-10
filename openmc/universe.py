@@ -339,6 +339,15 @@ class UniverseBase(ABC, IDManagerMixin):
         model.geometry = openmc.Geometry(self)
         return model.plot(*args, **kwargs)
 
+    def voxel_plot(self, *args, **kwargs):
+        """Create a 3D voxel plot of the universe.
+
+        .. versionadded:: 0.15.2
+        """
+        model = openmc.Model()
+        model.geometry = openmc.Geometry(self)
+        return model.voxel_plot(*args, **kwargs)
+
     def get_nuclides(self):
         """Returns all nuclides in the universe
 

@@ -605,6 +605,19 @@ class Cell(IDManagerMixin):
         openmc.UniverseBase.next_id = next_id
         return u.plot(*args, **kwargs)
 
+    def voxel_plot(self, *args, **kwargs):
+        """Create a 3D voxel plot of the cell.
+
+        .. versionadded:: 0.15.2
+        """
+        # Create dummy universe but preserve used_ids
+        next_id = openmc.UniverseBase.next_id
+        u = openmc.Universe(cells=[self])
+        openmc.UniverseBase.used_ids.remove(u.id)
+        openmc.UniverseBase.next_id = next_id
+        return u.voxel_plot(*args, **kwargs)
+
+
     def create_xml_subelement(self, xml_element, memo=None):
         """Add the cell's xml representation to an incoming xml element
 
