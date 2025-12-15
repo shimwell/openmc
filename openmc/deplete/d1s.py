@@ -212,6 +212,84 @@ def apply_time_correction(
     return new_tally
 
 
+def apply_time_corrections_parallel(
+        tally: openmc.Tally,
+        time_correction_factors: dict[str, np.ndarray],
+        indexes: Sequence[int] | None = None,
+        sum_nuclides: bool = True,
+        n_workers: int | None = None
+) -> list[openmc.Tally]:
+    """Apply time correction factors to a tally for multiple time indexes in parallel.
+
+    This function applies the time correction factors at multiple indexes to a
+    tally that contains a :class:`~openmc.ParentNuclideFilter`. Uses free-threading
+    (Python 3.13+) to parallelize across time indexes.
+
+    Parameters
+    ----------
+    tally : openmc.Tally
+        Tally to apply the time correction factors to
+    time_correction_factors : dict
+        Time correction factors as returned by :func:`time_correction_factors`
+    indexes : sequence of int, optional
+        Indexes of the times of interest. If None, applies correction for all
+        available times.
+    sum_nuclides : bool
+        Whether to sum over the parent nuclides
+    n_workers : int, optional
+        Number of worker threads. If None, uses number of CPU cores.
+
+    Returns
+    -------
+    list of openmc.Tally
+        List of derived tallies with time correction factors applied, one for
+        each index in `indexes`.
+
+    """
+    from concurrent.futures import ThreadPoolExecutor
+    import os
+    
+    # Determine indexes to process
+    if indexes is None:
+        n_times = len(next(iter(time_correction_factors.values())))
+        indexes = list(range(n_times))
+    
+    # Determine number of workers
+    if n_workers is None:
+        n_workers = os.cpu_count() or 1
+
+    # Check if free-threading is available and beneficial
+    has_free_threading = hasattr(sys.flags, 'gil') and sys.flags.gil == 0
+    use_parallel = has_free_threading and len(indexes) > 1
+    
+    if not has_free_threading and n_workers is not None:
+        warnings.warn(
+            "Free-threading is not available in this Python build. "
+            "Falling back to serial processing. "
+            "For parallel processing, use Python 3.13t or later.",
+            RuntimeWarning
+        )
+    
+    # Use ThreadPoolExecutor with free-threading
+    with ThreadPoolExecutor(max_workers=n_workers) as executor:
+        # Submit all tasks
+        futures = [
+            executor.submit(
+                apply_time_correction,
+                tally,
+                time_correction_factors,
+                idx,
+                sum_nuclides
+            )
+            for idx in indexes
+        ]
+        
+        # Gather results in order
+        results = [future.result() for future in futures]
+    
+    return results
+
+
 def prepare_tallies(
         model: openmc.Model,
         nuclides: list[str] | None = None,
