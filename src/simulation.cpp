@@ -741,12 +741,41 @@ void initialize_data()
       if (max_E == data::energy_max[neutron]) {
         write_message(7, "Maximum neutron transport energy: {} eV for {}",
           data::energy_max[neutron], nuc->name_);
-        if (mpi::master && data::energy_max[neutron] < 20.0e6) {
-          warning("Maximum neutron energy is below 20 MeV. This may bias "
-                  "the results.");
-        }
         break;
       }
+    }
+  }
+
+  // Show which element or interaction results in lowest maximum energy for photon transport
+  if (settings::photon_transport) {
+    int photon = static_cast<int>(ParticleType::photon);
+    // Find the element with the lowest maximum energy
+    double min_max_energy = INFTY;
+    std::string limiting_source;
+    for (const auto& elem : data::elements) {
+      if (elem->energy_.size() >= 1) {
+        int n = elem->energy_.size();
+        double max_E = std::exp(elem->energy_(n - 1));
+        if (max_E < min_max_energy) {
+          min_max_energy = max_E;
+          limiting_source = elem->name_;
+        }
+      }
+    }
+
+    // Check if TTB electron treatment further limits the energy
+    if (settings::electron_treatment == ElectronTreatment::TTB &&
+        data::ttb_e_grid.size() >= 1) {
+      int electron = static_cast<int>(ParticleType::electron);
+      double ttb_max = data::energy_max[electron];
+      if (ttb_max < min_max_energy) {
+        limiting_source = "TTB electrons";
+      }
+    }
+
+    if (!limiting_source.empty()) {
+      write_message(7, "Maximum photon transport energy: {} eV for {}",
+        data::energy_max[photon], limiting_source);
     }
   }
 
