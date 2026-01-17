@@ -1052,3 +1052,26 @@ def test_sample_external_source(run_in_tmpdir, mpi_intracomm):
     openmc.lib.init(["-c"])
     openmc.lib.sample_external_source(100)
     openmc.lib.finalize()
+
+
+def test_prn(pincell_model, mpi_intracomm):
+    openmc.lib.init()
+
+    seed = 12345
+    random_numbers = []
+    for _ in range(10):
+        random_value, seed = openmc.lib.prn(seed)
+        random_numbers.append(random_value)
+        # Check that random values are in [0, 1)
+        assert 0.0 <= random_value < 1.0
+
+    # Check that we got different values (not all the same)
+    assert len(set(random_numbers)) > 1
+    
+    # Check that using the same initial seed produces the same sequence
+    seed2 = 12345
+    for expected_value in random_numbers:
+        random_value, seed2 = openmc.lib.prn(seed2)
+        assert random_value == pytest.approx(expected_value)
+
+    openmc.lib.finalize()

@@ -1,4 +1,4 @@
-from ctypes import c_int, c_int32, c_int64, c_double, c_char_p, c_bool, POINTER
+from ctypes import c_int, c_int32, c_int64, c_uint64, c_double, c_char_p, c_bool, POINTER, byref
 
 from . import _dll
 from .core import _DLLGlobal
@@ -14,6 +14,8 @@ _dll.openmc_set_seed.argtypes = [c_int64]
 _dll.openmc_get_seed.restype = c_int64
 _dll.openmc_set_stride.argtypes = [c_int64]
 _dll.openmc_get_stride.restype = c_int64
+_dll.openmc_prn.argtypes = [POINTER(c_uint64)]
+_dll.openmc_prn.restype = c_double
 _dll.openmc_get_n_batches.argtypes = [POINTER(c_int), c_bool]
 _dll.openmc_get_n_batches.restype = c_int
 _dll.openmc_get_n_batches.errcheck = _error_handler
@@ -114,6 +116,25 @@ class _Settings:
         _dll.openmc_get_n_batches(n_batches, get_max_batches)
 
         return n_batches.value
+
+
+def prn(seed):
+    """Generate a pseudo-random number using OpenMC's RNG
+    
+    Parameters
+    ----------
+    seed : int
+        Pseudorandom number seed (will be modified in place)
+    
+    Returns
+    -------
+    tuple of (float, int)
+        Random number between 0 and 1, and the updated seed
+    
+    """
+    c_seed = c_uint64(seed)
+    random_value = _dll.openmc_prn(byref(c_seed))
+    return random_value, c_seed.value
 
 
 settings = _Settings()

@@ -35,6 +35,7 @@ Functions
    next_batch
    num_realizations
    plot_geometry
+   prn
    property_map
    reset
    reset_timers
