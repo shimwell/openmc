@@ -361,12 +361,24 @@ void initialize_batch()
   // Increment current batch
   ++simulation::current_batch;
   if (settings::run_mode == RunMode::FIXED_SOURCE) {
+    bool show_total = !settings::trigger_on;
+    int total_batches = settings::n_batches;
     if (settings::solver_type == SolverType::RANDOM_RAY &&
         simulation::current_batch < settings::n_inactive + 1) {
-      write_message(
-        6, "Simulating batch {:<4} (inactive)", simulation::current_batch);
+      if (show_total) {
+        write_message(6, "Simulating batch {:<4} of {} (inactive)",
+          simulation::current_batch, total_batches);
+      } else {
+        write_message(
+          6, "Simulating batch {:<4} (inactive)", simulation::current_batch);
+      }
     } else {
-      write_message(6, "Simulating batch {}", simulation::current_batch);
+      if (show_total) {
+        write_message(6, "Simulating batch {} of {}", simulation::current_batch,
+          total_batches);
+      } else {
+        write_message(6, "Simulating batch {}", simulation::current_batch);
+      }
     }
   }
 
