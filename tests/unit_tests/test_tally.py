@@ -3,17 +3,17 @@ import openmc
 
 def test_tally_init_args():
     """Test that Tally constructor kwargs are applied correctly."""
-    f = openmc.EnergyFilter([0.0, 1.0, 20.0e6])
-    t = openmc.Tally(
+    filter = openmc.EnergyFilter([0.0, 1.0, 20.0e6])
+    tally = openmc.Tally(
         name='my tally',
         scores=['flux', 'fission'],
-        filters=[f],
+        filters=[filter],
         nuclides=['U235'],
         estimator='tracklength',
     )
 
-    assert t.name == 'my tally'
-    assert t.scores == ['flux', 'fission']
-    assert t.filters == [f]
-    assert t.nuclides == ['U235']
-    assert t.estimator == 'tracklength'
+    assert tally.name == 'my tally'
+    assert tally.scores == ['flux', 'fission']
+    assert tally.filters == [filter]
+    assert tally.nuclides == ['U235']
+    assert tally.estimator == 'tracklength'
