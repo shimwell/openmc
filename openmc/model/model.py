@@ -2052,7 +2052,8 @@ class Model:
             # Unpack the isothermal XSData objects and build a single XSData object per material.
             mgxs_sets = []
             for m in range(len(self.materials)):
-                mgxs_sets.append(openmc.XSdata(self.materials[m].name, groups))
+                mgxs_sets.append(openmc.XSdata(self.materials[m].name, groups,
+                                               temperatures=temperatures))
                 mgxs_sets[-1].order = 0
                 for temperature in temperatures:
                     mgxs_sets[-1].add_temperature_data(raw_mgxs_sets[temperature][m])
@@ -2333,7 +2334,7 @@ class Model:
             # Unpack the isothermal XSData objects and build a single XSData object per material.
             mgxs_sets = []
             for mat in self.materials:
-                mgxs_sets.append(openmc.XSdata(mat.name, groups))
+                mgxs_sets.append(openmc.XSdata(mat.name, groups, temperatures=temperatures))
                 mgxs_sets[-1].order = 0
                 for temperature in temperatures:
                     mgxs_sets[-1].add_temperature_data(raw_mgxs_sets[temperature][mat.name])
@@ -2500,7 +2501,7 @@ class Model:
             # Unpack the isothermal XSData objects and build a single XSData object per material.
             mgxs_sets = []
             for mat in self.materials:
-                mgxs_sets.append(openmc.XSdata(mat.name, groups))
+                mgxs_sets.append(openmc.XSdata(mat.name, groups, temperatures=temperatures))
                 mgxs_sets[-1].order = 0
                 for temperature in temperatures:
                     mgxs_sets[-1].add_temperature_data(raw_mgxs_sets[temperature][mat.name])
@@ -2583,9 +2584,16 @@ class Model:
             # TODO: Can this be done without having to init/finalize?
             for univ in self.geometry.get_all_universes().values():
                 if isinstance(univ, openmc.DAGMCUniverse):
+                    # Initialize in stochastic volume mode (non-transport mode)
+                    # This mode doesn't require
+                    # valid transport settings like particles/batches
+                    original_run_mode = self.settings.run_mode
+                    self.settings.run_mode = 'volume' 
                     self.init_lib(directory=tmpdir)
                     self.sync_dagmc_universes()
                     self.finalize_lib()
+                    # Restore original run mode
+                    self.settings.run_mode = original_run_mode
                     break
 
             # Make sure all materials have a name, and that the name is a valid HDF5
