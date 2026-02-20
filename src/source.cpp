@@ -27,6 +27,7 @@
 #include "openmc/message_passing.h"
 #include "openmc/mgxs_interface.h"
 #include "openmc/nuclide.h"
+#include "openmc/photon.h"
 #include "openmc/random_lcg.h"
 #include "openmc/search.h"
 #include "openmc/settings.h"
@@ -403,8 +404,37 @@ SourceSite IndependentSource::sample(uint64_t* seed) const
       auto energies =
         tensor::Tensor<double>(energy_ptr->x().data(), energy_ptr->x().size());
       if ((energies > data::energy_max[p]).any()) {
-        fatal_error("Source energy above range of energies of at least "
-                    "one cross section table");
+        // Identify which nuclides/elements have max energies below the source
+        double src_E_max = energy_ptr->x().back();
+        std::string offenders;
+        if (particle_ == ParticleType::neutron()) {
+          for (const auto& nuc : data::nuclides) {
+            if (nuc->grid_.size() >= 1 &&
+                nuc->grid_[0].energy.back() < src_E_max) {
+              if (!offenders.empty())
+                offenders += ", ";
+              offenders += fmt::format(
+                "{} ({:.6e} eV)", nuc->name_, nuc->grid_[0].energy.back());
+            }
+          }
+        } else if (particle_ == ParticleType::photon()) {
+          for (const auto& elem : data::elements) {
+            if (elem->energy_.size() >= 1) {
+              double elem_E_max =
+                std::exp(elem->energy_(elem->energy_.size() - 1));
+              if (elem_E_max < src_E_max) {
+                if (!offenders.empty())
+                  offenders += ", ";
+                offenders +=
+                  fmt::format("{} ({:.6e} eV)", elem->name_, elem_E_max);
+              }
+            }
+          }
+        }
+        fatal_error(fmt::format(
+          "Source energy {:.6e} eV is above the range of energies of the "
+          "following cross section table(s): {}",
+          src_E_max, offenders));
       }
     }
 
