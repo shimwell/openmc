@@ -1,6 +1,7 @@
 name: Build Linux Wheels
 
 on:
+  push:
   workflow_dispatch:
 
 jobs:

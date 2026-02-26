@@ -1,6 +1,7 @@
 name: Build macOS ARM Wheels
 
 on:
+  push:
   workflow_dispatch:
 
 jobs:
