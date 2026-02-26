@@ -29,4 +29,5 @@ COPY Li.h5 .
 COPY Li7.h5 .
 COPY small_um.vtk .
 RUN apt install libxrender1 -y
+RUN openmc --version || echo "openmc --version exit code: $?"
 RUN python${python_version} minimal_test.py
