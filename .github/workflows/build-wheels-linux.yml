@@ -1,0 +1,68 @@
+name: Build Linux Wheels
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+        include:
+          - python-version: "3.11"
+            python-abi: "cp311-cp311"
+          - python-version: "3.12"
+            python-abi: "cp312-cp312"
+          - python-version: "3.13"
+            python-abi: "cp313-cp313"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build wheel in Docker
+        run: |
+          docker build --no-cache \
+            --build-arg Python_ABI=${{ matrix.python-abi }} \
+            --build-arg OPENMC_USE_DAGMC=ON \
+            -t openmc_wheel:python${{ matrix.python-version }} \
+            -f manylinux.Dockerfile .
+
+      - name: Extract wheel from container
+        run: |
+          mkdir -p wheelhouse
+          docker create --name wheel_container openmc_wheel:python${{ matrix.python-version }}
+          docker cp wheel_container:/root/openmc/dist/. wheelhouse
+          docker rm wheel_container
+          ls -la wheelhouse/
+
+      - name: Upload wheel
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-wheel-${{ matrix.python-version }}
+          path: wheelhouse/*manylinux*.whl
+
+  test:
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download wheels
+        uses: actions/download-artifact@v4
+        with:
+          path: wheelhouse
+          merge-multiple: true
+
+      - name: Test wheel
+        run: |
+          docker build \
+            -f wheeltest.Dockerfile \
+            --build-arg python_version=${{ matrix.python-version }} \
+            .

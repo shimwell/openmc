@@ -1,0 +1,71 @@
+name: Build macOS ARM Wheels
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-14
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          brew install hdf5 cmake
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install Python build tools
+        run: |
+          pip install build delocate
+
+      - name: Build wheel
+        run: |
+          export SKBUILD_CMAKE_ARGS="-DOPENMC_USE_DAGMC=OFF;-DOPENMC_USE_LIBMESH=OFF;-DOPENMC_USE_MPI=OFF;-DHDF5_ROOT=$(brew --prefix hdf5)"
+          python -m build . -w
+
+      - name: Repair wheel
+        run: |
+          delocate-wheel -w wheelhouse dist/openmc-*.whl
+          ls -la wheelhouse/
+
+      - name: Upload wheel
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-arm-wheel-${{ matrix.python-version }}
+          path: wheelhouse/*.whl
+
+  test:
+    needs: build
+    runs-on: macos-14
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+
+    steps:
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Download wheel
+        uses: actions/download-artifact@v4
+        with:
+          name: macos-arm-wheel-${{ matrix.python-version }}
+          path: wheelhouse
+
+      - name: Test wheel
+        run: |
+          python -m venv test_env
+          source test_env/bin/activate
+          pip install wheelhouse/openmc-*.whl
+          python -c "import openmc.lib; print('openmc.lib imported successfully')"
+          openmc --version
