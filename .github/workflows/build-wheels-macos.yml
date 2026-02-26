@@ -33,6 +33,7 @@ jobs:
           cmake .. \
             -DCMAKE_INSTALL_PREFIX=${{ env.DEP_PREFIX }} \
             -DENABLE_MPI=OFF \
+            -DENABLE_FORTRAN=OFF \
             -DENABLE_HDF5=ON \
             -DHDF5_ROOT=$(brew --prefix hdf5) \
             -DENABLE_NETCDF=ON \
