@@ -4,6 +4,11 @@ on:
   push:
   workflow_dispatch:
 
+env:
+  MOAB_TAG: "5.5.0"
+  DAGMC_TAG: "v3.2.4"
+  DEP_PREFIX: /usr/local/openmc_deps
+
 jobs:
   build:
     runs-on: macos-14
@@ -17,7 +22,41 @@ jobs:
 
       - name: Install system dependencies
         run: |
-          brew install hdf5 cmake
+          brew install hdf5 cmake netcdf
+
+      - name: Build MOAB
+        run: |
+          git clone --depth 1 -b ${{ env.MOAB_TAG }} https://bitbucket.org/fathomteam/moab.git
+          cd moab
+          mkdir build && cd build
+          cmake .. \
+            -DCMAKE_INSTALL_PREFIX=${{ env.DEP_PREFIX }} \
+            -DENABLE_MPI=OFF \
+            -DENABLE_HDF5=ON \
+            -DHDF5_ROOT=$(brew --prefix hdf5) \
+            -DENABLE_NETCDF=ON \
+            -DNETCDF_ROOT=$(brew --prefix netcdf) \
+            -DBUILD_SHARED_LIBS=ON \
+            -DENABLE_BLASLAPACK=OFF \
+            -DENABLE_PYMOAB=OFF
+          make -j$(sysctl -n hw.ncpu)
+          make install
+
+      - name: Build DAGMC
+        run: |
+          git clone --depth 1 -b ${{ env.DAGMC_TAG }} https://github.com/svalinn/DAGMC.git
+          cd DAGMC
+          mkdir build && cd build
+          cmake .. \
+            -DCMAKE_INSTALL_PREFIX=${{ env.DEP_PREFIX }} \
+            -DMOAB_DIR=${{ env.DEP_PREFIX }} \
+            -DDOUBLE_DOWN=OFF \
+            -DBUILD_TALLY=ON \
+            -DBUILD_UWUW=ON \
+            -DBUILD_STATIC_LIBS=OFF \
+            -DBUILD_RPATH=OFF
+          make -j$(sysctl -n hw.ncpu)
+          make install
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -30,7 +69,7 @@ jobs:
 
       - name: Build wheel
         run: |
-          export SKBUILD_CMAKE_ARGS="-DOPENMC_USE_DAGMC=OFF;-DOPENMC_USE_LIBMESH=OFF;-DOPENMC_USE_MPI=OFF;-DOPENMC_USE_OPENMP=OFF;-DHDF5_ROOT=$(brew --prefix hdf5)"
+          export SKBUILD_CMAKE_ARGS="-DOPENMC_USE_DAGMC=ON;-DOPENMC_USE_LIBMESH=OFF;-DOPENMC_USE_MPI=OFF;-DOPENMC_USE_OPENMP=OFF;-DHDF5_ROOT=$(brew --prefix hdf5);-DCMAKE_PREFIX_PATH=${{ env.DEP_PREFIX }}"
           python -m build . -w
 
       - name: Repair wheel
