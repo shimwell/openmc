@@ -37,7 +37,6 @@ jobs:
             -DENABLE_HDF5=ON \
             -DHDF5_ROOT=$(brew --prefix hdf5) \
             -DENABLE_NETCDF=ON \
-            -DNETCDF_DIR=$(brew --prefix netcdf) \
             -DBUILD_SHARED_LIBS=ON \
             -DENABLE_BLASLAPACK=OFF \
             -DENABLE_PYMOAB=OFF
