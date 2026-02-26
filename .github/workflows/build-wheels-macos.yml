@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
 
 env:
-  MOAB_TAG: "5.5.0"
+  MOAB_TAG: "5.6.0"
   DAGMC_TAG: "v3.2.4"
   DEP_PREFIX: /usr/local/openmc_deps
 
@@ -23,7 +23,7 @@ jobs:
       - name: Install system dependencies
         run: |
           brew install hdf5 netcdf
-          pip install cmake==3.31.6
+          pip install cmake
 
       - name: Build MOAB
         run: |
