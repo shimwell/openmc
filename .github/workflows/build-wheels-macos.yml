@@ -30,7 +30,7 @@ jobs:
 
       - name: Build wheel
         run: |
-          export SKBUILD_CMAKE_ARGS="-DOPENMC_USE_DAGMC=OFF;-DOPENMC_USE_LIBMESH=OFF;-DOPENMC_USE_MPI=OFF;-DHDF5_ROOT=$(brew --prefix hdf5)"
+          export SKBUILD_CMAKE_ARGS="-DOPENMC_USE_DAGMC=OFF;-DOPENMC_USE_LIBMESH=OFF;-DOPENMC_USE_MPI=OFF;-DOPENMC_USE_OPENMP=OFF;-DHDF5_ROOT=$(brew --prefix hdf5)"
           python -m build . -w
 
       - name: Repair wheel
