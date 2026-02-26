@@ -22,7 +22,8 @@ jobs:
 
       - name: Install system dependencies
         run: |
-          brew install hdf5 cmake netcdf
+          brew install hdf5 netcdf
+          pip install cmake==3.31.6
 
       - name: Build MOAB
         run: |
