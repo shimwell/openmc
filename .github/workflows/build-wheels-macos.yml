@@ -53,8 +53,8 @@ jobs:
             -DCMAKE_INSTALL_PREFIX=${{ env.DEP_PREFIX }} \
             -DMOAB_DIR=${{ env.DEP_PREFIX }} \
             -DDOUBLE_DOWN=OFF \
-            -DBUILD_TALLY=ON \
-            -DBUILD_UWUW=ON \
+            -DBUILD_TALLY=OFF \
+            -DBUILD_UWUW=OFF \
             -DBUILD_STATIC_LIBS=OFF \
             -DBUILD_RPATH=OFF
           make -j$(sysctl -n hw.ncpu)
