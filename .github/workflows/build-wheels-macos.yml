@@ -27,6 +27,7 @@ jobs:
 
       - name: Build MOAB
         run: |
+          sudo mkdir -p ${{ env.DEP_PREFIX }}
           git clone --depth 1 -b ${{ env.MOAB_TAG }} https://bitbucket.org/fathomteam/moab.git
           cd moab
           mkdir build && cd build
@@ -41,7 +42,7 @@ jobs:
             -DENABLE_BLASLAPACK=OFF \
             -DENABLE_PYMOAB=OFF
           make -j$(sysctl -n hw.ncpu)
-          make install
+          sudo make install
 
       - name: Build DAGMC
         run: |
@@ -57,7 +58,7 @@ jobs:
             -DBUILD_STATIC_LIBS=OFF \
             -DBUILD_RPATH=OFF
           make -j$(sysctl -n hw.ncpu)
-          make install
+          sudo make install
 
       - name: Set up Python
         uses: actions/setup-python@v5
