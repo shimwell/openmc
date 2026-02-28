@@ -15,8 +15,6 @@ RUN apt update -y && apt upgrade -y && \
     apt update -y && \
     apt install -y python${python_version} python${python_version}-venv python3-pip python${python_version}-dev
 
-RUN apt install libhdf5-dev -y
-
 RUN python${python_version} -m venv openmc_venv
 ENV PATH=/openmc_venv/bin:$PATH
 COPY wheelhouse/openmc-${openmc_version}-cp${python_version_no_dot}-cp${python_version_no_dot}-manylinux_2_28_x86_64.whl .

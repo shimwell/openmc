@@ -7,42 +7,24 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.11", "3.12", "3.13"]
-        include:
-          - python-version: "3.11"
-            python-abi: "cp311-cp311"
-          - python-version: "3.12"
-            python-abi: "cp312-cp312"
-          - python-version: "3.13"
-            python-abi: "cp313-cp313"
+    timeout-minutes: 120
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # needed for setuptools_scm
 
-      - name: Build wheel in Docker
-        run: |
-          docker build --no-cache \
-            --build-arg Python_ABI=${{ matrix.python-abi }} \
-            --build-arg OPENMC_USE_DAGMC=ON \
-            -t openmc_wheel:python${{ matrix.python-version }} \
-            -f manylinux.Dockerfile .
+      - name: Build wheels with cibuildwheel
+        uses: pypa/cibuildwheel@v2.22
+        env:
+          CIBW_PLATFORM: linux
 
-      - name: Extract wheel from container
-        run: |
-          mkdir -p wheelhouse
-          docker create --name wheel_container openmc_wheel:python${{ matrix.python-version }}
-          docker cp wheel_container:/root/openmc/dist/. wheelhouse
-          docker rm wheel_container
-          ls -la wheelhouse/
-
-      - name: Upload wheel
+      - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
-          name: linux-wheel-${{ matrix.python-version }}
-          path: wheelhouse/*manylinux*.whl
+          name: linux-wheels
+          path: wheelhouse/*.whl
 
   test:
     needs: build
@@ -58,10 +40,13 @@ jobs:
       - name: Download wheels
         uses: actions/download-artifact@v4
         with:
+          name: linux-wheels
           path: wheelhouse
-          merge-multiple: true
 
-      - name: Test wheel
+      - name: List wheels
+        run: ls -la wheelhouse/
+
+      - name: Test wheel in Docker
         run: |
           docker build \
             -f wheeltest.Dockerfile \

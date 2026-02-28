@@ -73,3 +73,17 @@ wheel.packages = ["openmc"]
 
 [tool.setuptools_scm]
 fallback_version = "0.15.2"
+
+# ---------------------------------------------------------------------------
+# cibuildwheel
+# ---------------------------------------------------------------------------
+[tool.cibuildwheel]
+build = ["cp311-manylinux_x86_64", "cp312-manylinux_x86_64", "cp313-manylinux_x86_64"]
+skip = ["*-musllinux*"]
+
+[tool.cibuildwheel.linux]
+manylinux-x86_64-image = "manylinux_2_28"
+before-all = "bash {project}/tools/ci/cibw_before_all_linux.sh"
+environment = { SKBUILD_CMAKE_ARGS="-DOPENMC_USE_DAGMC=ON;-DOPENMC_USE_OPENMP=ON;-DOPENMC_USE_MPI=OFF;-DOPENMC_USE_UWUW=OFF;-DOPENMC_USE_LIBMESH=OFF" }
+repair-wheel-command = "auditwheel repair -w {dest_dir} {wheel}"
+test-command = "openmc --version && python -c \"import openmc; import openmc.lib\""
