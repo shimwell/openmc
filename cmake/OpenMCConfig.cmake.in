@@ -16,6 +16,10 @@ if(@OPENMC_USE_LIBMESH@)
   pkg_check_modules(LIBMESH REQUIRED @LIBMESH_PC_FILE@>=1.7.0 IMPORTED_TARGET)
 endif()
 
+if(@OPENMC_USE_XDG@)
+  find_package(XDG REQUIRED HINTS @XDG_DIR@)
+endif()
+
 find_package(PNG)
 
 if(NOT TARGET OpenMC::libopenmc)
