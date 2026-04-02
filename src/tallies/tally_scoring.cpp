@@ -660,7 +660,7 @@ void score_general_ce_nonanalog(Particle& p, int i_tally, int start_index,
       break;
 
     case SCORE_FISSION:
-      if (p.macro_xs().fission == 0)
+      if (p.macro_xs().fission == 0 && atom_density == 0)
         continue;
 
       if (i_nuclide >= 0) {
@@ -671,7 +671,7 @@ void score_general_ce_nonanalog(Particle& p, int i_tally, int start_index,
       break;
 
     case SCORE_NU_FISSION:
-      if (p.macro_xs().fission == 0)
+      if (p.macro_xs().fission == 0 && atom_density == 0)
         continue;
 
       if (i_nuclide >= 0) {
@@ -682,7 +682,7 @@ void score_general_ce_nonanalog(Particle& p, int i_tally, int start_index,
       break;
 
     case SCORE_PROMPT_NU_FISSION:
-      if (p.macro_xs().fission == 0)
+      if (p.macro_xs().fission == 0 && atom_density == 0)
         continue;
       if (i_nuclide >= 0) {
         score = p.neutron_xs(i_nuclide).fission *
@@ -707,7 +707,7 @@ void score_general_ce_nonanalog(Particle& p, int i_tally, int start_index,
       break;
 
     case SCORE_DELAYED_NU_FISSION:
-      if (p.macro_xs().fission == 0)
+      if (p.macro_xs().fission == 0 && atom_density == 0)
         continue;
       if (i_nuclide >= 0) {
         if (tally.delayedgroup_filter_ != C_NONE) {
@@ -775,7 +775,7 @@ void score_general_ce_nonanalog(Particle& p, int i_tally, int start_index,
       break;
 
     case SCORE_DECAY_RATE:
-      if (p.macro_xs().fission == 0)
+      if (p.macro_xs().fission == 0 && atom_density == 0)
         continue;
       if (i_nuclide >= 0) {
         const auto& nuc {*data::nuclides[i_nuclide]};
@@ -877,7 +877,7 @@ void score_general_ce_nonanalog(Particle& p, int i_tally, int start_index,
       break;
 
     case SCORE_KAPPA_FISSION:
-      if (p.macro_xs().fission == 0.)
+      if (p.macro_xs().fission == 0. && atom_density == 0)
         continue;
       score = 0.;
       // Kappa-fission values are determined from the Q-value listed for the
@@ -934,7 +934,7 @@ void score_general_ce_nonanalog(Particle& p, int i_tally, int start_index,
 
     case SCORE_FISS_Q_PROMPT:
     case SCORE_FISS_Q_RECOV:
-      if (p.macro_xs().fission == 0.)
+      if (p.macro_xs().fission == 0. && atom_density == 0)
         continue;
       score =
         score_fission_q(p, score_bin, tally, flux, i_nuclide, atom_density);

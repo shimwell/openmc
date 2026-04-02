@@ -48,3 +48,33 @@ def test_micro_macro_compare(run_in_tmpdir):
 
     # For micro tally, H3 scores should be positive
     assert np.all(tally_micro.get_values(nuclides=['H3']) > 0.0)
+
+
+def test_fission_in_void(run_in_tmpdir):
+    """Test that fission scores work in void with multiply_density=False.
+
+    The macro_xs().fission guard must not skip microscopic fission scoring
+    when atom_density has been set to 1.0 by the void path.
+    """
+    sph = openmc.Sphere(r=10.0, boundary_type='vacuum')
+    void_cell = openmc.Cell(region=-sph)
+    model = openmc.Model()
+    model.geometry = openmc.Geometry([void_cell])
+    model.settings.run_mode = 'fixed source'
+    model.settings.particles = 1000
+    model.settings.batches = 5
+    model.settings.source = openmc.IndependentSource(
+        space=openmc.stats.Point()
+    )
+
+    tally = openmc.Tally()
+    tally.scores = ['fission', 'nu-fission']
+    tally.nuclides = ['U235']
+    tally.multiply_density = False
+    model.tallies = [tally]
+
+    sp_filename = model.run()
+    with openmc.StatePoint(sp_filename) as sp:
+        t = sp.tallies[tally.id]
+
+    assert np.all(t.mean > 0.0)
