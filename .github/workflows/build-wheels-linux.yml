@@ -16,7 +16,7 @@ jobs:
           fetch-depth: 0  # needed for setuptools_scm
 
       - name: Build wheels with cibuildwheel
-        uses: pypa/cibuildwheel@v2.22
+        uses: pypa/cibuildwheel@v3.4.1
         env:
           CIBW_PLATFORM: linux
 
