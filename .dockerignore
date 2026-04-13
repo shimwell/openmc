@@ -1,0 +1,11 @@
+**/__pycache__
+*.pyc
+build/
+dist/
+wheelhouse/
+statepoint.*
+summary.h5
+mgxs.h5
+vendor/xtensor
+vendor/xtl
+q

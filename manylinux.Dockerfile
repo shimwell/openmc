@@ -41,7 +41,7 @@ ARG OPENMC_ENABLE_PROFILE="OFF"
 ARG OPENMC_ENABLE_COVERAGE="OFF"
 ARG OPENMC_USE_DAGMC="ON"
 ARG OPENMC_USE_XDG="ON"
-ARG OPENMC_USE_LIBMESH="ON"
+ARG OPENMC_USE_LIBMESH="OFF"
 ARG OPENMC_USE_UWUW="OFF"
 
 # Configure dependencies tags
@@ -296,37 +296,19 @@ RUN git clone --depth 1 -b ${DAGMC_TAG} https://github.com/svalinn/DAGMC.git dag
     cd ../.. && \
     rm -rf dagmc
 
-# Build and install libMesh
-ARG LIBMESH_TAG
-RUN git clone --depth 1 -b ${LIBMESH_TAG} https://github.com/libMesh/libmesh.git libmesh && \
-    cd libmesh && \
-    git submodule update --init --recursive && \
-    mkdir build && cd build && \
-    export METHODS="opt" && \
-    ../configure \
-        $([ ${COMPILER} = 'openmpi' ] && echo '--enable-mpi' || echo '--disable-mpi') \
-        --prefix=/usr \
-        --enable-exodus \
-        --disable-netcdf-4 \
-        --disable-eigen \
-        --disable-lapack && \
-    make -j$(nproc) && make install && \
-    cd ../.. && \
-    rm -rf libmesh
-
 # Build and install XDG
 ARG XDG_TAG
-RUN git clone --depth 1 -b ${XDG_TAG} --recurse-submodules https://github.com/xdg-org/xdg.git xdg && \
+RUN git clone --depth 1 -b ${XDG_TAG} https://github.com/xdg-org/xdg.git xdg && \
     cd xdg && \
+    git submodule update --init vendor/fmt vendor/linalg vendor/indicators vendor/argparse && \
     mkdir build && cd build && \
     cmake .. \
         -DCMAKE_INSTALL_PREFIX=/usr \
         -DXDG_BUILD_TESTS=OFF \
-        -DXDG_BUILD_TOOLS=OFF \
         -DXDG_ENABLE_MOAB=ON \
         -DMOAB_DIR=/usr \
-        -DXDG_ENABLE_LIBMESH=ON \
-        -DCMAKE_PREFIX_PATH=/usr && \
+        -DXDG_ENABLE_LIBMESH=OFF \
+        -DCMAKE_DISABLE_FIND_PACKAGE_fmt=ON && \
     make -j$(nproc) && make install && \
     cd ../.. && \
     rm -rf xdg
