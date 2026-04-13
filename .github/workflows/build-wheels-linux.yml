@@ -8,23 +8,45 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 120
+    strategy:
+      matrix:
+        python-abi: ["cp312-cp312", "cp313-cp313", "cp314-cp314"]
+        include:
+          - python-abi: "cp312-cp312"
+            python-version: "3.12"
+          - python-abi: "cp313-cp313"
+            python-version: "3.13"
+          - python-abi: "cp314-cp314"
+            python-version: "3.14"
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # needed for setuptools_scm
+          fetch-depth: 0
 
-      - name: Build wheels with cibuildwheel
-        uses: pypa/cibuildwheel@v3.4.1
-        env:
-          CIBW_PLATFORM: linux
+      - name: Build wheel
+        run: |
+          docker build \
+            --build-arg Python_ABI=${{ matrix.python-abi }} \
+            --build-arg OPENMC_USE_DAGMC=ON \
+            --build-arg OPENMC_USE_XDG=ON \
+            -t openmc_wheel:python${{ matrix.python-version }} \
+            -f manylinux.Dockerfile .
+
+      - name: Extract wheel
+        run: |
+          mkdir -p wheelhouse
+          docker create --name wheel_container openmc_wheel:python${{ matrix.python-version }}
+          docker cp wheel_container:/root/openmc/dist/. wheelhouse
+          docker rm wheel_container
+          ls -la wheelhouse/*manylinux*.whl
 
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
-          name: linux-wheels
-          path: wheelhouse/*.whl
+          name: linux-wheel-${{ matrix.python-version }}
+          path: wheelhouse/*manylinux*.whl
 
   test:
     needs: build
@@ -37,18 +59,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Download wheels
+      - name: Download wheel
         uses: actions/download-artifact@v4
         with:
-          name: linux-wheels
+          name: linux-wheel-${{ matrix.python-version }}
           path: wheelhouse
-
-      - name: List wheels
-        run: ls -la wheelhouse/
 
       - name: Test wheel in Docker
         run: |
           docker build \
+            --progress=plain \
             -f wheeltest.Dockerfile \
             --build-arg python_version=${{ matrix.python-version }} \
             .
