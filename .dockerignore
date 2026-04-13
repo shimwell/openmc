@@ -1,0 +1,10 @@
+**/__pycache__
+*.pyc
+build/
+dist/
+statepoint.*
+summary.h5
+mgxs.h5
+vendor/xtensor
+vendor/xtl
+q

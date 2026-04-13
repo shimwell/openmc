@@ -9,18 +9,28 @@ pip install --upgrade numpy
 # Install NJOY 2016
 ./tools/ci/gha-install-njoy.sh
 
-# Install DAGMC if needed
-if [[ $DAGMC = 'y' ]]; then
-    ./tools/ci/gha-install-dagmc.sh
+# Build MOAB if needed
+if [[ $DAGMC = 'y' || $XDG = 'y' ]]; then
+    ./tools/ci/gha-build-moab.sh
 fi
 
 # Install NCrystal and verify installation
 pip install 'ncrystal>=4.1.0'
 nctool --test
 
+# Install DAGMC if needed
+if [[ $DAGMC = 'y' ]]; then
+    ./tools/ci/gha-install-dagmc.sh
+fi
+
 # Install libMesh if needed
-if [[ $LIBMESH = 'y' ]]; then
+if [[ $LIBMESH = 'y' || $XDG = 'y' ]]; then
     ./tools/ci/gha-install-libmesh.sh
+fi
+
+# Install XDG if needed
+if [[ $XDG = 'y' ]]; then
+    ./tools/ci/gha-install-xdg.sh
 fi
 
 # Install MCPL
@@ -39,8 +49,6 @@ if [[ $MPI == 'y' ]]; then
     pip install --no-build-isolation --no-binary=h5py h5py
 fi
 
-# Build and install OpenMC executable
+# Build and install OpenMC
 python tools/ci/gha-install.py
 
-# Install Python API in editable mode
-pip install -e .[test,vtk,ci]

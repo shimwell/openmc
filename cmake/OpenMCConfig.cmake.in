@@ -1,12 +1,10 @@
-get_filename_component(OpenMC_CMAKE_DIR "${CMAKE_CURRENT_LIST_FILE}" DIRECTORY)
 
-# Compute the install prefix from this file's location
-get_filename_component(_OPENMC_PREFIX "${OpenMC_CMAKE_DIR}/../../.." ABSOLUTE)
+include(CMakeFindDependencyMacro)
 
-find_package(fmt CONFIG REQUIRED HINTS ${_OPENMC_PREFIX})
-find_package(pugixml CONFIG REQUIRED HINTS ${_OPENMC_PREFIX})
-if(@OPENMC_USE_DAGMC@)
-  find_package(DAGMC REQUIRED HINTS @DAGMC_DIR@)
+if(@OPENMC_USE_XDG@)
+  if(NOT TARGET xdg::xdg)
+    find_dependency(XDG CONFIG REQUIRED HINTS "@XDG_DIR@")
+  endif()
 endif()
 
 if(@OPENMC_USE_LIBMESH@)
@@ -16,18 +14,81 @@ if(@OPENMC_USE_LIBMESH@)
   pkg_check_modules(LIBMESH REQUIRED @LIBMESH_PC_FILE@>=1.7.0 IMPORTED_TARGET)
 endif()
 
-find_package(PNG)
+if(@OPENMC_USE_DAGMC@)
+  if(NOT TARGET dagmc-shared)
+    find_dependency(DAGMC REQUIRED HINTS "@DAGMC_DIR@")
+  endif()
+endif()
 
-if(NOT TARGET OpenMC::libopenmc)
-  include("${OpenMC_CMAKE_DIR}/OpenMCTargets.cmake")
+if(NOT TARGET fmt::fmt)
+  find_dependency(fmt CONFIG REQUIRED)
+endif()
+
+if(NOT TARGET pugixml::pugixml AND NOT TARGET pugixml)
+  find_dependency(pugixml CONFIG REQUIRED)
+endif()
+
+if(@PNG_FOUND@)
+  if(NOT TARGET PNG::PNG)
+    find_dependency(PNG REQUIRED)
+  endif()
 endif()
 
 if(@OPENMC_USE_MPI@)
-  find_package(MPI REQUIRED)
+  if(NOT TARGET MPI::MPI_CXX)
+    find_dependency(MPI REQUIRED)
+  endif()
 endif()
 
 if(@OPENMC_USE_OPENMP@)
-  find_package(OpenMP REQUIRED)
+  if(NOT TARGET OpenMP::OpenMP_CXX)
+    find_dependency(OpenMP REQUIRED)
+  endif()
+endif()
+
+if(@SKBUILD@)
+  # Find the Python interpreter and ensure it's available.
+  find_package(Python COMPONENTS Interpreter REQUIRED)
+
+  # Function to run Python commands and validate their execution.
+  function(run_python_command output_var command)
+    execute_process(
+      COMMAND ${Python_EXECUTABLE} -c "${command}"
+      OUTPUT_VARIABLE ${output_var}
+      OUTPUT_STRIP_TRAILING_WHITESPACE
+      RESULT_VARIABLE result
+    )
+    # Check if the command was successful
+    if(NOT result EQUAL 0)
+      message(FATAL_ERROR "Failed to run Python command: ${command}")
+    else()
+      # Add the output variable to the parent scope
+      set(${output_var} "${${output_var}}" PARENT_SCOPE)
+    endif()
+  endfunction()
+
+  # Extract MOAB include paths, library paths, and extra libraries
+  run_python_command(OpenMC_INCLUDE_DIRS "import openmc; print(' '.join(openmc.include_path))")
+  run_python_command(OpenMC_LIBRARY_DIRS "import openmc; print(' '.join(openmc.lib_path))")
+  run_python_command(OpenMC_EXTRA_LIBRARIES "import openmc; print(' '.join(openmc.extra_lib))")
+
+  # Check if the wheel was repaired using auditwheel or delocate
+  if(OpenMC_EXTRA_LIBRARIES)
+    message(FATAL_ERROR
+        "This build of OpenMC is not supported. "
+        "It appears that the wheel was repaired using tools like auditwheel or delocate, "
+        "that modifies the shared libraries, which may cause problems.\n"
+        "OpenMC_EXTRA_LIBRARIES is not empty: ${OpenMC_EXTRA_LIBRARIES}.\n"
+        "To resolve this, please build OpenMC from scratch. "
+        "For more information, visit: https://docs.openmc.org/"
+    )
+  endif()
+  
+  # Add OpenMC targets
+  file(TO_CMAKE_PATH "${OpenMC_LIBRARY_DIRS}/cmake/OpenMC/OpenMCTargets.cmake" OpenMC_TARGETS_FILE)
+  include(${OpenMC_TARGETS_FILE})
+elseif(NOT TARGET OpenMC::libopenmc)
+  include("${OpenMC_CMAKE_DIR}/OpenMCTargets.cmake")
 endif()
 
 if(@OPENMC_USE_UWUW@ AND NOT ${DAGMC_BUILD_UWUW})
