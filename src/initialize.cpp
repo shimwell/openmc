@@ -42,6 +42,10 @@
 #include "libmesh/libmesh.h"
 #endif
 
+#ifdef OPENMC_XDG_ENABLED
+#include "xdg/config.h"
+#endif
+
 int openmc_init(int argc, char* argv[], const void* intracomm)
 {
   using namespace openmc;
@@ -84,6 +88,16 @@ int openmc_init(int argc, char* argv[], const void* intracomm)
 
     settings::libmesh_comm = &(settings::libmesh_init->comm());
   }
+
+#ifdef OPENMC_XDG_ENABLED
+#ifdef XDG_ENABLE_LIBMESH
+  // Set the external libMesh initialization and communicator for XDG if
+  // libMesh was initialized externally. If libMesh was initialized internally,
+  // the XDG config will use the internal initialization and communicator.
+  xdg::config::external_libmesh_init = settings::libmesh_init.get();
+  xdg::config::external_libmesh_comm = settings::libmesh_comm;
+#endif
+#endif
 
 #endif
 
@@ -225,6 +239,15 @@ int parse_command_line(int argc, char* argv[])
       } else if (arg == "-n" || arg == "--particles") {
         i += 1;
         settings::n_particles = std::stoll(argv[i]);
+
+      } else if (arg == "-q" || arg == "--verbosity") {
+        i += 1;
+        settings::verbosity = std::stoi(argv[i]);
+        if (settings::verbosity > 10 || settings::verbosity < 1) {
+          auto msg = fmt::format("Invalid verbosity: {}.", settings::verbosity);
+          strcpy(openmc_err_msg, msg.c_str());
+          return OPENMC_E_INVALID_ARGUMENT;
+        }
 
       } else if (arg == "-e" || arg == "--event") {
         settings::event_based = true;
@@ -376,8 +399,10 @@ bool read_model_xml()
   auto settings_root = root.child("settings");
 
   // Verbosity
-  if (check_for_node(settings_root, "verbosity")) {
+  if (check_for_node(settings_root, "verbosity") && settings::verbosity == -1) {
     settings::verbosity = std::stoi(get_node_value(settings_root, "verbosity"));
+  } else if (settings::verbosity == -1) {
+    settings::verbosity = 7;
   }
 
   // To this point, we haven't displayed any output since we didn't know what

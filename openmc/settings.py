@@ -4,6 +4,7 @@ import itertools
 from math import ceil
 from numbers import Integral, Real
 from pathlib import Path
+import traceback
 
 import lxml.etree as ET
 import warnings
@@ -40,6 +41,10 @@ class Settings:
 
     Attributes
     ----------
+    atomic_relaxation : bool
+        Whether to simulate the atomic relaxation cascade (fluorescence photons
+        and Auger electrons) following photoelectric and incoherent scattering
+        interactions.
     batches : int
         Number of batches to simulate
     confidence_intervals : bool
@@ -182,7 +187,7 @@ class Settings:
         Options for configuring the random ray solver. Acceptable keys are:
 
         :distance_inactive:
-            Indicates the total active distance in [cm] a ray should travel
+            Indicates the total inactive distance in [cm] a ray should travel
         :distance_active:
             Indicates the total active distance in [cm] a ray should travel
         :ray_source:
@@ -206,7 +211,11 @@ class Settings:
             default is 'False'.
         :sample_method:
             Sampling method for the ray starting location and direction of
-            travel. Options are `prng` (default) or 'halton`.
+            travel. Options are `prng` (default), `halton`, or `s2`. `s2`
+            modifies the `prng` sampling method such that rays are sampled
+            with directions (-1, 0, 0) or (1, 0, 0). This is used for verification
+            against analytic transport benchmarks which are often derivied with
+            a reduced angular domain.
         :source_region_meshes:
             List of tuples where each tuple contains a mesh and a list of
             domains. Each domain is an instance of openmc.Material, openmc.Cell,
@@ -284,6 +293,14 @@ class Settings:
         :cellto: Cell ID used to determine if particles crossing identified
                  surfaces are to be banked. Particles going to this declared
                  cell will be banked (int)
+    surface_grazing_cutoff : float
+        Surface flux cosine cutoff. If not specified, the default value is
+        0.001. For more information, see the surface tally section in the theory
+        manual.
+    surface_grazing_ratio : float
+        Surface flux cosine substitution ratio. If not specified, the default
+        value is 0.5. For more information, see the surface tally section in the
+        theory manual.
     survival_biasing : bool
         Indicate whether survival biasing is to be used
     tabular_legendre : dict
@@ -389,11 +406,14 @@ class Settings:
         self._confidence_intervals = None
         self._electron_treatment = None
         self._photon_transport = None
+        self._atomic_relaxation = None
         self._plot_seed = None
         self._ptables = None
         self._uniform_source_sampling = None
         self._seed = None
         self._stride = None
+        self._surface_grazing_cutoff = None
+        self._surface_grazing_ratio = None
         self._survival_biasing = None
         self._free_gas_threshold = None
 
@@ -466,6 +486,16 @@ class Settings:
 
         for key, value in kwargs.items():
             setattr(self, key, value)
+
+    def __setattr__(self, name: str, value):
+        if not name.startswith('_'):
+            try:
+                getattr(self, name)
+            except AttributeError as e:
+                msg, = traceback.format_exception_only(e)
+                msg = msg.strip().split(maxsplit=1)[-1]
+                warnings.warn(msg, stacklevel=2)
+        super().__setattr__(name, value)
 
     @property
     def run_mode(self) -> str:
@@ -639,6 +669,15 @@ class Settings:
         self._electron_treatment = electron_treatment
 
     @property
+    def atomic_relaxation(self) -> bool:
+        return self._atomic_relaxation
+
+    @atomic_relaxation.setter
+    def atomic_relaxation(self, atomic_relaxation: bool):
+        cv.check_type('atomic relaxation', atomic_relaxation, bool)
+        self._atomic_relaxation = atomic_relaxation
+
+    @property
     def ptables(self) -> bool:
         return self._ptables
 
@@ -694,6 +733,27 @@ class Settings:
         cv.check_type('random number generator stride', stride, Integral)
         cv.check_greater_than('random number generator stride', stride, 0)
         self._stride = stride
+
+    @property
+    def surface_grazing_cutoff(self) -> float:
+        return self._surface_grazing_cutoff
+
+    @surface_grazing_cutoff.setter
+    def surface_grazing_cutoff(self, surface_grazing_cutoff: float):
+        cv.check_type('surface grazing cutoff', surface_grazing_cutoff, float)
+        cv.check_greater_than('surface grazing cutoff', surface_grazing_cutoff, 0.0)
+        cv.check_less_than('surface grazing cutoff', surface_grazing_cutoff, 1.0)
+        self._surface_grazing_cutoff = surface_grazing_cutoff
+
+    @property
+    def surface_grazing_ratio(self) -> float:
+        return self._surface_grazing_ratio
+
+    @surface_grazing_ratio.setter
+    def surface_grazing_ratio(self, surface_grazing_ratio: float):
+        cv.check_type('surface grazing ratio', surface_grazing_ratio, float)
+        cv.check_greater_than('surface grazing ratio', surface_grazing_ratio, 0.0)
+        self._surface_grazing_ratio = surface_grazing_ratio
 
     @property
     def survival_biasing(self) -> bool:
@@ -1278,9 +1338,12 @@ class Settings:
         return self._weight_windows_file
 
     @weight_windows_file.setter
-    def weight_windows_file(self, value: PathLike):
-        cv.check_type('weight windows file', value, PathLike)
-        self._weight_windows_file = input_path(value)
+    def weight_windows_file(self, value: PathLike | None):
+        if value is None:
+            self._weight_windows_file = None
+        else:
+            cv.check_type('weight windows file', value, PathLike)
+            self._weight_windows_file = input_path(value)
 
     @property
     def weight_window_generators(self) -> list[WeightWindowGenerator]:
@@ -1337,7 +1400,7 @@ class Settings:
                                 'openmc.Material, openmc.Cell, or openmc.Universe.')
             elif key == 'sample_method':
                 cv.check_value('sample method', value,
-                               ('prng', 'halton'))
+                               ('prng', 'halton', 's2'))
             elif key == 'diagonal_stabilization_rho':
                 cv.check_type('diagonal stabilization rho', value, Real)
                 cv.check_greater_than('diagonal stabilization rho',
@@ -1582,6 +1645,11 @@ class Settings:
             element = ET.SubElement(root, "electron_treatment")
             element.text = str(self._electron_treatment)
 
+    def _create_atomic_relaxation_subelement(self, root):
+        if self._atomic_relaxation is not None:
+            element = ET.SubElement(root, "atomic_relaxation")
+            element.text = str(self._atomic_relaxation).lower()
+
     def _create_photon_transport_subelement(self, root):
         if self._photon_transport is not None:
             element = ET.SubElement(root, "photon_transport")
@@ -1606,6 +1674,16 @@ class Settings:
         if self._stride is not None:
             element = ET.SubElement(root, "stride")
             element.text = str(self._stride)
+
+    def _create_surface_grazing_cutoff_subelement(self, root):
+        if self._surface_grazing_cutoff is not None:
+            element = ET.SubElement(root, "surface_grazing_cutoff")
+            element.text = str(self._surface_grazing_cutoff)
+
+    def _create_surface_grazing_ratio_subelement(self, root):
+        if self._surface_grazing_ratio is not None:
+            element = ET.SubElement(root, "surface_grazing_ratio")
+            element.text = str(self._surface_grazing_ratio)
 
     def _create_survival_biasing_subelement(self, root):
         if self._survival_biasing is not None:
@@ -1874,7 +1952,11 @@ class Settings:
             for key, value in self._random_ray.items():
                 if key == 'ray_source' and isinstance(value, SourceBase):
                     source_element = value.to_xml_element()
+                    if source_element.find('bias') is not None:
+                        raise RuntimeError(
+                            "Ray source distributions should not be biased.")
                     element.append(source_element)
+
                 elif key == 'source_region_meshes':
                     subelement = ET.SubElement(element, 'source_region_meshes')
                     for mesh, domains in value:
@@ -2066,6 +2148,11 @@ class Settings:
         if text is not None:
             self.electron_treatment = text
 
+    def _atomic_relaxation_from_xml_element(self, root):
+        text = get_text(root, 'atomic_relaxation')
+        if text is not None:
+            self.atomic_relaxation = text in ('true', '1')
+
     def _energy_mode_from_xml_element(self, root):
         text = get_text(root, 'energy_mode')
         if text is not None:
@@ -2105,6 +2192,16 @@ class Settings:
         text = get_text(root, 'stride')
         if text is not None:
             self.stride = int(text)
+
+    def _surface_grazing_cutoff_from_xml_element(self, root):
+        text = get_text(root, 'surface_grazing_cutoff')
+        if text is not None:
+            self.surface_grazing_cutoff = float(text)
+
+    def _surface_grazing_ratio_from_xml_element(self, root):
+        text = get_text(root, 'surface_grazing_ratio')
+        if text is not None:
+            self.surface_grazing_ratio = float(text)
 
     def _survival_biasing_from_xml_element(self, root):
         text = get_text(root, 'survival_biasing')
@@ -2321,6 +2418,9 @@ class Settings:
                     self.random_ray[child.tag] = float(child.text)
                 elif child.tag == 'source':
                     source = SourceBase.from_xml_element(child)
+                    if child.find('bias') is not None:
+                        raise RuntimeError(
+                            "Ray source distributions should not be biased.")
                     self.random_ray['ray_source'] = source
                 elif child.tag == 'volume_estimator':
                     self.random_ray['volume_estimator'] = child.text
@@ -2402,6 +2502,7 @@ class Settings:
         self._create_collision_track_subelement(element)
         self._create_confidence_intervals(element)
         self._create_electron_treatment_subelement(element)
+        self._create_atomic_relaxation_subelement(element)
         self._create_energy_mode_subelement(element)
         self._create_max_order_subelement(element)
         self._create_photon_transport_subelement(element)
@@ -2410,6 +2511,8 @@ class Settings:
         self._create_ptables_subelement(element)
         self._create_seed_subelement(element)
         self._create_stride_subelement(element)
+        self._create_surface_grazing_cutoff_subelement(element)
+        self._create_surface_grazing_ratio_subelement(element)
         self._create_survival_biasing_subelement(element)
         self._create_cutoff_subelement(element)
         self._create_entropy_mesh_subelement(element, mesh_memo)
@@ -2516,6 +2619,7 @@ class Settings:
         settings._collision_track_from_xml_element(elem)
         settings._confidence_intervals_from_xml_element(elem)
         settings._electron_treatment_from_xml_element(elem)
+        settings._atomic_relaxation_from_xml_element(elem)
         settings._energy_mode_from_xml_element(elem)
         settings._max_order_from_xml_element(elem)
         settings._photon_transport_from_xml_element(elem)
@@ -2524,6 +2628,8 @@ class Settings:
         settings._ptables_from_xml_element(elem)
         settings._seed_from_xml_element(elem)
         settings._stride_from_xml_element(elem)
+        settings._surface_grazing_cutoff_from_xml_element(elem)
+        settings._surface_grazing_ratio_from_xml_element(elem)
         settings._survival_biasing_from_xml_element(elem)
         settings._cutoff_from_xml_element(elem)
         settings._entropy_mesh_from_xml_element(elem, meshes)

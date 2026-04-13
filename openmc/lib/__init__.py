@@ -32,6 +32,9 @@ else:
 def _dagmc_enabled():
     return c_bool.in_dll(_dll, "DAGMC_ENABLED").value
 
+def _xdg_enabled():
+    return c_bool.in_dll(_dll, "XDG_ENABLED").value
+
 def _coord_levels():
     return c_int.in_dll(_dll, "n_coord_levels").value
 
@@ -40,6 +43,9 @@ def _libmesh_enabled():
 
 def _uwuw_enabled():
     return c_bool.in_dll(_dll, "UWUW_ENABLED").value
+
+def _strict_fp_enabled():
+    return c_bool.in_dll(_dll, "STRICT_FP_ENABLED").value
 
 
 from .error import *

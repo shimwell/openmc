@@ -9,23 +9,28 @@ pip install --upgrade numpy
 # Install NJOY 2016
 ./tools/ci/gha-install-njoy.sh
 
-# Install DAGMC if needed
-if [[ $DAGMC = 'y' ]]; then
-    ./tools/ci/gha-install-dagmc.sh
+# Build MOAB if needed
+if [[ $DAGMC = 'y' || $XDG = 'y' ]]; then
+    ./tools/ci/gha-build-moab.sh
 fi
 
 # Install NCrystal and verify installation
 pip install 'ncrystal>=4.1.0'
 nctool --test
 
-# Install vectfit for WMP generation if needed
-if [[ $VECTFIT = 'y' ]]; then
-    ./tools/ci/gha-install-vectfit.sh
+# Install DAGMC if needed
+if [[ $DAGMC = 'y' ]]; then
+    ./tools/ci/gha-install-dagmc.sh
 fi
 
 # Install libMesh if needed
-if [[ $LIBMESH = 'y' ]]; then
+if [[ $LIBMESH = 'y' || $XDG = 'y' ]]; then
     ./tools/ci/gha-install-libmesh.sh
+fi
+
+# Install XDG if needed
+if [[ $XDG = 'y' ]]; then
+    ./tools/ci/gha-install-xdg.sh
 fi
 
 # Install MCPL
@@ -39,7 +44,9 @@ if [[ $MPI == 'y' ]]; then
     export CC=mpicc
     export HDF5_MPI=ON
     export HDF5_DIR=/usr/lib/x86_64-linux-gnu/hdf5/mpich
-    pip install --no-binary=h5py h5py
+    # Install h5py without build isolation to pick up already installed mpi4py
+    pip install setuptools Cython pkgconfig
+    pip install --no-build-isolation --no-binary=h5py h5py
 fi
 
 # Build and install OpenMC

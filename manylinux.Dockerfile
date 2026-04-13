@@ -40,6 +40,7 @@ ARG OPENMC_BUILD_TESTS="ON"
 ARG OPENMC_ENABLE_PROFILE="OFF"
 ARG OPENMC_ENABLE_COVERAGE="OFF"
 ARG OPENMC_USE_DAGMC="ON"
+ARG OPENMC_USE_XDG="ON"
 ARG OPENMC_USE_LIBMESH="ON"
 ARG OPENMC_USE_UWUW="OFF"
 
@@ -60,6 +61,7 @@ ARG PYBIND_TAG="v2.13.6"
 ARG XTENSOR_PYTHON_TAG="0.27.0"
 ARG VECTFIT_TAG="master"
 ARG LIBMESH_TAG="v1.7.7"
+ARG XDG_TAG="main"
 
 
 # Base stage
@@ -295,22 +297,39 @@ RUN git clone --depth 1 -b ${DAGMC_TAG} https://github.com/svalinn/DAGMC.git dag
     rm -rf dagmc
 
 # Build and install libMesh
-# ARG LIBMESH_TAG
-# RUN git clone --depth 1 -b ${LIBMESH_TAG} https://github.com/libMesh/libmesh.git libmesh && \
-#     cd libmesh && \
-#     git submodule update --init --recursive && \
-#     mkdir build && cd build && \
-#     export METHODS="opt" && \
-#     ../configure \
-#         $([ ${COMPILER} = 'openmpi' ] && echo '--enable-mpi' || echo '--disable-mpi') \
-#         --prefix=/usr \
-#         --enable-exodus \
-#         --disable-netcdf-4 \
-#         --disable-eigen \
-#         --disable-lapack && \
-#     make -j$(nproc) && make install && \
-#     cd ../.. && \
-#     rm -rf libmesh
+ARG LIBMESH_TAG
+RUN git clone --depth 1 -b ${LIBMESH_TAG} https://github.com/libMesh/libmesh.git libmesh && \
+    cd libmesh && \
+    git submodule update --init --recursive && \
+    mkdir build && cd build && \
+    export METHODS="opt" && \
+    ../configure \
+        $([ ${COMPILER} = 'openmpi' ] && echo '--enable-mpi' || echo '--disable-mpi') \
+        --prefix=/usr \
+        --enable-exodus \
+        --disable-netcdf-4 \
+        --disable-eigen \
+        --disable-lapack && \
+    make -j$(nproc) && make install && \
+    cd ../.. && \
+    rm -rf libmesh
+
+# Build and install XDG
+ARG XDG_TAG
+RUN git clone --depth 1 -b ${XDG_TAG} --recurse-submodules https://github.com/xdg-org/xdg.git xdg && \
+    cd xdg && \
+    mkdir build && cd build && \
+    cmake .. \
+        -DCMAKE_INSTALL_PREFIX=/usr \
+        -DXDG_BUILD_TESTS=OFF \
+        -DXDG_BUILD_TOOLS=OFF \
+        -DXDG_ENABLE_MOAB=ON \
+        -DMOAB_DIR=/usr \
+        -DXDG_ENABLE_LIBMESH=ON \
+        -DCMAKE_PREFIX_PATH=/usr && \
+    make -j$(nproc) && make install && \
+    cd ../.. && \
+    rm -rf xdg
 
 
 # Download and extract HDF5 data
@@ -376,6 +395,7 @@ ARG OPENMC_BUILD_TESTS
 ARG OPENMC_ENABLE_PROFILE
 ARG OPENMC_ENABLE_COVERAGE
 ARG OPENMC_USE_DAGMC
+ARG OPENMC_USE_XDG
 ARG OPENMC_USE_LIBMESH
 ARG OPENMC_USE_UWUW
 
@@ -389,7 +409,8 @@ RUN export SKBUILD_CMAKE_ARGS="-DOPENMC_USE_MPI=$([ ${COMPILER} == 'openmpi' ] &
                         -DOPENMC_ENABLE_PROFILE=${OPENMC_ENABLE_PROFILE}; \
                         -DOPENMC_ENABLE_COVERAGE=${OPENMC_ENABLE_COVERAGE}; \
                         -DOPENMC_USE_DAGMC=${OPENMC_USE_DAGMC}; \
-                        # -DOPENMC_USE_LIBMESH=${OPENMC_USE_LIBMESH}; \
+                        -DOPENMC_USE_XDG=${OPENMC_USE_XDG}; \
+                        -DOPENMC_USE_LIBMESH=${OPENMC_USE_LIBMESH}; \
                         -DOPENMC_USE_UWUW=${OPENMC_USE_UWUW}" && \
     cd $HOME/openmc && \
     python -m build . -w

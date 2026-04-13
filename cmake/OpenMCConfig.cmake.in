@@ -1,16 +1,10 @@
 
-# Compute the install prefix from this file's location
-get_filename_component(_OPENMC_PREFIX "${OpenMC_CMAKE_DIR}/../../.." ABSOLUTE)
+include(CMakeFindDependencyMacro)
 
-find_package(fmt CONFIG REQUIRED HINTS ${_OPENMC_PREFIX})
-find_package(pugixml CONFIG REQUIRED HINTS ${_OPENMC_PREFIX})
-find_package(xtl CONFIG REQUIRED HINTS ${_OPENMC_PREFIX})
-find_package(xtensor CONFIG REQUIRED HINTS ${_OPENMC_PREFIX})
-
-find_package(HDF5 REQUIRED COMPONENTS C HL)
-
-if(@OPENMC_USE_DAGMC@)
-  find_package(DAGMC REQUIRED HINTS @DAGMC_DIR@)
+if(@OPENMC_USE_XDG@)
+  if(NOT TARGET xdg::xdg)
+    find_dependency(XDG CONFIG REQUIRED HINTS "@XDG_DIR@")
+  endif()
 endif()
 
 if(@OPENMC_USE_LIBMESH@)
@@ -20,7 +14,37 @@ if(@OPENMC_USE_LIBMESH@)
   pkg_check_modules(LIBMESH REQUIRED @LIBMESH_PC_FILE@>=1.7.0 IMPORTED_TARGET)
 endif()
 
-find_package(PNG)
+if(@OPENMC_USE_DAGMC@)
+  if(NOT TARGET dagmc-shared)
+    find_dependency(DAGMC REQUIRED HINTS "@DAGMC_DIR@")
+  endif()
+endif()
+
+if(NOT TARGET fmt::fmt)
+  find_dependency(fmt CONFIG REQUIRED)
+endif()
+
+if(NOT TARGET pugixml::pugixml AND NOT TARGET pugixml)
+  find_dependency(pugixml CONFIG REQUIRED)
+endif()
+
+if(@PNG_FOUND@)
+  if(NOT TARGET PNG::PNG)
+    find_dependency(PNG REQUIRED)
+  endif()
+endif()
+
+if(@OPENMC_USE_MPI@)
+  if(NOT TARGET MPI::MPI_CXX)
+    find_dependency(MPI REQUIRED)
+  endif()
+endif()
+
+if(@OPENMC_USE_OPENMP@)
+  if(NOT TARGET OpenMP::OpenMP_CXX)
+    find_dependency(OpenMP REQUIRED)
+  endif()
+endif()
 
 if(@SKBUILD@)
   # Find the Python interpreter and ensure it's available.
@@ -65,14 +89,6 @@ if(@SKBUILD@)
   include(${OpenMC_TARGETS_FILE})
 elseif(NOT TARGET OpenMC::libopenmc)
   include("${OpenMC_CMAKE_DIR}/OpenMCTargets.cmake")
-endif()
-
-if(@OPENMC_USE_MPI@)
-  find_package(MPI REQUIRED)
-endif()
-
-if(@OPENMC_USE_OPENMP@)
-  find_package(OpenMP REQUIRED)
 endif()
 
 if(@OPENMC_USE_UWUW@ AND NOT ${DAGMC_BUILD_UWUW})
