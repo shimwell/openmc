@@ -36,6 +36,7 @@ from openmc.plotter import *
 from openmc.search import *
 from openmc.polynomial import *
 from openmc.tracks import *
+from openmc.xdg import *
 from .config import *
 
 # Import a few names from the model module
