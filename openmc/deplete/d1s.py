@@ -212,6 +212,114 @@ def apply_time_correction(
     return new_tally
 
 
+def apply_time_correction_series(
+        tally: openmc.Tally,
+        time_correction_factors: dict[str, np.ndarray],
+        indices: Sequence[int] | None = None,
+        sum_nuclides: bool = True,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Apply time correction factors to a tally at multiple time indices.
+
+    Vectorized variant of :func:`apply_time_correction` that evaluates a series
+    of time indices in a single matrix multiplication. Calling
+    :func:`apply_time_correction` in a loop over ``N`` indices deep-copies the
+    tally ``N`` times and does ``N`` applications of the
+    sum/sum_sq/mean/std_dev arithmetic; this function reads the underlying
+    arrays once and folds the radionuclide-axis sum into one matmul, so the
+    work is independent of ``N`` on the tally-extraction side.
+
+    Unlike :func:`apply_time_correction`, this returns raw NumPy arrays rather
+    than a list of derived :class:`openmc.Tally` objects: constructing ``N``
+    derived tallies (each with its own copy of ``_sum``, ``_sum_sq``,
+    ``_mean``, and ``_std_dev``) negates the memory advantage on fine-mesh
+    tallies. Users who need a ``Tally`` per index can build one from the
+    returned arrays.
+
+    Parameters
+    ----------
+    tally : openmc.Tally
+        Tally to apply the time correction factors to. Must contain a
+        :class:`~openmc.ParentNuclideFilter`.
+    time_correction_factors : dict
+        Time correction factors as returned by :func:`time_correction_factors`.
+    indices : iterable of int, optional
+        Indices into each time correction factor array to evaluate. If None
+        (default), every available index is evaluated.
+    sum_nuclides : bool, optional
+        Whether to sum over the parent nuclides (default True). Matches the
+        semantics of :func:`apply_time_correction`: with ``sum_nuclides=True``
+        the standard deviation across radionuclides is the L2 norm.
+
+    Returns
+    -------
+    mean : numpy.ndarray
+        Mean values. Shape is ``(n_indices, n_other_filter_bins, n_nuclides,
+        n_scores)`` when ``sum_nuclides`` is True (the
+        :class:`~openmc.ParentNuclideFilter` axis is collapsed), and
+        ``(n_indices, n_filter_bins, n_nuclides, n_scores)`` otherwise (with
+        the parent-nuclide bins flattened into the filter-bin axis, same
+        layout as :func:`apply_time_correction` produces).
+    std_dev : numpy.ndarray
+        Standard deviations with the same shape as ``mean``.
+
+    """
+    # Locate the ParentNuclideFilter
+    for i_filter, f in enumerate(tally.filters):
+        if isinstance(f, openmc.ParentNuclideFilter):
+            break
+    else:
+        raise ValueError('Tally must contain a ParentNuclideFilter')
+
+    radionuclides = [str(x) for x in tally.filters[i_filter].bins]
+    n_radionuclides = len(radionuclides)
+
+    # Default to every available index
+    if indices is None:
+        indices = range(len(time_correction_factors[radionuclides[0]]))
+    indices = np.asarray(list(indices), dtype=int)
+    n_indices = indices.size
+
+    # Build (n_indices, n_radionuclides) TCF matrix
+    tcf = np.column_stack(
+        [time_correction_factors[nuc][indices] for nuc in radionuclides]
+    )
+
+    # Force std_dev to be computed and the underlying arrays to be read
+    tally.std_dev
+
+    # Reshape to expose the parent-nuclide axis
+    n_bins_before = prod([f.num_bins for f in tally.filters[:i_filter]])
+    n_bins_after = prod([f.num_bins for f in tally.filters[i_filter + 1:]])
+    _, n_nuclides, n_scores = tally.shape
+    shape5 = (n_bins_before, n_radionuclides, n_bins_after, n_nuclides, n_scores)
+
+    mean_5d = tally.mean.reshape(shape5)
+    std_dev_5d = tally.std_dev.reshape(shape5)
+
+    if sum_nuclides:
+        # Move parent-nuclide axis to position 0 and flatten the rest so a
+        # single matmul does the per-index radionuclide sum.
+        mean_rf = np.moveaxis(mean_5d, 1, 0).reshape(n_radionuclides, -1)
+        var_rf = np.moveaxis(std_dev_5d ** 2, 1, 0).reshape(n_radionuclides, -1)
+
+        mean_out = tcf @ mean_rf
+        # Variances combine linearly when factors are squared; sqrt at the end
+        # gives the L2 norm matching apply_time_correction.
+        std_out = np.sqrt((tcf ** 2) @ var_rf)
+
+        out_shape = (n_indices, n_bins_before * n_bins_after,
+                     n_nuclides, n_scores)
+        return mean_out.reshape(out_shape), std_out.reshape(out_shape)
+
+    # Per-radionuclide: result keeps the parent-nuclide axis.
+    tcf_b = tcf.reshape(n_indices, 1, n_radionuclides, 1, 1, 1)
+    mean_out = tcf_b * mean_5d[np.newaxis, ...]
+    std_out = tcf_b * std_dev_5d[np.newaxis, ...]
+
+    out_shape = (n_indices, -1, n_nuclides, n_scores)
+    return mean_out.reshape(out_shape), std_out.reshape(out_shape)
+
+
 def prepare_tallies(
         model: openmc.Model,
         nuclides: list[str] | None = None,
