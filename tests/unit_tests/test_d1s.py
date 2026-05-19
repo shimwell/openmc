@@ -152,7 +152,7 @@ def test_apply_time_correction(run_in_tmpdir):
     result_summed.get_pandas_dataframe()
 
 
-def test_apply_time_correction_series(run_in_tmpdir):
+def test_apply_time_correction_multi_index(run_in_tmpdir):
     # Build the same model used in test_apply_time_correction
     mat = openmc.Material()
     mat.add_element('Ni', 1.0)
@@ -171,86 +171,61 @@ def test_apply_time_correction_series(run_in_tmpdir):
     tally.scores = ['flux']
     model.tallies = [tally]
 
-    # A schedule with several timesteps so the series has > 1 entry.
+    # A schedule with several timesteps so we can ask for many indices
     nuclides = d1s.prepare_tallies(model, chain_file=CHAIN_PATH)
     timesteps = [1.0e8, 1.0e8, 1.0e8, 1.0e8]
     source_rates = [1.0, 0.0, 1.0, 0.0]
     factors = d1s.time_correction_factors(nuclides, timesteps, source_rates)
     n_times = len(factors[nuclides[0]])
 
-    # Run the model once
     with openmc.config.patch('chain_file', CHAIN_PATH):
         output_path = model.run()
     with openmc.StatePoint(output_path) as sp:
         tally = sp.tallies[tally.id]
 
-        # Snapshot original tally state so we can confirm immutability later
         orig_filters = list(tally.filters)
         orig_sum = tally.sum.copy()
         orig_sum_sq = tally.sum_sq.copy()
         orig_mean = tally.mean.copy()
         orig_std_dev = tally.std_dev.copy()
 
-        # sum_nuclides=True: series matches per-index loop
-        mean_series, std_series = d1s.apply_time_correction_series(
-            tally, factors, sum_nuclides=True
-        )
-        assert mean_series.shape[0] == n_times
-        assert std_series.shape == mean_series.shape
+        # Passing a list of indices returns a list of derived tallies, each
+        # matching what a scalar call at that index would have produced.
+        for sum_nuc in (True, False):
+            many = d1s.apply_time_correction(
+                tally, factors, index=list(range(n_times)),
+                sum_nuclides=sum_nuc,
+            )
+            assert isinstance(many, list)
+            assert len(many) == n_times
+            for i, derived in enumerate(many):
+                ref = d1s.apply_time_correction(
+                    tally, factors, index=i, sum_nuclides=sum_nuc
+                )
+                np.testing.assert_array_equal(derived.mean, ref.mean)
+                np.testing.assert_array_equal(derived.std_dev, ref.std_dev)
+                np.testing.assert_array_equal(derived.sum, ref.sum)
+                np.testing.assert_array_equal(derived.sum_sq, ref.sum_sq)
+                assert derived.filters == ref.filters
 
-        for i in range(n_times):
-            ref = d1s.apply_time_correction(
-                tally, factors, index=i, sum_nuclides=True
-            )
-            np.testing.assert_allclose(
-                mean_series[i].reshape(ref.mean.shape), ref.mean
-            )
-            np.testing.assert_allclose(
-                std_series[i].reshape(ref.std_dev.shape), ref.std_dev
-            )
-
-        # sum_nuclides=False: series matches per-index loop
-        mean_series_f, std_series_f = d1s.apply_time_correction_series(
-            tally, factors, sum_nuclides=False
-        )
-        assert mean_series_f.shape[0] == n_times
-
-        for i in range(n_times):
-            ref = d1s.apply_time_correction(
-                tally, factors, index=i, sum_nuclides=False
-            )
-            np.testing.assert_allclose(
-                mean_series_f[i].reshape(ref.mean.shape), ref.mean
-            )
-            np.testing.assert_allclose(
-                std_series_f[i].reshape(ref.std_dev.shape), ref.std_dev
-            )
-
-        # explicit indices subset (and unordered)
+        # Unordered / partial index sequence is honored in order
         subset = [n_times - 1, 0, 2]
-        mean_sub, std_sub = d1s.apply_time_correction_series(
-            tally, factors, indices=subset
-        )
-        assert mean_sub.shape[0] == len(subset)
-        for k, i in enumerate(subset):
+        many = d1s.apply_time_correction(tally, factors, index=subset)
+        assert isinstance(many, list)
+        assert len(many) == len(subset)
+        for derived, i in zip(many, subset):
             ref = d1s.apply_time_correction(tally, factors, index=i)
-            np.testing.assert_allclose(
-                mean_sub[k].reshape(ref.mean.shape), ref.mean
-            )
-            np.testing.assert_allclose(
-                std_sub[k].reshape(ref.std_dev.shape), ref.std_dev
-            )
+            np.testing.assert_array_equal(derived.mean, ref.mean)
+            np.testing.assert_array_equal(derived.std_dev, ref.std_dev)
 
-        # original tally is unchanged
+        # Scalar input still returns a single Tally, not a 1-element list
+        single = d1s.apply_time_correction(tally, factors, index=2)
+        assert isinstance(single, openmc.Tally)
+        assert not isinstance(single, list)
+
+        # Original tally is unchanged
         assert tally.filters == orig_filters
         assert np.all(tally.sum == orig_sum)
         assert np.all(tally.sum_sq == orig_sum_sq)
         assert np.all(tally.mean == orig_mean)
         assert np.all(tally.std_dev == orig_std_dev)
-
-        # missing ParentNuclideFilter raises
-        bare = openmc.Tally()
-        bare.filters = [particle_filter]
-        bare.scores = ['flux']
-        with pytest.raises(ValueError):
-            d1s.apply_time_correction_series(bare, factors)
