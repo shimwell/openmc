@@ -204,9 +204,15 @@ def test_apply_time_correction_multi_index(run_in_tmpdir):
                 )
                 np.testing.assert_array_equal(derived.mean, ref.mean)
                 np.testing.assert_array_equal(derived.std_dev, ref.std_dev)
-                np.testing.assert_array_equal(derived.sum, ref.sum)
-                np.testing.assert_array_equal(derived.sum_sq, ref.sum_sq)
                 assert derived.filters == ref.filters
+                if sum_nuc:
+                    # Summed tally is derived; sum/sum_sq are None (as in
+                    # develop, where the public accessors return None for any
+                    # derived tally)
+                    assert derived.sum is None and derived.sum_sq is None
+                else:
+                    np.testing.assert_array_equal(derived.sum, ref.sum)
+                    np.testing.assert_array_equal(derived.sum_sq, ref.sum_sq)
 
         # Unordered / partial index sequence is honored in order
         subset = [n_times - 1, 0, 2]
