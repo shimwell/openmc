@@ -150,3 +150,88 @@ def test_apply_time_correction(run_in_tmpdir):
     result_summed.get_reshaped_data()
     result.get_pandas_dataframe()
     result_summed.get_pandas_dataframe()
+
+
+def test_apply_time_correction_multi_index(run_in_tmpdir):
+    # Build the same model used in test_apply_time_correction
+    mat = openmc.Material()
+    mat.add_element('Ni', 1.0)
+    sphere = openmc.Sphere(r=10.0, boundary_type='vacuum')
+    cell = openmc.Cell(fill=mat, region=-sphere)
+    model = openmc.Model()
+    model.geometry = openmc.Geometry([cell])
+    model.settings.run_mode = 'fixed source'
+    model.settings.batches = 3
+    model.settings.particles = 10
+    model.settings.photon_transport = True
+    model.settings.use_decay_photons = True
+    particle_filter = openmc.ParticleFilter('photon')
+    tally = openmc.Tally()
+    tally.filters = [particle_filter]
+    tally.scores = ['flux']
+    model.tallies = [tally]
+
+    # A schedule with several timesteps so we can ask for many indices
+    nuclides = d1s.prepare_tallies(model, chain_file=CHAIN_PATH)
+    timesteps = [1.0e8, 1.0e8, 1.0e8, 1.0e8]
+    source_rates = [1.0, 0.0, 1.0, 0.0]
+    factors = d1s.time_correction_factors(nuclides, timesteps, source_rates)
+    n_times = len(factors[nuclides[0]])
+
+    with openmc.config.patch('chain_file', CHAIN_PATH):
+        output_path = model.run()
+    with openmc.StatePoint(output_path) as sp:
+        tally = sp.tallies[tally.id]
+
+        orig_filters = list(tally.filters)
+        orig_sum = tally.sum.copy()
+        orig_sum_sq = tally.sum_sq.copy()
+        orig_mean = tally.mean.copy()
+        orig_std_dev = tally.std_dev.copy()
+
+        # Passing a list of indices returns a list of derived tallies, each
+        # matching what a scalar call at that index would have produced.
+        for sum_nuc in (True, False):
+            many = d1s.apply_time_correction(
+                tally, factors, index=list(range(n_times)),
+                sum_nuclides=sum_nuc,
+            )
+            assert isinstance(many, list)
+            assert len(many) == n_times
+            for i, derived in enumerate(many):
+                ref = d1s.apply_time_correction(
+                    tally, factors, index=i, sum_nuclides=sum_nuc
+                )
+                np.testing.assert_array_equal(derived.mean, ref.mean)
+                np.testing.assert_array_equal(derived.std_dev, ref.std_dev)
+                assert derived.filters == ref.filters
+                if sum_nuc:
+                    # Summed tally is derived; sum/sum_sq are None (as in
+                    # develop, where the public accessors return None for any
+                    # derived tally)
+                    assert derived.sum is None and derived.sum_sq is None
+                else:
+                    np.testing.assert_array_equal(derived.sum, ref.sum)
+                    np.testing.assert_array_equal(derived.sum_sq, ref.sum_sq)
+
+        # Unordered / partial index sequence is honored in order
+        subset = [n_times - 1, 0, 2]
+        many = d1s.apply_time_correction(tally, factors, index=subset)
+        assert isinstance(many, list)
+        assert len(many) == len(subset)
+        for derived, i in zip(many, subset):
+            ref = d1s.apply_time_correction(tally, factors, index=i)
+            np.testing.assert_array_equal(derived.mean, ref.mean)
+            np.testing.assert_array_equal(derived.std_dev, ref.std_dev)
+
+        # Scalar input still returns a single Tally, not a 1-element list
+        single = d1s.apply_time_correction(tally, factors, index=2)
+        assert isinstance(single, openmc.Tally)
+        assert not isinstance(single, list)
+
+        # Original tally is unchanged
+        assert tally.filters == orig_filters
+        assert np.all(tally.sum == orig_sum)
+        assert np.all(tally.sum_sq == orig_sum_sq)
+        assert np.all(tally.mean == orig_mean)
+        assert np.all(tally.std_dev == orig_std_dev)
