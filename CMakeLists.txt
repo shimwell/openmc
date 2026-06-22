@@ -648,9 +648,7 @@ endif()
 #===============================================================================
 # Install executable, scripts, manpage, license
 #===============================================================================
-
-configure_file(cmake/OpenMCConfig.cmake.in "${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/OpenMCConfig.cmake" @ONLY)
-configure_file(cmake/OpenMCConfigVersion.cmake.in "${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/OpenMCConfigVersion.cmake" @ONLY)
+include(CMakePackageConfigHelpers)
 
 if(SKBUILD)
   set(INSTALL_CONFIGDIR ${SKBUILD_DATA_DIR}/${CMAKE_INSTALL_LIBDIR}/cmake/OpenMC)
@@ -682,10 +680,24 @@ else()
   install(PROGRAMS ${SCRIPTS} DESTINATION ${CMAKE_INSTALL_BINDIR})
 endif()
 
+configure_package_config_file(
+    "cmake/OpenMCConfig.cmake.in"
+    "${CMAKE_BINARY_DIR}/${CMAKE_FILES_DIRECTORY}/OpenMCConfig.cmake"
+    INSTALL_DESTINATION ${INSTALL_CONFIGDIR}
+)
+
+write_basic_package_version_file(
+    "${CMAKE_BINARY_DIR}/${CMAKE_FILES_DIRECTORY}/OpenMCConfigVersion.cmake"
+    VERSION ${OPENMC_VERSION}
+    COMPATIBILITY AnyNewerVersion
+)
+
 install(FILES
-  "${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/OpenMCConfig.cmake"
-  "${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/OpenMCConfigVersion.cmake"
-  DESTINATION ${INSTALL_CONFIGDIR})
+    "${CMAKE_BINARY_DIR}/${CMAKE_FILES_DIRECTORY}/OpenMCConfig.cmake"
+    "${CMAKE_BINARY_DIR}/${CMAKE_FILES_DIRECTORY}/OpenMCConfigVersion.cmake"
+    DESTINATION "${INSTALL_CONFIGDIR}"
+)
+
 install(FILES man/man1/openmc.1 DESTINATION ${CMAKE_INSTALL_MANDIR}/man1)
 install(FILES LICENSE DESTINATION "${CMAKE_INSTALL_DOCDIR}" RENAME copyright)
 install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
