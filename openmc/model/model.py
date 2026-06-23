@@ -1077,6 +1077,175 @@ class Model:
 
         return origin, width, pixels
 
+    def _set_voxel_defaults(
+        self,
+        origin: Sequence[float] | None,
+        width: Sequence[float] | None,
+        pixels: int | Sequence[int],
+    ):
+        """Set default values for voxel plot parameters.
+        
+        Parameters
+        ----------
+        origin : Sequence[float] or None
+            Origin (center) of the voxel plot
+        width : Sequence[float] or None
+            Width of the voxel plot in each dimension
+        pixels : int or Sequence[int]
+            Number of voxels in each direction
+            
+        Returns
+        -------
+        tuple
+            (origin, width, pixels) with defaults applied
+        """
+        bb = self.bounding_box
+        
+        # Check if bounding box contains inf values
+        if np.isinf(bb.extent['xyz']).any():
+            if origin is None:
+                origin = (0.0, 0.0, 0.0)
+            if width is None:
+                width = (10.0, 10.0, 10.0)
+        else:
+            if origin is None:
+                # Replace NaN values with 0.0
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore", RuntimeWarning)
+                    origin = np.nan_to_num(bb.center)
+            if width is None:
+                width = bb.width
+        
+        # Convert single int pixels to 3D tuple with cubic voxels
+        if isinstance(pixels, int):
+            # Calculate cubic root to get voxels per side
+            voxels_per_side = (pixels ** (1/3))
+            
+            # Distribute voxels proportionally to width in each dimension
+            # to maintain cubic voxels
+            pixels = tuple(
+                max(1, int(round(voxels_per_side * w / max(width))))
+                for w in width
+            )
+        
+        return origin, width, pixels
+
+    def voxel_plot(
+        self,
+        origin: Sequence[float] | None = None,
+        width: Sequence[float] | None = None,
+        pixels: int | Sequence[int] = 64000,
+        color_by: str = 'cell',
+        colors: dict | None = None,
+        seed: int | None = None,
+        openmc_exec: PathLike = 'openmc',
+        output: PathLike = 'voxel_plot.vti',
+        show_overlaps: bool = False,
+        overlap_color: Sequence[int] | str | None = None,
+    ) -> Path:
+        """Create a 3D voxel plot of the model.
+
+        .. versionadded:: 0.15.4
+
+        Parameters
+        ----------
+        origin : Sequence[float], optional
+            Origin (center) of the plot (3 values). If unspecified, defaults to
+            the center of the bounding box if available, otherwise (0, 0, 0).
+        width : Sequence[float], optional
+            Width of the plot in each dimension (3 values). If unspecified,
+            defaults to the bounding box width if available, otherwise
+            (10, 10, 10).
+        pixels : int | Sequence[int], optional
+            If an iterable of ints is provided then this directly sets the
+            number of voxels in each direction (3 values). If a single int is
+            provided then this sets the total number of voxels in the plot and
+            the number of voxels in each direction is calculated to maintain
+            cubic voxels based on the width.
+        color_by : {'cell', 'material'}, optional
+            Indicate whether the plot should be colored by cell or by material.
+        colors : dict, optional
+            Dictionary indicating that certain cells/materials should be
+            displayed with a particular color.
+        seed : int, optional
+            Pseudorandom number seed for plot coloring
+        openmc_exec : PathLike, optional
+            Path to OpenMC executable. Defaults to 'openmc'.
+        output : PathLike, optional
+            Path to the output file. File extension determines format: '.h5'
+            for HDF5 voxel file, '.vti' for VTK image data file. Defaults to
+            'voxel_plot.vti'.
+        show_overlaps : bool, optional
+            Indicate whether or not overlapping regions are shown.
+        overlap_color : Sequence[int] or str, optional
+            Color to apply to overlapping regions.
+
+        Returns
+        -------
+        Path
+            Path to the generated voxel plot file (.h5 or .vti)
+
+        """
+        from openmc.plots import voxel_to_vtk
+        import shutil
+        
+        # Set defaults using helper function
+        origin, width, pixels = self._set_voxel_defaults(origin, width, pixels)
+
+        # Validate output file extension
+        output_path = Path(output)
+        if output_path.suffix not in ('.h5', '.vti'):
+            raise ValueError(
+                f"Output file extension must be '.h5' or '.vti', "
+                f"got '{output_path.suffix}'"
+            )
+
+        with TemporaryDirectory() as tmpdir:
+            _plot_seed = self.settings.plot_seed
+            if seed is not None:
+                self.settings.plot_seed = seed
+
+            # Create voxel plot object
+            voxel = openmc.VoxelPlot()
+            voxel.origin = origin
+            voxel.width = width
+            voxel.pixels = pixels
+            voxel.color_by = color_by
+            voxel.show_overlaps = show_overlaps
+            if overlap_color is not None:
+                voxel.overlap_color = overlap_color
+            if colors is not None:
+                voxel.colors = colors
+
+            self.plots.append(voxel)
+
+            # Run OpenMC in geometry plotting mode
+            self.plot_geometry(False, cwd=tmpdir, openmc_exec=openmc_exec)
+
+            # Undo changes to model
+            self.plots.pop()
+            self.settings._plot_seed = _plot_seed
+
+            # Determine base filename
+            base_name = output_path.stem
+            h5_filename = f'{base_name}.h5'
+            h5_src = Path(tmpdir) / h5_filename
+            
+            # Convert to VTK if .vti extension
+            if output_path.suffix == '.vti':
+                vti_filename = f'{base_name}.vti'
+                
+                # Use voxel_to_vtk function from openmc.plots
+                vti_src = voxel_to_vtk(h5_src, Path(tmpdir) / vti_filename)
+                
+                shutil.move(str(vti_src), output_path)
+                
+                return output_path
+            else:  # .h5 extension
+                shutil.move(str(h5_src), output_path)
+                
+                return output_path
+
     def id_map(
         self,
         origin: Sequence[float] | None = None,

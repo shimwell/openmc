@@ -261,3 +261,40 @@ def test_get_nuclide_densities():
     universe = openmc.Universe(cells=[cell])
     with pytest.raises(RuntimeError):
         universe.get_nuclide_densities()
+
+
+def test_voxel_plot(run_in_tmpdir):
+    """Test Universe.voxel_plot() method"""
+    
+    # Create materials
+    mat1 = openmc.Material(material_id=1, name='mat1')
+    mat1.set_density('g/cm3', 1.0)
+    mat1.add_element('H', 1.0)
+    
+    mat2 = openmc.Material(material_id=2, name='mat2')
+    mat2.set_density('g/cm3', 2.0)
+    mat2.add_element('Fe', 1.0)
+    
+    # Create cells
+    inner_sphere = openmc.Sphere(r=3.0)
+    outer_sphere = openmc.Sphere(r=5.0, boundary_type='vacuum')
+    
+    cell1 = openmc.Cell(fill=mat1, region=-inner_sphere)
+    cell2 = openmc.Cell(fill=mat2, region=+inner_sphere & -outer_sphere)
+    
+    # Create universe
+    u = openmc.Universe(cells=[cell1, cell2])
+    
+    # Test VTI generation
+    vti_path = u.voxel_plot(pixels=1000, output='univ_test.vti')
+    assert vti_path.exists()
+    assert vti_path.suffix == '.vti'
+    
+    # Test H5 generation
+    h5_path = u.voxel_plot(pixels=1000, output='univ_test.h5')
+    assert h5_path.exists()
+    assert h5_path.suffix == '.h5'
+    
+    # Test with explicit pixel dimensions
+    explicit_path = u.voxel_plot(pixels=(10, 10, 10), output='univ_explicit.vti')
+    assert explicit_path.exists()

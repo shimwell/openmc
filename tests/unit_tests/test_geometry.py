@@ -403,3 +403,45 @@ def test_redundant_surfaces():
     geom = openmc.Geometry([c3])
     redundant_surfs = geom.remove_redundant_surfaces()
     assert len(redundant_surfs) == 0
+
+
+def test_geometry_voxel_plot(run_in_tmpdir):
+    """Test Geometry.voxel_plot() method"""
+    
+    # Create materials
+    mat1 = openmc.Material(material_id=1, name='material_1')
+    mat1.set_density('g/cm3', 1.0)
+    mat1.add_element('H', 1.0)
+    
+    mat2 = openmc.Material(material_id=2, name='material_2')
+    mat2.set_density('g/cm3', 2.0)
+    mat2.add_element('Fe', 1.0)
+    
+    # Create simple geometry with two spheres
+    inner_sphere = openmc.Sphere(r=5.0)
+    outer_sphere = openmc.Sphere(r=10.0, boundary_type='vacuum')
+    
+    inner_cell = openmc.Cell(fill=mat1, region=-inner_sphere)
+    outer_cell = openmc.Cell(fill=mat2, region=+inner_sphere & -outer_sphere)
+    
+    geometry = openmc.Geometry([inner_cell, outer_cell])
+    
+    # Test 1: Generate VTI file
+    vti_path = geometry.voxel_plot(pixels=1000, output='geom_test.vti')
+    assert vti_path.exists()
+    assert vti_path.suffix == '.vti'
+    
+    # Test 2: Generate H5 file
+    h5_path = geometry.voxel_plot(pixels=1000, output='geom_test.h5')
+    assert h5_path.exists()
+    assert h5_path.suffix == '.h5'
+    
+    # Test 3: Test with explicit pixel dimensions
+    explicit_path = geometry.voxel_plot(pixels=(10, 10, 10), output='geom_explicit.vti')
+    assert explicit_path.exists()
+    
+    # Test 4: Test default output
+    default_path = geometry.voxel_plot(pixels=1000)
+    assert default_path.exists()
+    assert default_path.name == 'voxel_plot.vti'
+
