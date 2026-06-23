@@ -118,11 +118,16 @@ cd /tmp && rm -rf Catch2
 # ---------------------------------------------------------------------------
 git clone --depth 1 -b v4.3.3 https://github.com/embree/embree.git
 cd embree && mkdir build && cd build
+# Embree compiles every ISA variant (SSE2..AVX-512) into one library and selects
+# the fastest one supported by the host CPU at runtime, so the AVX-512 ray-tracing
+# kernels accelerate capable machines while still running safely everywhere.
+# EMBREE_ISA_AVX512=ON makes that explicit so the AVX-512 path is always built in.
 cmake .. \
     -DCMAKE_INSTALL_PREFIX=/usr \
     -DEMBREE_TASKING_SYSTEM=INTERNAL \
     -DEMBREE_ISPC_SUPPORT=OFF \
-    -DEMBREE_TUTORIALS=OFF
+    -DEMBREE_TUTORIALS=OFF \
+    -DEMBREE_ISA_AVX512=ON
 make -j"$NPROC" && make install
 cd /tmp && rm -rf embree
 
@@ -130,7 +135,15 @@ cd /tmp && rm -rf embree
 # Double-Down
 # ---------------------------------------------------------------------------
 git clone --depth 1 -b v1.1.0 https://github.com/pshriwise/double-down.git
-cd double-down && mkdir build && cd build
+cd double-down
+# double-down's CMakeLists.txt hardcodes "-march=native -mavx2", which bakes the
+# build host's exact instruction set into libdd. On GitHub's AVX-512-capable Xeon
+# runners this emits AVX-512 (e.g. vmovdqu64 %zmm0), making the wheel crash with
+# SIGILL on any CPU without those instructions (the test runner, most laptops,
+# AMD/older Intel). Strip the non-portable flags so the wheel stays compatible
+# with the manylinux x86-64 baseline; -fPIC is preserved.
+sed -i 's/-march=native//g; s/-mavx2//g' CMakeLists.txt
+mkdir build && cd build
 cmake .. -DCMAKE_INSTALL_PREFIX=/usr
 make -j"$NPROC" && make install
 cd /tmp && rm -rf double-down
