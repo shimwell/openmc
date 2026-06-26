@@ -319,7 +319,8 @@ def _unitbase_anchors(td, edges, per=4):
     return np.array(Ea), np.array(GF)
 
 
-def scatter_matrix(material, groups, temperature=294.0, cross_sections=None, source=None):
+def scatter_matrix(material, groups, temperature=294.0, cross_sections=None, source=None,
+                   return_p1=False):
     """Deterministic P0 group-to-group scattering matrix for one material.
 
     Returns the macroscopic Sigma_s,g->g' (1/cm) as an ``[G_in, G_out]`` array in
@@ -360,6 +361,7 @@ def scatter_matrix(material, groups, temperature=294.0, cross_sections=None, sou
     wt = phi * dwid
     gi = np.clip(np.searchsorted(edges, grid, side='right') - 1, 0, G - 1)
     M = np.zeros((G, G)); denom = np.zeros(G); np.add.at(denom, gi, wt)
+    M1 = np.zeros((G, G)) if return_p1 else None             # P1 (mu_lab-weighted) elastic outscatter
 
     def overlap(lo, hi):
         if hi <= lo:
@@ -397,8 +399,12 @@ def scatter_matrix(material, groups, temperature=294.0, cross_sections=None, sou
                     pw = fp * wmu; s = pw.sum()
                     if s <= 0:
                         M[gi[i], gi[i]] += src[i]; continue
-                    go = np.clip(np.searchsorted(edges, E * (A*A + 2*A*mu + 1.0) / a1) - 1, 0, G - 1)
-                    np.add.at(M[gi[i]], go, src[i] * pw / s)
+                    kin = A*A + 2*A*mu + 1.0
+                    go = np.clip(np.searchsorted(edges, E * kin / a1) - 1, 0, G - 1)
+                    pwn = pw / s
+                    np.add.at(M[gi[i]], go, src[i] * pwn)
+                    if M1 is not None:                        # mu_lab = (1+A mu)/sqrt(A^2+2A mu+1)
+                        np.add.at(M1[gi[i]], go, src[i] * pwn * (1.0 + A*mu) / np.sqrt(kin))
                 continue
             for prod in r.products:                              # inelastic: all neutron products
                 if prod.particle != 'neutron':
@@ -461,4 +467,10 @@ def scatter_matrix(material, groups, temperature=294.0, cross_sections=None, sou
         if up:
             M[g, g] += up; M[g, g+1:] = 0.0
     M = M / np.clip(denom[:, None], 1e-30, None)
+    if return_p1:
+        # P1 outscatter moment Sigma_s1,g per group, for a transport-corrected (TC-P0)
+        # library: emit sigma_tr = sigma_t - Sigma_s1 and subtract Sigma_s1 from the
+        # in-group diagonal. Random ray expects the correction applied here, not in the solver.
+        sigma_s1 = (M1.sum(1) / np.clip(denom, 1e-30, None))[::-1]
+        return M[::-1, ::-1], sigma_s1
     return M[::-1, ::-1]                                      # -> OpenMC ordering (group 1 = high E)
