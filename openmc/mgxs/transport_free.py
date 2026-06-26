@@ -273,8 +273,8 @@ def _apply_urr(incs, dens, temp_str, grid, sigma_t_smooth, temperature):
 
 
 def collapse_material(material, groups, temperature=294.0, cross_sections=None,
-                      self_shield=True, source=None, weighting='nr', sd_per_decade=40,
-                      use_urr=True, ir_lambda=None):
+                      source=None, weighting='nr', sd_per_decade=40,
+                      ir_lambda=None):
     """Transport-free macroscopic multigroup cross sections for one material.
 
     Parameters
@@ -283,9 +283,10 @@ def collapse_material(material, groups, temperature=294.0, cross_sections=None,
     groups : EnergyGroups | str | sequence of float
     temperature : float
         Target temperature [K] (nearest available data temperature is used).
-    self_shield : bool
-        If True, use the narrow-resonance self-shielded flux phi = w(E)/Sigma_t(E);
-        if False, use the unshielded smooth flux phi = w(E) (infinite dilution).
+
+    Self-shielding (resolved resonances via phi = w/Sigma_t, plus the unresolved
+    range via probability tables) is always applied: a real material is never at
+    infinite dilution, so there is no knob to turn it off.
 
     Returns
     -------
@@ -323,14 +324,14 @@ def collapse_material(material, groups, temperature=294.0, cross_sections=None,
     sigma_f = _macroscopic(incs, dens, temp_str, grid, 18)
 
     # Unresolved-resonance self-shielding (probability tables): correct the dilute
-    # total / absorption / capture band-by-band in the URR before weighting.
-    if self_shield and use_urr:
-        d = _apply_urr(incs, dens, temp_str, grid, sigma_t, temperature)
-        sigma_t = sigma_t + d[1]
-        if sigma_a is not None:
-            sigma_a = sigma_a + d[101]
-        if sigma_c is not None:
-            sigma_c = sigma_c + d[102]
+    # total / absorption / capture band-by-band in the URR before weighting. Always
+    # applied -- it is part of self-shielding, which a real material always has.
+    d = _apply_urr(incs, dens, temp_str, grid, sigma_t, temperature)
+    sigma_t = sigma_t + d[1]
+    if sigma_a is not None:
+        sigma_a = sigma_a + d[101]
+    if sigma_c is not None:
+        sigma_c = sigma_c + d[102]
 
     # Weighting flux. Options:
     #  'nr'           narrow-resonance: phi = w(E)/Sigma_t(E), w = 1/E (+ source PDF).
@@ -351,7 +352,7 @@ def collapse_material(material, groups, temperature=294.0, cross_sections=None,
         w = 1.0 / np.clip(grid, 1e-11, None)
         if source is not None:
             w = w + _source_pdf(source, grid)
-        if weighting == 'ir' and self_shield:
+        if weighting == 'ir':
             removed = np.zeros_like(grid)              # sum_i (1-lambda_i) Sigma_s,i
             for nuc, n in dens.items():
                 inc = incs[nuc]
@@ -371,7 +372,7 @@ def collapse_material(material, groups, temperature=294.0, cross_sections=None,
                 removed += (1.0 - lam) * n * np.clip(sti - sai, 0.0, None)
             phi = w / np.clip(sigma_t - removed, 1e-30, None)   # positive: = Sigma_a + sum lam_i Sigma_s,i
         else:
-            phi = w / np.clip(sigma_t, 1e-30, None) if self_shield else w
+            phi = w / np.clip(sigma_t, 1e-30, None)
 
     reactions = {
         'total': sigma_t,
