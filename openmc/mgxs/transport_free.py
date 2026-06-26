@@ -37,6 +37,26 @@ def _nearest_temperature(inc: "openmc.data.IncidentNeutron", temperature: float)
     return inc.temperatures[int(np.argmin(np.abs(temps - temperature)))]
 
 
+def _source_pdf(dist, grid):
+    """Evaluate a source energy distribution as a normalized PDF on ``grid``."""
+    import openmc.stats as st
+    pdf = np.zeros_like(grid)
+    if isinstance(dist, st.Normal):                       # e.g. openmc.stats.muir()
+        mu, sig = float(dist.mean_value), float(dist.std_dev)
+        pdf = np.exp(-0.5 * ((grid - mu) / sig) ** 2) / (sig * np.sqrt(2 * np.pi))
+    elif isinstance(dist, st.Discrete):                   # mono lines (e.g. DD 2.45 MeV)
+        for xi, pi in zip(np.atleast_1d(dist.x), np.atleast_1d(dist.p)):
+            j = int(np.clip(np.searchsorted(grid, xi), 1, len(grid) - 1))
+            pdf[j - 1] += pi / max(grid[j] - grid[j - 1], 1e-30)
+    elif isinstance(dist, st.Tabular):                    # TT continuum / arbitrary
+        pdf = np.interp(grid, dist.x, dist.p, left=0.0, right=0.0)
+    elif isinstance(dist, st.Mixture):                    # mixtures
+        for p, d in zip(dist.probability, dist.distribution):
+            pdf = pdf + p * _source_pdf(d, grid)
+    integral = _trapz(pdf, grid)
+    return pdf / integral if integral > 0 else pdf
+
+
 def _macroscopic(incs, dens, temp_str, grid, mt):
     """Macroscopic pointwise xs (1/cm) for reaction ``mt`` on ``grid``; None if absent."""
     total = np.zeros_like(grid)
@@ -53,7 +73,7 @@ def _macroscopic(incs, dens, temp_str, grid, mt):
 
 
 def collapse_material(material, groups, temperature=294.0, cross_sections=None,
-                      self_shield=True):
+                      self_shield=True, source=None):
     """Transport-free macroscopic multigroup cross sections for one material.
 
     Parameters
@@ -97,9 +117,13 @@ def collapse_material(material, groups, temperature=294.0, cross_sections=None,
     if sigma_t is None:
         raise ValueError("no total cross section (MT=1) found for material")
 
-    # Weighting flux: smooth part w(E) = 1/E (asymptotic slowing-down),
+    # Weighting flux: smooth part w(E) = 1/E (asymptotic slowing-down), optionally
+    # sharpened in the fast groups by the source spectrum (added as a normalized
+    # PDF — at high E the source dominates 1/E, below it 1/E dominates), then
     # narrow-resonance self-shielded by the material's own total.
     w = 1.0 / np.clip(grid, 1e-11, None)
+    if source is not None:
+        w = w + _source_pdf(source, grid)
     phi = w / np.clip(sigma_t, 1e-30, None) if self_shield else w
 
     reactions = {
