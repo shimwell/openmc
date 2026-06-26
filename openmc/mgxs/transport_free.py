@@ -7,9 +7,9 @@ transport solve, no ``nparticles``. Each material is collapsed *directly*
 because multigroup cross sections are flux-weighted averages and do not add
 cleanly (see shimwell/openmc#112, design principle 7).
 
-This is the Phase-1 vector-cross-section core (total / absorption / capture /
-fission / nu-fission). Scatter matrices and the 0-D slowing-down weighting
-(option 3) come later.
+Vector cross sections only (total / absorption / capture / fission). Weighting
+is a 1/E (+ optional source) narrow-resonance flux; self-shielding (resolved
+resonances plus the unresolved range via probability tables) is always applied.
 """
 from __future__ import annotations
 
@@ -70,146 +70,6 @@ def _macroscopic(incs, dens, temp_str, grid, mt):
         total += n * xs(grid)
         present = True
     return total if present else None
-
-
-def _outgoing(dist):
-    """Classify a secondary-neutron energy distribution for the transfer kernel.
-
-    Returns ('delta', threshold, mass_ratio) for a discrete inelastic level
-    (E_out = mass_ratio*(E_in - threshold)), or ('tab', incident_energies,
-    [Tabular,...]) for a tabulated continuum / (n,xn) distribution, or None.
-    """
-    try:
-        from openmc.data import (UncorrelatedAngleEnergy, CorrelatedAngleEnergy,
-                                 LevelInelastic)
-    except Exception:
-        return None
-    if isinstance(dist, CorrelatedAngleEnergy):
-        return ('tab', np.asarray(dist.energy, dtype=float), dist.energy_out)
-    ed = dist.energy if isinstance(dist, UncorrelatedAngleEnergy) else getattr(dist, 'energy', None)
-    if isinstance(ed, LevelInelastic):
-        return ('delta', float(ed.threshold), float(ed.mass_ratio))
-    if ed is not None and hasattr(ed, 'energy_out') and hasattr(ed, 'energy'):
-        return ('tab', np.asarray(ed.energy, dtype=float), ed.energy_out)
-    return None
-
-
-def _slowing_down_weight(incs, dens, temp_str, fine_grid, sigma_t_fine,
-                         source, per_decade=40):
-    """0-D infinite-medium slowing-down weighting flux on ``fine_grid``.
-
-    Solves the energy-domain neutron balance
-        Sigma_t(E) phi(E) = S(E) + sum_r integral Sigma_s,r(E') f_r(E'->E) phi(E') dE'
-    on a coarse lethargy grid (the slowing-down *source* is smooth), using real
-    energy-transfer kernels from ``openmc.data``: analytic elastic (MT=2),
-    discrete inelastic levels (MT=51-90), and tabulated continuum / (n,xn)
-    (MT=91/16/17). Strictly down-scatter -> a single high->low energy sweep is
-    exact. The smooth slowing-down source is then divided by the *fine* total to
-    reintroduce resonance self-shielding. No transport, no Monte Carlo.
-
-    Thermal up-scatter (S(alpha,beta)) is not modelled -> valid in the
-    fast/epithermal range (the populated range for fast fusion shields).
-    """
-    emin, emax = fine_grid[0], fine_grid[-1]
-    nb = int(max(per_decade * np.log10(emax / emin), 40))
-    be = np.logspace(np.log10(emin), np.log10(emax), nb + 1)   # bin edges
-    cg = np.sqrt(be[:-1] * be[1:])                              # bin centres
-    nb = len(cg)
-
-    # dilute (1/E-weighted) bin-averaged total, smooth -> no erratic resonance sampling
-    w = 1.0 / np.clip(fine_grid, 1e-11, None)
-    def _cum(y):
-        c = np.zeros_like(fine_grid)
-        c[1:] = np.cumsum(0.5 * (y[1:] + y[:-1]) * np.diff(fine_grid))
-        return c
-    Ni = np.interp(be, fine_grid, _cum(sigma_t_fine * w))
-    Di = np.interp(be, fine_grid, _cum(w))
-    sigt_c = np.diff(Ni) / np.clip(np.diff(Di), 1e-300, None)
-
-    # transfer matrix M[l, k] = scatter rate into bin l per unit flux in bin k
-    M = np.zeros((nb, nb))
-    for nuc, dn in dens.items():
-        inc = incs[nuc]
-        ts = temp_str[nuc]
-        alpha = ((inc.atomic_weight_ratio - 1.0) / (inc.atomic_weight_ratio + 1.0)) ** 2
-        for mt, r in inc.reactions.items():
-            is_el = (mt == 2)
-            if not (is_el or (51 <= mt <= 91) or mt in (16, 17)):
-                continue
-            try:
-                sig = dn * r.xs[ts](cg)
-            except Exception:
-                continue
-            if not np.any(sig > 0):
-                continue
-            if is_el:
-                lo = alpha * cg
-                for k in range(nb):
-                    if sig[k] <= 0:
-                        continue
-                    width = cg[k] - lo[k]
-                    if width <= 0:                       # alpha ~ 1 (heavy): no loss
-                        M[k, k] += sig[k]
-                        continue
-                    ov = np.clip(np.minimum(be[1:], cg[k]) - np.maximum(be[:-1], lo[k]), 0, None)
-                    M[:, k] += sig[k] * ov / width
-                continue
-            prods = [p for p in r.products if p.particle == 'neutron']
-            if not prods:
-                continue
-            try:
-                og = _outgoing(prods[0].distribution[0])
-            except Exception:
-                og = None
-            if og is None:
-                continue
-            try:
-                mult = np.atleast_1d(np.asarray(prods[0].yield_(cg), dtype=float))
-                if mult.size == 1:
-                    mult = np.full(nb, float(mult[0]))
-            except Exception:
-                mult = np.ones(nb)
-            if og[0] == 'delta':
-                thr, mr = og[1], og[2]
-                eout = mr * (cg - thr)
-                for k in range(nb):
-                    if sig[k] <= 0 or cg[k] <= thr or eout[k] < be[0]:
-                        continue
-                    l = min(max(np.searchsorted(be, eout[k]) - 1, 0), nb - 1)
-                    M[l, k] += sig[k] * mult[k]
-            else:                                        # 'tab'
-                ein, eos = og[1], og[2]
-                for k in range(nb):
-                    if sig[k] <= 0 or cg[k] < ein[0]:
-                        continue
-                    t = eos[min(np.searchsorted(ein, cg[k]), len(eos) - 1)]
-                    cx, cp = np.asarray(t.x), np.asarray(t.p)
-                    cc = np.zeros_like(cx)
-                    cc[1:] = np.cumsum(0.5 * (cp[1:] + cp[:-1]) * np.diff(cx))
-                    if cc[-1] <= 0:
-                        continue
-                    Wb = np.diff(np.interp(be, cx, cc / cc[-1], left=0.0, right=1.0))
-                    M[:, k] += sig[k] * mult[k] * Wb
-
-    # external (or generic top-energy) source on the coarse grid
-    S = _source_pdf(source, cg) if source is not None else np.zeros(nb)
-    if S.sum() <= 0:
-        S = np.zeros(nb)
-        S[-1] = 1.0
-
-    # exact downward sweep (strictly down-scatter)
-    phi = np.zeros(nb)
-    for k in range(nb - 1, -1, -1):
-        inscat = M[k, k + 1:].dot(phi[k + 1:]) if k + 1 < nb else 0.0
-        denom = sigt_c[k] - M[k, k]                      # remove within-bin self-scatter
-        phi[k] = (S[k] + inscat) / (denom if denom > 1e-30 else max(sigt_c[k], 1e-30))
-
-    qtot = phi * sigt_c                                  # smooth slowing-down source
-    good = qtot > 0
-    if good.sum() < 2:                                   # degenerate -> fall back to 1/E
-        return (1.0 / np.clip(fine_grid, 1e-11, None)) / np.clip(sigma_t_fine, 1e-30, None)
-    qf = np.exp(np.interp(np.log(fine_grid), np.log(cg[good]), np.log(qtot[good])))
-    return qf / np.clip(sigma_t_fine, 1e-30, None)       # self-shield on the fine total
 
 
 def _apply_urr(incs, dens, temp_str, grid, sigma_t_smooth, temperature):
@@ -273,8 +133,7 @@ def _apply_urr(incs, dens, temp_str, grid, sigma_t_smooth, temperature):
 
 
 def collapse_material(material, groups, temperature=294.0, cross_sections=None,
-                      source=None, weighting='nr', sd_per_decade=40,
-                      ir_lambda=None):
+                      source=None):
     """Transport-free macroscopic multigroup cross sections for one material.
 
     Parameters
@@ -333,46 +192,14 @@ def collapse_material(material, groups, temperature=294.0, cross_sections=None,
     if sigma_c is not None:
         sigma_c = sigma_c + d[102]
 
-    # Weighting flux. Options:
-    #  'nr'           narrow-resonance: phi = w(E)/Sigma_t(E), w = 1/E (+ source PDF).
-    #  'ir'           intermediate resonance: phi = w(E)/[Sigma_t - sum_i (1-lambda_i)
-    #                 Sigma_s,i], i.e. only a fraction lambda_i of each nuclide's
-    #                 scattering moderates. lambda_i=1 recovers NR exactly; lambda_i=0
-    #                 is wide-resonance. The default per-nuclide lambda is the mass
-    #                 proxy 1-alpha (alpha=((A-1)/(A+1))^2) -- a documented kinematic
-    #                 proxy for the *scatterer's* slowing-down weight, NOT the rigorous
-    #                 per-group Goldstein-Cohen parameter; override via `ir_lambda`
-    #                 {nuclide: lambda}. Applied on the (URR-corrected) Sigma_t.
-    #  'slowing_down' option 3: solve the 0-D slowing-down balance with real transfer
-    #                 kernels, then self-shield on the fine total.
-    if weighting == 'slowing_down':
-        phi = _slowing_down_weight(incs, dens, temp_str, grid, sigma_t, source,
-                                   per_decade=sd_per_decade)
-    else:
-        w = 1.0 / np.clip(grid, 1e-11, None)
-        if source is not None:
-            w = w + _source_pdf(source, grid)
-        if weighting == 'ir':
-            removed = np.zeros_like(grid)              # sum_i (1-lambda_i) Sigma_s,i
-            for nuc, n in dens.items():
-                inc = incs[nuc]
-                A = inc.atomic_weight_ratio
-                lam = (ir_lambda or {}).get(nuc, 4.0 * A / (A + 1.0) ** 2)  # 1 - alpha
-                if lam >= 1.0:
-                    continue
-                ts = temp_str[nuc]
-                sti = inc[1].xs[ts](grid)
-                try:
-                    sai = inc[101].xs[ts](grid)
-                except KeyError:
-                    try:
-                        sai = inc[102].xs[ts](grid)
-                    except KeyError:
-                        sai = np.zeros_like(grid)
-                removed += (1.0 - lam) * n * np.clip(sti - sai, 0.0, None)
-            phi = w / np.clip(sigma_t - removed, 1e-30, None)   # positive: = Sigma_a + sum lam_i Sigma_s,i
-        else:
-            phi = w / np.clip(sigma_t, 1e-30, None)
+    # Narrow-resonance weighting flux: phi = w(E)/Sigma_t(E). The smooth part
+    # w = 1/E (asymptotic slowing-down) is optionally sharpened in the fast groups
+    # by the source spectrum, then self-shielded by the material's own
+    # (URR-corrected) total.
+    w = 1.0 / np.clip(grid, 1e-11, None)
+    if source is not None:
+        w = w + _source_pdf(source, grid)
+    phi = w / np.clip(sigma_t, 1e-30, None)
 
     reactions = {
         'total': sigma_t,
