@@ -212,8 +212,69 @@ def _slowing_down_weight(incs, dens, temp_str, fine_grid, sigma_t_fine,
     return qf / np.clip(sigma_t_fine, 1e-30, None)       # self-shield on the fine total
 
 
+def _apply_urr(incs, dens, temp_str, grid, sigma_t_smooth, temperature):
+    """Unresolved-resonance self-shielding via probability tables (Bondarenko).
+
+    In the unresolved range the pointwise data is the infinitely-dilute (smooth)
+    average, so phi = 1/Sigma_t applies *no* self-shielding there. The probability
+    tables restore the band structure: for each band b (probability p_b, micro
+    total sigma_t,b), the flux ~ 1/(sigma_t,b + sigma_0), giving the self-shielded
+    effective micro xs  <sigma_x> = sum_b p_b sigma_x,b/(sigma_t,b+sigma_0)
+                                   / sum_b p_b/(sigma_t,b+sigma_0),
+    with sigma_0 the per-resonant-nuclide background from the rest of the material.
+    Tables here are LSSF=1 factors on the smooth xs (``multiply_smooth``).
+
+    Returns {mt: macroscopic delta array (1/cm)} to ADD to the dilute macroscopic
+    cross sections, for mt in (1, 101, 102).
+    """
+    delta = {1: np.zeros_like(grid), 101: np.zeros_like(grid), 102: np.zeros_like(grid)}
+    for nuc, n in dens.items():
+        inc = incs[nuc]
+        urr = getattr(inc, 'urr', None)
+        if not urr:
+            continue
+        cand = [t for t in urr if urr.get(t) is not None and t in inc.temperatures]
+        if not cand:
+            continue
+        ts = min(cand, key=lambda t: abs(float(t[:-1]) - temperature))
+        pt = urr[ts]
+        if not getattr(pt, 'multiply_smooth', False):
+            continue                                   # only LSSF=1 factor tables
+        e = np.asarray(pt.energy, dtype=float)
+        tab = np.asarray(pt.table, dtype=float)        # [nE, 6, nbands]
+        idx = np.where((grid >= e[0]) & (grid <= e[-1]))[0]
+        if idx.size == 0:
+            continue
+        st = inc[1].xs[ts](grid)                        # smooth micro total
+        sc = inc[102].xs[ts](grid)                      # smooth micro capture
+        try:
+            sa = inc[101].xs[ts](grid)
+        except Exception:
+            sa = sc
+        for gi in idx:
+            j = int(np.clip(np.searchsorted(e, grid[gi]), 1, len(e) - 1))
+            row = tab[j - 1] if abs(e[j - 1] - grid[gi]) <= abs(e[j] - grid[gi]) else tab[j]
+            p = np.diff(np.concatenate(([0.0], row[0])))    # band probabilities
+            sig0 = (sigma_t_smooth[gi] - n * st[gi]) / n    # micro background (others)
+            if sig0 < 0:
+                sig0 = 0.0
+            stb = st[gi] * row[1]                            # band micro total
+            w = p / (stb + sig0)
+            denom = w.sum()
+            if denom <= 0:
+                continue
+            st_eff = float((w * stb).sum() / denom)
+            sc_eff = float((w * (sc[gi] * row[4])).sum() / denom)
+            fc = sc_eff / sc[gi] if sc[gi] > 0 else 1.0     # shield absorption like capture
+            delta[1][gi]   += n * (st_eff - st[gi])
+            delta[102][gi] += n * (sc_eff - sc[gi])
+            delta[101][gi] += n * sa[gi] * (fc - 1.0)
+    return delta
+
+
 def collapse_material(material, groups, temperature=294.0, cross_sections=None,
-                      self_shield=True, source=None, weighting='nr', sd_per_decade=40):
+                      self_shield=True, source=None, weighting='nr', sd_per_decade=40,
+                      use_urr=True):
     """Transport-free macroscopic multigroup cross sections for one material.
 
     Parameters
@@ -257,6 +318,20 @@ def collapse_material(material, groups, temperature=294.0, cross_sections=None,
     if sigma_t is None:
         raise ValueError("no total cross section (MT=1) found for material")
 
+    sigma_a = _macroscopic(incs, dens, temp_str, grid, 101)
+    sigma_c = _macroscopic(incs, dens, temp_str, grid, 102)
+    sigma_f = _macroscopic(incs, dens, temp_str, grid, 18)
+
+    # Unresolved-resonance self-shielding (probability tables): correct the dilute
+    # total / absorption / capture band-by-band in the URR before weighting.
+    if self_shield and use_urr:
+        d = _apply_urr(incs, dens, temp_str, grid, sigma_t, temperature)
+        sigma_t = sigma_t + d[1]
+        if sigma_a is not None:
+            sigma_a = sigma_a + d[101]
+        if sigma_c is not None:
+            sigma_c = sigma_c + d[102]
+
     # Weighting flux. Two options:
     #  'nr'           narrow-resonance: phi = w(E)/Sigma_t(E) with smooth part
     #                 w = 1/E (+ source PDF in the fast groups). Cheap; assumes the
@@ -276,9 +351,9 @@ def collapse_material(material, groups, temperature=294.0, cross_sections=None,
 
     reactions = {
         'total': sigma_t,
-        'absorption': _macroscopic(incs, dens, temp_str, grid, 101),
-        'capture': _macroscopic(incs, dens, temp_str, grid, 102),
-        'fission': _macroscopic(incs, dens, temp_str, grid, 18),
+        'absorption': sigma_a,
+        'capture': sigma_c,
+        'fission': sigma_f,
     }
 
     G = groups.num_groups
