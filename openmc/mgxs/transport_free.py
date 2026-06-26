@@ -274,7 +274,7 @@ def _apply_urr(incs, dens, temp_str, grid, sigma_t_smooth, temperature):
 
 def collapse_material(material, groups, temperature=294.0, cross_sections=None,
                       self_shield=True, source=None, weighting='nr', sd_per_decade=40,
-                      use_urr=True):
+                      use_urr=True, ir_lambda=None):
     """Transport-free macroscopic multigroup cross sections for one material.
 
     Parameters
@@ -332,14 +332,18 @@ def collapse_material(material, groups, temperature=294.0, cross_sections=None,
         if sigma_c is not None:
             sigma_c = sigma_c + d[102]
 
-    # Weighting flux. Two options:
-    #  'nr'           narrow-resonance: phi = w(E)/Sigma_t(E) with smooth part
-    #                 w = 1/E (+ source PDF in the fast groups). Cheap; assumes the
-    #                 between-collision flux recovers 1/E.
-    #  'slowing_down' option 3: solve the 0-D infinite-medium slowing-down balance
-    #                 with real elastic+inelastic+(n,xn) transfer kernels, then
-    #                 self-shield on the fine total. Most accurate (the deterministic
-    #                 equivalent of the MC infinite_medium spectrum).
+    # Weighting flux. Options:
+    #  'nr'           narrow-resonance: phi = w(E)/Sigma_t(E), w = 1/E (+ source PDF).
+    #  'ir'           intermediate resonance: phi = w(E)/[Sigma_t - sum_i (1-lambda_i)
+    #                 Sigma_s,i], i.e. only a fraction lambda_i of each nuclide's
+    #                 scattering moderates. lambda_i=1 recovers NR exactly; lambda_i=0
+    #                 is wide-resonance. The default per-nuclide lambda is the mass
+    #                 proxy 1-alpha (alpha=((A-1)/(A+1))^2) -- a documented kinematic
+    #                 proxy for the *scatterer's* slowing-down weight, NOT the rigorous
+    #                 per-group Goldstein-Cohen parameter; override via `ir_lambda`
+    #                 {nuclide: lambda}. Applied on the (URR-corrected) Sigma_t.
+    #  'slowing_down' option 3: solve the 0-D slowing-down balance with real transfer
+    #                 kernels, then self-shield on the fine total.
     if weighting == 'slowing_down':
         phi = _slowing_down_weight(incs, dens, temp_str, grid, sigma_t, source,
                                    per_decade=sd_per_decade)
@@ -347,7 +351,27 @@ def collapse_material(material, groups, temperature=294.0, cross_sections=None,
         w = 1.0 / np.clip(grid, 1e-11, None)
         if source is not None:
             w = w + _source_pdf(source, grid)
-        phi = w / np.clip(sigma_t, 1e-30, None) if self_shield else w
+        if weighting == 'ir' and self_shield:
+            removed = np.zeros_like(grid)              # sum_i (1-lambda_i) Sigma_s,i
+            for nuc, n in dens.items():
+                inc = incs[nuc]
+                A = inc.atomic_weight_ratio
+                lam = (ir_lambda or {}).get(nuc, 4.0 * A / (A + 1.0) ** 2)  # 1 - alpha
+                if lam >= 1.0:
+                    continue
+                ts = temp_str[nuc]
+                sti = inc[1].xs[ts](grid)
+                try:
+                    sai = inc[101].xs[ts](grid)
+                except KeyError:
+                    try:
+                        sai = inc[102].xs[ts](grid)
+                    except KeyError:
+                        sai = np.zeros_like(grid)
+                removed += (1.0 - lam) * n * np.clip(sti - sai, 0.0, None)
+            phi = w / np.clip(sigma_t - removed, 1e-30, None)   # positive: = Sigma_a + sum lam_i Sigma_s,i
+        else:
+            phi = w / np.clip(sigma_t, 1e-30, None) if self_shield else w
 
     reactions = {
         'total': sigma_t,
