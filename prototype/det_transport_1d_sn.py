@@ -23,6 +23,7 @@ LAYERS = [(ORDER[j], 6.0 if j == 0 else 4.0, 6 if j == 0 else 4) for j in range(
 NMU = 8                                                    # S8 Gauss-Legendre
 
 E = np.asarray(openmc.mgxs.GROUP_STRUCTURES[GS]); E = E[E <= 2e7]; edges = E; G = len(E)-1
+GE = openmc.mgxs.EnergyGroups(E)
 
 # ---- energy grid: union of all path materials' nuclide grids + per-group sub-grid ----
 matnames = [l[0] for l in LAYERS]
@@ -117,3 +118,33 @@ print(f"\n{TARGET} TOTAL %err vs material_wise ({GS}):")
 print(f"  det-NR (isolated)   {err(collapse(phi_nr)):.2f}")
 print(f"  det-TRANSPORT (1D)  {err(collapse(phi_loc)):.2f}")
 print(f"  stochastic_slab     {err(slabt):.2f}")
+
+
+# ---- SCATTER MATRIX for RR: kernel SHAPE (weighting-insensitive) x transport-flux
+#      scatter XS (direct collapse). The SCALE/AMPX recipe: 2D matrix shape renormalised
+#      to the self-shielded scatter cross section. ----
+from scatter_det import scatter_matrix
+def p0(tag):
+    L=openmc.MGXSLibrary.from_hdf5(f"scatref_{GS}_{tag}.h5")
+    x=[a for a in L.xsdatas if a.name.startswith(TARGET)][0]; return np.array(x._scatter_matrix[0])[...,0]
+mw_s=p0("mw"); slab_s=p0("slab")
+mid=np.sqrt(edges[:-1]*edges[1:])[::-1]; Ulg=-np.log(mid)
+def rs(M,Nref): r=Nref.sum(1)>1e-3; return 100*np.mean(np.abs((M.sum(1)-Nref.sum(1))[r]/Nref.sum(1)[r]))
+def mlg(M): r=M.sum(1); return np.where(r>0,(M@Ulg)/np.clip(r,1e-30,None),0)
+def shp(M,Nref): a,b=mlg(M),mlg(Nref); r=Nref.sum(1)>1e-3; return float(np.mean(np.abs((a-b)[r])))
+def coll(phi1d,sig):                                          # direct group collapse on the transport grid
+    out=np.zeros(G)
+    for g in range(G):
+        k=(grid>=edges[g])&(grid<=edges[g+1])
+        if k.sum()<2: continue
+        x,p,s=grid[k],phi1d[k],sig[k]; dd=_trapz(p,x); out[g]=_trapz(s*p,x)/dd if dd>0 else 0
+    return out[::-1]
+M_shape=scatter_matrix(mats[TARGET],GE,source=SRC)            # kernel shape (NR weighting; shape ~ weighting-free)
+d_=mats[TARGET].get_nuclide_atom_densities()
+sabs=_macroscopic({k:incs[k] for k in d_},d_,ts_,grid,101)
+if sabs is None: sabs=_macroscopic({k:incs[k] for k in d_},d_,ts_,grid,102)
+sscat=np.clip(st_fe-(sabs if sabs is not None else 0.0),0,None)   # scatter XS ~ total - absorption
+M_tr=M_shape*(coll(phi_loc,sscat)/np.clip(M_shape.sum(1),1e-30,None))[:,None]   # rows -> transport scatter XS
+print(f"\n{TARGET} SCATTER MATRIX ({GS}):")
+print(f"  ROWSUM %err:  det-NR {rs(M_shape,mw_s):.2f}   det-TRANSPORT {rs(M_tr,mw_s):.2f}   slab {rs(slab_s,mw_s):.2f}")
+print(f"  SHAPE leth :  det-NR {shp(M_shape,mw_s):.3f}  det-TRANSPORT {shp(M_tr,mw_s):.3f}  slab {shp(slab_s,mw_s):.3f}")
