@@ -7,6 +7,7 @@ from scatter_det import scatter_matrix
 from mats import materials
 _trapz = getattr(np, 'trapezoid', None) or np.trapz
 GS = sys.argv[1] if len(sys.argv) > 1 else "CCFE-709"
+REFPFX = sys.argv[2] if len(sys.argv) > 2 else ""        # "" = sphere refs, "slab1d_" = slab refs
 SRC = openmc.stats.muir(e0=14.06e6, m_rat=5.0, kt=20000.0)
 datalib = openmc.data.DataLibrary.from_xml(openmc.config['cross_sections'])
 _ms = materials(); mats = {m.name: m for m in _ms}; ORDER = [m.name for m in _ms]
@@ -85,7 +86,7 @@ def coll(p, sig):
         x, pp, sg = grid[k], p[k], sig[k]; dd = _trapz(pp, x); out[g] = _trapz(sg*pp, x)/dd if dd > 0 else 0
     return out[::-1]
 def lib(tag, nm, kind):
-    L = openmc.MGXSLibrary.from_hdf5(f"scatref_{GS}_{tag}.h5"); x = [a for a in L.xsdatas if a.name.startswith(nm)][0]
+    L = openmc.MGXSLibrary.from_hdf5(f"scatref_{REFPFX}{GS}_{tag}.h5"); x = [a for a in L.xsdatas if a.name.startswith(nm)][0]
     return np.array(x._total[0]) if kind == 't' else np.array(x._scatter_matrix[0])[..., 0]
 def et(a, b): k = np.abs(b) > 1e-9; return 100*np.mean(np.abs((a-b)[k]/b[k]))
 def rs(M, Nr): r = Nr.sum(1) > 1e-3; return 100*np.mean(np.abs((M.sum(1)-Nr.sum(1))[r]/Nr.sum(1)[r]))
