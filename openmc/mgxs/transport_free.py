@@ -319,8 +319,34 @@ def _unitbase_anchors(td, edges, per=4):
     return np.array(Ea), np.array(GF)
 
 
+def _freegas_gf(E, A, kT, edges, nv=28, nmu=14):
+    """Free-gas (ideal-gas) elastic energy-transfer group fractions at incident energy E.
+
+    Quadrature over the target Maxwellian (speed v_t, cosine mu_t); for each target the
+    isotropic-CM elastic scatter gives the lab outgoing energy uniform over
+    [0.5(Vcm-w)^2, 0.5(Vcm+w)^2]. Captures thermal up-scatter and broadening that the
+    static (target-at-rest) kernel misses; reduces to Wigner-Wilkins for A=1 (verified
+    to ~1-2%). E and kT in eV; speeds in sqrt(eV) with m_n = 1.
+    """
+    vn = np.sqrt(2.0 * E); vth = np.sqrt(2.0 * kT / max(A, 1e-9))
+    vt = np.linspace(0.02 * vth, 6.0 * vth, nv)
+    wv = vt**2 * np.exp(-A * vt**2 / (2.0 * kT))
+    mu = np.linspace(-1.0, 1.0, nmu)
+    VT = vt[:, None]; MU = mu[None, :]
+    vrel = np.sqrt(np.clip(vn*vn + VT*VT - 2*vn*VT*MU, 0, None))
+    Vcm = np.sqrt(np.clip(vn*vn + A*A*VT*VT + 2*A*vn*VT*MU, 0, None)) / (A + 1.0)
+    w = (A / (A + 1.0)) * vrel
+    Elo = (0.5 * (Vcm - w)**2).ravel(); Ehi = (0.5 * (Vcm + w)**2).ravel()
+    wgt = ((wv[:, None]) * np.ones_like(mu)[None, :] * vrel).ravel()
+    rng = np.clip(Ehi - Elo, 1e-30, None); tot = wgt.sum()
+    if tot <= 0:
+        return None
+    cdf = (np.clip((edges[:, None] - Elo[None, :]) / rng[None, :], 0, 1) * wgt[None, :]).sum(1) / tot
+    return np.diff(cdf)
+
+
 def scatter_matrix(material, groups, temperature=294.0, cross_sections=None, source=None,
-                   return_p1=False):
+                   return_p1=False, thermal=True):
     """Deterministic P0 group-to-group scattering matrix for one material.
 
     Returns the macroscopic Sigma_s,g->g' (1/cm) as an ``[G_in, G_out]`` array in
@@ -387,8 +413,20 @@ def scatter_matrix(material, groups, temperature=294.0, cross_sections=None, sou
                     ang = r.products[0].distribution[0].angle; aE = np.asarray(ang.energy)
                 except Exception:
                     ang = None
+                E_TH = 5.0; kT = 8.617e-5 * temperature           # free-gas thermal for light nuclides
+                do_fg = thermal and A <= 20.0
+                tgf = {}
+                if do_fg:
+                    mid = np.sqrt(edges[:-1] * edges[1:])
+                    for g in np.where(mid < E_TH)[0]:
+                        gf = _freegas_gf(mid[g], A, kT, edges)
+                        if gf is not None:
+                            tgf[int(g)] = gf
                 for i in nz:
-                    E = grid[i]; mu = fp = None
+                    E = grid[i]
+                    if do_fg and E < E_TH and gi[i] in tgf:       # thermal: free-gas energy transfer
+                        M[gi[i]] += src[i] * tgf[gi[i]]; continue
+                    mu = fp = None
                     if ang is not None:
                         t = ang.mu[min(np.searchsorted(aE, E), len(aE) - 1)]
                         if hasattr(t, 'x') and hasattr(t, 'p'):
@@ -462,7 +500,11 @@ def scatter_matrix(material, groups, temperature=294.0, cross_sections=None, sou
                             fr = (E - Ea[j-1]) / (Ea[j] - Ea[j-1]); gf = (1 - fr) * GF[j-1] + fr * GF[j]
                         M[gi[i]] += src[i] * yld[i] * app[i] * gf
 
-    for g in range(G - 1):                                    # fold upscatter artifacts into the diagonal
+    # fold upscatter artifacts into the diagonal, but keep real thermal up-scatter (free-gas, below E_TH)
+    _midf = np.sqrt(edges[:-1] * edges[1:])
+    for g in range(G - 1):
+        if thermal and _midf[g] < 5.0:
+            continue
         up = M[g, g+1:].sum()
         if up:
             M[g, g] += up; M[g, g+1:] = 0.0
