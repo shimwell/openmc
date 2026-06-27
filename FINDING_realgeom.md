@@ -60,3 +60,36 @@ accuracy AND positivity.
   diffusivity hurts steel/CuCrZr.
 - A diamond+fixup spherical solver should get the best of both (accurate + positive +
   correct geometry) -- the recommended future direction for a single uniform method.
+
+## Update 2: diamond + negative-flux fixup added (scheme='fixup', now default)
+Set-to-zero & re-solve: where a diamond cell's outgoing spatial/angular edge would go
+negative, clamp it to 0 and re-solve the cell (the curvature coeffs alpha>=0 guarantee
+termination positive). Validation (point source in absorber): **fixup 0.74% mean (best;
+diamond 0.89, step 1.17), positive flux.**
+
+BUT on the RESONANT stack (CCFE-709, total %err vs material_wise):
+| material | step | fixup | slab-transport(#114) | slab(MC) |
+|---|---|---|---|---|
+| tungsten | 2.13 | 2.47 | (5.51 slab-geom) | 2.56 |
+| steel    | 2.44 | 2.53 | 0.57(NR) | 0.48 |
+| Fe-56    | 1.08 | 2.06 | **0.60** | 1.39 |
+| CuCrZr   | 1.20 | 1.63 | 0.85(NR) | 1.02 |
+
+**fixup is WORSE than step on resonances** -- at the many resonance negativities the
+set-to-zero clamp accumulates more error than step's consistent upwinding. So for the
+resonant deep-penetration problem, neither spherical scheme beats the simpler, robust
+1D-SLAB transport (#114, diamond + edge clamp): Fe-56 0.60 (slab-transport) vs 1.08
+(spherical step). The spherical geometry's only clear gain is the near-source shell
+(tungsten 2.13 vs slab-method 2.56), where NR is already excellent anyway.
+
+## Bottom line / recommendation
+A correct-geometry spherical Sn does NOT outperform the robust slab transport on the
+deep resonant materials -- the spherical central-source + resonance negativity make it
+numerically harder, and the schemes that are positive (step/fixup) are too diffusive or
+clamp-lossy. The practical best method remains:
+  * #113 (NR) as the geometry-free default, +
+  * #114 (1D-slab transport + thermal-NR fallback) for the deep cross-talk materials
+    (Fe-56 total 0.60 / scatter 0.69, both beat slab),
+  * NR for the near-source shells (already <=2%).
+A uniform high-accuracy positive spherical solver would need more advanced numerics
+(characteristic/CN, or much finer mesh) -- diminishing returns vs the hybrid above.
