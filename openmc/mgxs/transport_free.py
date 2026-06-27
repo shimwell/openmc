@@ -413,8 +413,9 @@ def scatter_matrix(material, groups, temperature=294.0, cross_sections=None, sou
                     ang = r.products[0].distribution[0].angle; aE = np.asarray(ang.energy)
                 except Exception:
                     ang = None
-                E_TH = 5.0; kT = 8.617e-5 * temperature           # free-gas thermal for light nuclides
-                do_fg = thermal and A <= 20.0
+                kT = 8.617e-5 * temperature                       # free-gas thermal for light nuclides
+                E_TH = 400.0 * kT                                  # = OpenMC free_gas_threshold (default 400 kT);
+                do_fg = thermal and A <= 20.0                      # when model-driven, read settings.free_gas_threshold
                 tgf = {}
                 if do_fg:
                     mid = np.sqrt(edges[:-1] * edges[1:])
@@ -501,9 +502,9 @@ def scatter_matrix(material, groups, temperature=294.0, cross_sections=None, sou
                         M[gi[i]] += src[i] * yld[i] * app[i] * gf
 
     # fold upscatter artifacts into the diagonal, but keep real thermal up-scatter (free-gas, below E_TH)
-    _midf = np.sqrt(edges[:-1] * edges[1:])
+    _midf = np.sqrt(edges[:-1] * edges[1:]); _eth = 400.0 * 8.617e-5 * temperature
     for g in range(G - 1):
-        if thermal and _midf[g] < 5.0:
+        if thermal and _midf[g] < _eth:
             continue
         up = M[g, g+1:].sum()
         if up:
