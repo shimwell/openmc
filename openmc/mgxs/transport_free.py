@@ -434,16 +434,20 @@ def scatter_matrix(material, groups, temperature=294.0, cross_sections=None, sou
                             mu = np.asarray(t.x, float); fp = np.asarray(t.p, float)
                     if mu is None or mu.size < 2:
                         mu = np.linspace(-1, 1, 33); fp = np.full(33, 0.5)
-                    wmu = np.empty_like(mu); wmu[1:-1] = 0.5*(mu[2:]-mu[:-2]); wmu[0]=0.5*(mu[1]-mu[0]); wmu[-1]=0.5*(mu[-1]-mu[-2])
-                    pw = fp * wmu; s = pw.sum()
-                    if s <= 0:
+                    if mu[0] > mu[-1]:
+                        mu = mu[::-1]; fp = fp[::-1]
+                    # E_out is monotonic in mu, so spread f(mu) SMOOTHLY across outgoing
+                    # groups via the angular CDF -- not one delta per mu point, which piles
+                    # hydrogen's wide (mu~-1 -> E_out~0) down-scatter into the lowest group.
+                    eout = E * (A*A + 2*A*mu + 1.0) / a1
+                    cmu = np.concatenate(([0.0], np.cumsum(0.5*(fp[1:]+fp[:-1])*np.diff(mu))))
+                    if cmu[-1] <= 0:
                         M[gi[i], gi[i]] += src[i]; continue
-                    kin = A*A + 2*A*mu + 1.0
-                    go = np.clip(np.searchsorted(edges, E * kin / a1) - 1, 0, G - 1)
-                    pwn = pw / s
-                    np.add.at(M[gi[i]], go, src[i] * pwn)
+                    M[gi[i]] += src[i] * np.diff(np.interp(edges, eout, cmu/cmu[-1], left=0.0, right=1.0))
                     if M1 is not None:                        # mu_lab = (1+A mu)/sqrt(A^2+2A mu+1)
-                        np.add.at(M1[gi[i]], go, src[i] * pwn * (1.0 + A*mu) / np.sqrt(kin))
+                        mulab = (1.0 + A*mu) / np.sqrt(A*A + 2*A*mu + 1.0)
+                        cm1 = np.concatenate(([0.0], np.cumsum(0.5*(fp[1:]*mulab[1:]+fp[:-1]*mulab[:-1])*np.diff(mu))))
+                        M1[gi[i]] += src[i] * np.diff(np.interp(edges, eout, cm1, left=0.0, right=cm1[-1])) / cmu[-1]
                 continue
             for prod in r.products:                              # inelastic: all neutron products
                 if prod.particle != 'neutron':
