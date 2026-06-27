@@ -136,6 +136,50 @@ def _apply_urr(incs, dens, temp_str, grid, sigma_t_smooth, temperature):
     return delta
 
 
+def _urr_elastic_factor(incs, dens, temp_str, grid, sigma_t_smooth, temperature):
+    """Per-nuclide micro elastic self-shielding factor f_el(E) = <sigma_el>/sigma_el,smooth
+    in the unresolved range (1.0 elsewhere), from the same probability-table band average
+    as :func:`_apply_urr` but for the elastic channel (table column 2). Lets the scatter
+    matrix self-shield its elastic consistently with the URR-corrected vector total --
+    otherwise the scatter row-sum is the dilute (too-high) elastic across the URR.
+    """
+    fac = {}
+    for nuc, n in dens.items():
+        inc = incs[nuc]
+        urr = getattr(inc, 'urr', None)
+        if not urr:
+            continue
+        cand = [t for t in urr if urr.get(t) is not None and t in inc.temperatures]
+        if not cand:
+            continue
+        ts = min(cand, key=lambda t: abs(float(t[:-1]) - temperature))
+        pt = urr[ts]
+        if not getattr(pt, 'multiply_smooth', False):
+            continue
+        e = np.asarray(pt.energy, float); tab = np.asarray(pt.table, float)
+        idx = np.where((grid >= e[0]) & (grid <= e[-1]))[0]
+        if idx.size == 0:
+            continue
+        st = inc[1].xs[ts](grid); se = inc[2].xs[ts](grid)
+        f = np.ones_like(grid)
+        for gj in idx:
+            if se[gj] <= 0:
+                continue
+            j = int(np.clip(np.searchsorted(e, grid[gj]), 1, len(e) - 1))
+            row = tab[j - 1] if abs(e[j - 1] - grid[gj]) <= abs(e[j] - grid[gj]) else tab[j]
+            p = np.diff(np.concatenate(([0.0], row[0])))
+            sig0 = (sigma_t_smooth[gj] - n * st[gj]) / n
+            if sig0 < 0:
+                sig0 = 0.0
+            wgt = p / (st[gj] * row[1] + sig0)
+            den = wgt.sum()
+            if den <= 0:
+                continue
+            f[gj] = float((wgt * (se[gj] * row[2])).sum() / den) / se[gj]
+        fac[nuc] = f
+    return fac
+
+
 def collapse_material(material, groups, temperature=294.0, cross_sections=None,
                       source=None):
     """Transport-free macroscopic multigroup cross sections for one material.
@@ -382,6 +426,7 @@ def scatter_matrix(material, groups, temperature=294.0, cross_sections=None, sou
     if source is not None:
         w = w + _source_pdf(source, grid)
     phi = w / np.clip(sigma_t, 1e-30, None)
+    fel = _urr_elastic_factor(incs, dens, temp_str, grid, sigma_t, temperature)  # URR elastic self-shielding
     dwid = np.empty_like(grid)
     dwid[1:-1] = 0.5 * (grid[2:] - grid[:-2]); dwid[0] = 0.5*(grid[1]-grid[0]); dwid[-1] = 0.5*(grid[-1]-grid[-2])
     wt = phi * dwid
@@ -404,6 +449,8 @@ def scatter_matrix(material, groups, temperature=294.0, cross_sections=None, sou
                 xs = r.xs[ts](grid)
             except Exception:
                 continue
+            if is_el and nuc in fel:                 # self-shield elastic in the URR
+                xs = xs * fel[nuc]
             nz = np.nonzero(xs > 0)[0]
             if nz.size == 0:
                 continue
