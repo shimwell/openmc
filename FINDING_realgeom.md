@@ -29,3 +29,34 @@ treats the angular edges). This is the next engineering step.
       deep shells (cross-talk) -- the local flux itself signals the regime;
   (b) ship #113 (NR) as the robust geometry-independent library and #114 (slab transport)
       as the optional deep-material enhancement.
+
+## Update: positivity-preserving step-characteristic scheme added
+The curvature coefficients alpha_{m+1/2} are provably >= 0 (a tent: 0 -> peak -> 0),
+which makes STEP-CHARACTERISTIC differencing (upwind in space AND angle)
+UNCONDITIONALLY POSITIVE for spherical Sn. Implemented as scheme='step' (default) in
+sphere_sn.py. Validation (point source in absorber): step 1.2% mean (diamond 0.9%),
+min flux > 0 (vs diamond which can go negative).
+
+Re-run on the resonant stack (CCFE-709, total %err vs material_wise):
+| material | NR | diamond(broken) | STEP | slab |
+|---|---|---|---|---|
+| tungsten | 1.96 | 5.51 | **2.13** | 2.56 |
+| steel | 0.57 | 7.37 | 2.44 | 0.48 |
+| Fe-56 | 3.26 | (neg) | **1.08** | 1.39 |
+| CuCrZr | 0.85 | (neg) | 1.20 | 1.02 |
+
+Step fixes the negativity (no more catastrophic steel 7.37) and tungsten + Fe-56 now
+BEAT slab. BUT step is 1st-order diffusive, so steel/CuCrZr are worse than NR/slab.
+The diamond scheme is 2nd-order accurate but unstable on resonances. Neither is a clean
+win: the next step for a uniform spherical solver is **diamond with a proper negative-
+flux fixup** (set-to-zero + re-solve the cell, conserving), which keeps 2nd-order
+accuracy AND positivity.
+
+## Practical comparison of paths (CCFE-709)
+- The 1D-SLAB transport (#114) + thermal-NR fallback is the most accurate for the DEEP
+  materials: Fe-56 total 0.60 / scatter 0.69 (both beat slab) -- but slab geometry
+  over-softens the NEAR-SOURCE shells.
+- This spherical-STEP solver fixes near-source tungsten (2.13 < slab 2.56) but its
+  diffusivity hurts steel/CuCrZr.
+- A diamond+fixup spherical solver should get the best of both (accurate + positive +
+  correct geometry) -- the recommended future direction for a single uniform method.
