@@ -7,6 +7,7 @@ a per-problem switch). Validate all 10 materials vs material_wise + converged sl
 import sys, time, numpy as np, openmc, openmc.data
 from openmc.mgxs.transport_free import _macroscopic, _apply_urr, _source_pdf, _nearest_temperature
 from scatter_det import scatter_matrix
+from inel_source import coarse_grid, build_inel_transfer, inel_source_fine
 from mats import materials
 _trapz = getattr(np, 'trapezoid', None) or np.trapz
 GS = sys.argv[1] if len(sys.argv) > 1 else "CCFE-709"
@@ -51,22 +52,36 @@ ncell = len(cells); dx = np.array([c[1] for c in cells]); cmat = [c[0] for c in 
 ST = np.array([MD[nm][0] for nm in cmat]); lay_sl = []; s = 0
 for nm, th, nc in LAYERS: lay_sl.append((nm, slice(s, s+nc))); s += nc
 mu, wmu = np.polynomial.legendre.leggauss(8); pos = mu > 0; neg = mu < 0; mu_p = mu[pos]; mu_n = np.abs(mu[neg])
-phi = np.zeros((ncell, N)); t0 = time.time()
-for i in range(N-1, -1, -1):
-    Q = np.zeros(ncell)
+cg, be = coarse_grid(grid[0], grid[-1])                          # coarse grid for the inelastic source
+MINEL = {}
+for nm in ORDER:
+    d = mats[nm].get_nuclide_atom_densities(); MINEL[nm] = build_inel_transfer({k: INC[k] for k in d}, d, TS, cg, be)
+def solve_transport(q_inel):
+    phi = np.zeros((ncell, N))
+    for i in range(N-1, -1, -1):
+        Q = q_inel[:, i].copy()                                  # inelastic source (precomputed from prev pass)
+        for nm, sl in lay_sl:
+            for cf, jh in MD[nm][1]:                             # elastic down-scatter (fine gather)
+                j = jh[i]
+                if j > i+1: Q[sl] += phi[sl, i+1:j] @ cf[i+1:j]
+        Q[0] += inc_src[i]/dx[0]                                 # volumetric isotropic source in source cell
+        sigt = ST[:, i]; pa = np.zeros((ncell, 8)); psn = np.zeros(mu_p.size)
+        for c in range(ncell):
+            tM = 2*mu_p/dx[c]; po = np.clip((Q[c]+psn*(tM-sigt[c]))/(tM+sigt[c]), 0, None); pa[c, pos] = 0.5*(psn+po); psn = po
+        psn = np.zeros(mu_n.size)
+        for c in range(ncell-1, -1, -1):
+            tM = 2*mu_n/dx[c]; po = np.clip((Q[c]+psn*(tM-sigt[c]))/(tM+sigt[c]), 0, None); pa[c, neg] = 0.5*(psn+po); psn = po
+        phi[:, i] = pa @ wmu
+    return phi
+t0 = time.time()
+phi = solve_transport(np.zeros((ncell, N)))                      # pass 0: elastic only
+for _ in range(2):                                              # outer iterations: add inelastic source
+    q_inel = np.zeros((ncell, N))
     for nm, sl in lay_sl:
-        for cf, jh in MD[nm][1]:
-            j = jh[i]
-            if j > i+1: Q[sl] += phi[sl, i+1:j] @ cf[i+1:j]
-    Q[0] += inc_src[i]/dx[0]                                     # volumetric isotropic source in source cell
-    sigt = ST[:, i]; pa = np.zeros((ncell, 8)); psn = np.zeros(mu_p.size)   # vacuum incident (no boundary beam)
-    for c in range(ncell):
-        tM = 2*mu_p/dx[c]; po = np.clip((Q[c]+psn*(tM-sigt[c]))/(tM+sigt[c]), 0, None); pa[c, pos] = 0.5*(psn+po); psn = po
-    psn = np.zeros(mu_n.size)
-    for c in range(ncell-1, -1, -1):
-        tM = 2*mu_n/dx[c]; po = np.clip((Q[c]+psn*(tM-sigt[c]))/(tM+sigt[c]), 0, None); pa[c, neg] = 0.5*(psn+po); psn = po
-    phi[:, i] = pa @ wmu
-print(f"[{GS}] grid {N}, full-stack transport {time.time()-t0:.0f}s", flush=True)
+        for c in range(sl.start, sl.stop):
+            q_inel[c] = inel_source_fine(MINEL[nm], phi[c], grid, dE, cg, be)
+    phi = solve_transport(q_inel)
+print(f"[{GS}] grid {N}, transport+inelastic {time.time()-t0:.0f}s", flush=True)
 def coll(p, sig):
     out = np.zeros(G)
     for g in range(G):

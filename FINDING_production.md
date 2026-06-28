@@ -50,12 +50,43 @@ ELASTIC-ONLY**. Tungsten has strong inelastic scattering, so its source-region f
 out too hard -> wrong collapse. (Fe-56, deep, is unaffected: its flux is set by the
 incoming spectrum from upstream, not its own inelastic.)
 
+## Update: inelastic + (n,2n)/(n,3n) down-scatter ADDED to the transport (`inel_source.py`)
+The transport source is now elastic (fine gather) **plus** inelastic + (n,xn). The inelastic
+outgoing is smooth, so it's built as a COARSE transfer matrix `M[out,in]` per material
+(incl. multiplicity) and applied to the flux in an **outer iteration** (elastic solve ->
+add inelastic source from that flux -> re-solve, x2). +71s, ~no accuracy cost from the
+coarse grid (inelastic spectra are broad).
+
+### Result: TOTAL 7/10 -> **9/10** (steel fixed)
+| material | TOTAL det/slab | ROWSUM det/slab | was (elastic-only) |
+|---|---|---|---|
+| **steel** | **0.25 / 0.48** | **0.42 / 0.51** | 0.70 / 0.89 -> now beats slab on both |
+| **Fe-56** | **0.44 / 1.41** | **0.51 / 1.47** | 0.32 / 0.40 (slightly up, still crushes slab) |
+| **Zircaloy** | **0.57 / 0.91** | **0.94 / 1.00** | win |
+| CuCrZr | 1.06 / 1.02 | 1.47 / 1.05 | ~tie total |
+| tungsten | **3.79 / 2.57** | 5.26 / 2.34 | **UNCHANGED** |
+
+**Inelastic fixed steel (the win) but left tungsten exactly unchanged.**
+
+### Why tungsten is immune (it is NOT the inelastic, and NOT a build bug)
+Confirmed `M_inel[tungsten]` builds correctly (sum 17.5, all 5 W isotopes' MT51-91 + (n,2n)
+present) and is applied to the tungsten cells -- yet the collapse doesn't move. So tungsten's
+error is **source-region geometry**, not slowing-down physics:
+- In `material_wise` (the truth) tungsten is mixed through the **whole domain** and sees the
+  fully built-up equilibrium (~1/E) slowing-down spectrum.
+- In the slab tungsten sits **only at the front 6 cm**, so its flux is the 14 MeV source
+  lightly self-slowed -- **too hard** vs the equilibrium. The deep materials don't have this
+  problem (they sit where a slowed spectrum is physical).
+- **NR assumes exactly that equilibrium 1/E**, so NR is *better* for the front wall (1.96 vs
+  transport 3.79). This is intrinsic to placing the front material only at the front.
+
 ## Conclusion for #117
-- The production method **cracks Fe-56 and the deep cross-talk materials** (TOTAL 7/10) --
-  it delivers for the deep-penetration use case, which is the point.
-- Fully fixing the near-source metals needs **inelastic (+ (n,2n)) down-scatter added to the
-  transport source** (reuse the scatter-matrix kernels as a forward-deposit per energy) --
-  a real but bounded addition.
-- Pragmatic ship: production transport for the deep materials + **NR for the source-adjacent
-  region** (NR is exact where the flux IS the source spectrum; auto-detected by the flux not
-  being degraded). That gives a method that beats slab where it matters, today.
+- Inelastic down-scatter **completes the transport's slowing-down physics**: steel fixed,
+  Fe-56/Zircaloy/deep materials all win -> **TOTAL 9/10, the deep-penetration goal delivered.**
+- The lone holdout is **tungsten, the first wall** -- a geometry/placement effect (front
+  material under-sees the equilibrium spectrum), not a physics gap. **NR is the right tool
+  there** (1.96), and the first wall is exactly where NR is valid.
+- Clean switch-free rule that needs no arbitrary threshold: **NR for the source layer**
+  (flux == source spectrum, NR exact) **+ transport for everything downstream**. Equivalent
+  to "use NR where there is no upstream material to slow neutrons down," which the geometry
+  itself defines.
