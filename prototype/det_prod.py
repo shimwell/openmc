@@ -58,7 +58,8 @@ for i in range(N-1, -1, -1):
         for cf, jh in MD[nm][1]:
             j = jh[i]
             if j > i+1: Q[sl] += phi[sl, i+1:j] @ cf[i+1:j]
-    sigt = ST[:, i]; pa = np.zeros((ncell, 8)); psn = np.full(mu_p.size, inc_src[i])
+    Q[0] += inc_src[i]/dx[0]                                     # volumetric isotropic source in source cell
+    sigt = ST[:, i]; pa = np.zeros((ncell, 8)); psn = np.zeros(mu_p.size)   # vacuum incident (no boundary beam)
     for c in range(ncell):
         tM = 2*mu_p/dx[c]; po = np.clip((Q[c]+psn*(tM-sigt[c]))/(tM+sigt[c]), 0, None); pa[c, pos] = 0.5*(psn+po); psn = po
     psn = np.zeros(mu_n.size)
