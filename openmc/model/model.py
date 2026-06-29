@@ -2703,8 +2703,17 @@ class Model:
 
         Parameters
         ----------
-        method : {"material_wise", "stochastic_slab", "infinite_medium"}, optional
-            Method to generate the MGXS.
+        method : {"material_wise", "stochastic_slab", "infinite_medium", \
+                  "collapsed_self_shielding"}, optional
+            Method to generate the MGXS. "collapsed_self_shielding" generates the
+            library deterministically in the style of NJOY/FISPACT: it collapses
+            (group-averages) each material's continuous-energy data against an
+            assumed narrow-resonance weighting flux with always-on resonance
+            self-shielding (resolved range plus unresolved-range probability
+            tables), and builds a deterministic P0 scattering matrix. It uses no
+            Monte Carlo and no transport solve, introduces no statistical noise,
+            and yields a positive total cross section in every group. See
+            :func:`openmc.mgxs.collapsed_self_shielding.collapse_material`.
         groups : openmc.mgxs.EnergyGroups, str, or sequence of float, optional
             Energy group structure for the MGXS. Can be an
             :class:`openmc.mgxs.EnergyGroups` object, a string name of a
@@ -2793,6 +2802,9 @@ class Model:
                     self._generate_stochastic_slab_mgxs(
                         groups, nparticles, mgxs_path, correction, tmpdir, source_energy,
                         temperatures, temperature_settings)
+                elif method == "collapsed_self_shielding":
+                    self._generate_collapsed_self_shielding_mgxs(
+                        groups, mgxs_path, correction, source_energy, temperatures)
                 else:
                     raise ValueError(
                         f'MGXS generation method "{method}" not recognized')
@@ -2808,6 +2820,76 @@ class Model:
                 material.add_macroscopic(material.name)
 
             self.settings.energy_mode = 'multi-group'
+
+    def _generate_collapsed_self_shielding_mgxs(
+        self, groups, mgxs_path, correction, source_energy, temperatures
+    ):
+        """Deterministically generate an MGXS library (no Monte Carlo, no transport solve).
+
+        Each material's continuous-energy cross sections are collapsed
+        (group-averaged) against a narrow-resonance (1/E + source) weighting flux
+        with always-on resonance self-shielding (resolved range by
+        1/(sigma_t + sigma_0); unresolved range via NJOY probability tables),
+        together with a deterministic P0 group-to-group scattering matrix
+        (including a free-gas thermal kernel for light nuclides). Unlike
+        "material_wise" and "stochastic_slab", this introduces no Monte Carlo
+        noise and yields a positive total cross section in every group. See
+        :mod:`openmc.mgxs.collapsed_self_shielding`.
+
+        Parameters
+        ----------
+        groups : openmc.mgxs.EnergyGroups
+            Energy group structure for the MGXS.
+        mgxs_path : PathLike
+            Filename for the MGXS HDF5 file.
+        correction : str or None
+            "P0" applies the transport-corrected outscatter P0 correction
+            (sigma_tr = sigma_t - Sigma_s1, with Sigma_s1 removed from the in-group
+            diagonal); None emits the full P0 matrix.
+        source_energy : openmc.stats.Univariate or None
+            Weighting-flux source spectrum. If None, the model's source energy
+            distribution is used; if the model has no source, a pure 1/E weight is used.
+        temperatures : Sequence[float] or None
+            Temperatures to generate MGXS at. Defaults to room temperature.
+        """
+        from openmc.mgxs.collapsed_self_shielding import (
+            collapse_material, scatter_matrix)
+
+        # Weighting source spectrum: explicit argument, else the model's source energy
+        # distribution, else None (pure 1/E slowing-down weighting).
+        src = source_energy
+        if src is None and self.settings.source:
+            s0 = self.settings.source
+            s0 = s0[0] if isinstance(s0, (list, tuple)) else s0
+            src = getattr(s0, 'energy', None)
+
+        temps = list(temperatures) if temperatures else [294.0]
+        transport_correct = (correction == "P0")
+        diag = np.arange(groups.num_groups)
+
+        mgxs_lib = openmc.MGXSLibrary(energy_groups=groups)
+        for material in self.materials:
+            xsd = openmc.XSdata(material.name, groups, temperatures=temps)
+            xsd.order = 0
+            for temperature in temps:
+                coll = collapse_material(material, groups, temperature=temperature,
+                                         source=src)
+                total = np.asarray(coll['total'], float)
+                scat = scatter_matrix(material, groups, temperature=temperature,
+                                      source=src, return_p1=transport_correct)
+                if transport_correct:
+                    matrix, sigma_s1 = scat
+                    matrix = np.array(matrix, float)
+                    total = total - sigma_s1
+                    matrix[diag, diag] -= sigma_s1
+                else:
+                    matrix = np.asarray(scat, float)
+                xsd.set_total(total, temperature=temperature)
+                xsd.set_absorption(np.asarray(coll['absorption'], float),
+                                   temperature=temperature)
+                xsd.set_scatter_matrix(matrix[:, :, np.newaxis], temperature=temperature)
+            mgxs_lib.add_xsdata(xsd)
+        mgxs_lib.export_to_hdf5(mgxs_path)
 
     def convert_to_random_ray(self):
         """Convert a multigroup model to use random ray.
