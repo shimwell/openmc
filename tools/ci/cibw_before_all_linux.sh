@@ -134,14 +134,20 @@ cd /tmp && rm -rf embree
 # ---------------------------------------------------------------------------
 # Double-Down
 # ---------------------------------------------------------------------------
-git clone --depth 1 -b v1.1.0 https://github.com/pshriwise/double-down.git
+# Use the fork branch that force-aligns Vec3da to 32 bytes
+# (https://github.com/shimwell/double-down/tree/fix-non-avx2-vec3da-alignment,
+# upstream PR pshriwise/double-down#54). Without that fix, building double-down
+# without -mavx2 (below) leaves Vec3da under-aligned and point_in_volume returns
+# wrong containment, which silently breaks DAGMC geometry/slice plotting.
+git clone --depth 1 -b fix-non-avx2-vec3da-alignment https://github.com/shimwell/double-down.git
 cd double-down
 # double-down's CMakeLists.txt hardcodes "-march=native -mavx2", which bakes the
 # build host's exact instruction set into libdd. On GitHub's AVX-512-capable Xeon
 # runners this emits AVX-512 (e.g. vmovdqu64 %zmm0), making the wheel crash with
 # SIGILL on any CPU without those instructions (the test runner, most laptops,
 # AMD/older Intel). Strip the non-portable flags so the wheel stays compatible
-# with the manylinux x86-64 baseline; -fPIC is preserved.
+# with the manylinux x86-64 baseline; -fPIC is preserved. Safe now that the fork
+# branch makes point_in_volume correct without AVX2.
 sed -i 's/-march=native//g; s/-mavx2//g' CMakeLists.txt
 mkdir build && cd build
 cmake .. -DCMAKE_INSTALL_PREFIX=/usr
