@@ -147,6 +147,13 @@ random ray mode can be found in the :ref:`Random Ray User Guide <random_ray>`.
        # Add generator to openmc.settings object
        settings.weight_window_generators = wwg
 
+   Alternatively, ``method='fw_cadis_omega'`` selects the angle-informed
+   FW-CADIS-:math:`\Omega` variant, which additionally accumulates P1 current
+   moments during the forward and adjoint random ray solves and weights the
+   adjoint flux with the resulting directional correction before the weight
+   windows are formed. The rest of the workflow (mesh, tallies, output file)
+   is identical to ``fw_cadis``.
+
 .. warning::
     If using FW-CADIS weight window generation, ensure that the selected weight
     window mesh does not subdivide any source regions in the problem. This can

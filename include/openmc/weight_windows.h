@@ -17,7 +17,7 @@
 
 namespace openmc {
 
-enum class WeightWindowUpdateMethod { MAGIC, FW_CADIS };
+enum class WeightWindowUpdateMethod { MAGIC, FW_CADIS, FW_CADIS_OMEGA };
 
 //==============================================================================
 // Constants

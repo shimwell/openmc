@@ -498,8 +498,12 @@ class WeightWindowGenerator:
         maximum and minimum energy for the data available at runtime.
     particle_type : str or int or openmc.ParticleType
         Particle type the weight windows apply to
-    method : {'magic', 'fw_cadis'}
+    method : {'magic', 'fw_cadis', 'fw_cadis_omega'}
         The weight window generation methodology applied during an update.
+        The 'fw_cadis_omega' method is an angle-informed variant of
+        'fw_cadis' that weights the scalar adjoint flux with a P1
+        (current-based) correction formed from the forward and adjoint
+        random ray solutions.
     targets : :class:`openmc.Tallies` or iterable of int
         Target tallies for local variance reduction via FW-CADIS.
     max_realizations : int
@@ -519,7 +523,7 @@ class WeightWindowGenerator:
         energies in [eV] for a single bin
     particle_type : openmc.ParticleType
         Particle type the weight windows apply to
-    method : {'magic', 'fw_cadis'}
+    method : {'magic', 'fw_cadis', 'fw_cadis_omega'}
         The weight window generation methodology applied during an update.
     targets : :class:`openmc.Tallies` or numpy.ndarray
         Target tallies for local variance reduction via FW-CADIS.
@@ -611,7 +615,8 @@ class WeightWindowGenerator:
     @method.setter
     def method(self, m: str):
         cv.check_type('generation method', m, str)
-        cv.check_value('generation method', m, ('magic', 'fw_cadis'))
+        cv.check_value(
+            'generation method', m, ('magic', 'fw_cadis', 'fw_cadis_omega'))
         self._method = m
         if self._update_parameters is not None:
             try:
@@ -660,7 +665,7 @@ class WeightWindowGenerator:
         return self._update_parameters
 
     def _check_update_parameters(self, params: dict):
-        if self.method == 'magic' or self.method == 'fw_cadis':
+        if self.method in ('magic', 'fw_cadis', 'fw_cadis_omega'):
             check_params = self._WWG_PARAMS
 
         for key, val in params.items():
@@ -703,7 +708,7 @@ class WeightWindowGenerator:
         update_parameters : dict
             The update parameters as-read from the XML node (keys: str, values: str)
         """
-        if method == 'magic' or method == 'fw_cadis':
+        if method in ('magic', 'fw_cadis', 'fw_cadis_omega'):
             check_params = cls._WWG_PARAMS
 
         for param, param_type in check_params.items():
@@ -731,7 +736,7 @@ class WeightWindowGenerator:
         method_elem = ET.SubElement(element, 'method')
         method_elem.text = self.method
         if self.targets is not None:
-            if self.method != 'fw_cadis':
+            if self.method not in ('fw_cadis', 'fw_cadis_omega'):
                 raise ValueError(
                     "FW-CADIS update method is required in order to use " \
                     "target tallies for WeightWindowGenerator.")
@@ -782,7 +787,7 @@ class WeightWindowGenerator:
         wwg.method = get_text(elem, 'method')
         targets_elem = elem.find('targets')
         if targets_elem is not None:
-            if wwg.method != 'fw_cadis':
+            if wwg.method not in ('fw_cadis', 'fw_cadis_omega'):
                 raise ValueError(
                     "FW-CADIS update method is required in order to use " \
                     "target tallies for WeightWindowGenerator.")

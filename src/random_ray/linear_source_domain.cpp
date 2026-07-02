@@ -127,6 +127,13 @@ void LinearSourceDomain::normalize_scalar_flux_and_volumes(
     source_regions_.flux_moments_new(se) *= normalization_factor;
   }
 
+  if (SourceRegionContainer::omega_current_enabled_) {
+#pragma omp parallel for
+    for (int64_t se = 0; se < n_source_elements(); se++) {
+      source_regions_.current_new(se) *= normalization_factor;
+    }
+  }
+
 // Accumulate cell-wise ray length tallies collected this iteration, then
 // update the simulation-averaged cell-wise volume estimates
 #pragma omp parallel for
@@ -156,10 +163,16 @@ void LinearSourceDomain::set_flux_to_flux_plus_source(
 {
   int material = source_regions_.material(sr);
   if (material == MATERIAL_VOID) {
+    // The base class version also handles current normalization for void
     FlatSourceDomain::set_flux_to_flux_plus_source(sr, volume, g);
   } else {
     source_regions_.scalar_flux_new(sr, g) /= volume;
     source_regions_.scalar_flux_new(sr, g) += source_regions_.source(sr, g);
+    // In the linear source kernel the accumulated current is already
+    // track-length scaled, so it shares the scalar flux normalization
+    if (SourceRegionContainer::omega_current_enabled_) {
+      source_regions_.current_new(sr, g) *= (1.0 / volume);
+    }
   }
   // If a source region is small, then the moments are likely noisy, so we zero
   // them. This is reasonable, given that small regions can get by with a flat

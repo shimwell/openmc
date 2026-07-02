@@ -180,6 +180,7 @@ public:
   float* source_;
   float* external_source_;
   double* scalar_flux_final_;
+  MomentArray* current_new_ {nullptr};
 
   MomentArray* source_gradients_;
   MomentArray* flux_moments_old_;
@@ -306,6 +307,9 @@ public:
   MomentArray& flux_moments_t(int g) { return flux_moments_t_[g]; }
   const MomentArray flux_moments_t(int g) const { return flux_moments_t_[g]; }
 
+  MomentArray& current_new(int g) { return current_new_[g]; }
+  const MomentArray current_new(int g) const { return current_new_[g]; }
+
   vector<TallyTask>& tally_task(int g) { return tally_task_[g]; }
   const vector<TallyTask>& tally_task(int g) const { return tally_task_[g]; }
 
@@ -383,6 +387,11 @@ public:
   vector<MomentArray>
     flux_moments_t_; //!< The linear flux moments accumulated over all active
                      //!< iterations (used for plotting)
+
+  vector<MomentArray>
+    current_new_; //!< The P1 net current moment from the current iteration.
+                  //!< Only allocated when angle-informed (FW-CADIS-Omega)
+                  //!< weight window generation is requested.
 
   //---------------------------------------
   // 2D array representing values for all energy groups x tally
@@ -530,6 +539,50 @@ public:
     return flux_moments_t_[se];
   }
 
+  MomentArray& current_new(int64_t sr, int g)
+  {
+    return current_new_[index(sr, g)];
+  }
+  const MomentArray current_new(int64_t sr, int g) const
+  {
+    return current_new_[index(sr, g)];
+  }
+  MomentArray& current_new(int64_t se) { return current_new_[se]; }
+  const MomentArray current_new(int64_t se) const { return current_new_[se]; }
+
+  MomentArray& current_t(int64_t sr, int g) { return current_t_[index(sr, g)]; }
+  const MomentArray current_t(int64_t sr, int g) const
+  {
+    return current_t_[index(sr, g)];
+  }
+  MomentArray& current_t(int64_t se) { return current_t_[se]; }
+  const MomentArray current_t(int64_t se) const { return current_t_[se]; }
+
+  MomentArray& current_fwd(int64_t sr, int g)
+  {
+    return current_fwd_[index(sr, g)];
+  }
+  const MomentArray current_fwd(int64_t sr, int g) const
+  {
+    return current_fwd_[index(sr, g)];
+  }
+  MomentArray& current_fwd(int64_t se) { return current_fwd_[se]; }
+  const MomentArray current_fwd(int64_t se) const { return current_fwd_[se]; }
+
+  double& scalar_flux_fwd(int64_t sr, int g)
+  {
+    return scalar_flux_fwd_[index(sr, g)];
+  }
+  const double scalar_flux_fwd(int64_t sr, int g) const
+  {
+    return scalar_flux_fwd_[index(sr, g)];
+  }
+  double& scalar_flux_fwd(int64_t se) { return scalar_flux_fwd_[se]; }
+  const double scalar_flux_fwd(int64_t se) const
+  {
+    return scalar_flux_fwd_[se];
+  }
+
   double& scalar_flux_old(int64_t sr, int g)
   {
     return scalar_flux_old_[index(sr, g)];
@@ -624,6 +677,16 @@ public:
   void push_back(const SourceRegion& sr);
   void assign(int n_source_regions, const SourceRegion& source_region);
   void flux_swap();
+
+  //----------------------------------------------------------------------------
+  // Static Data members
+
+  // Enables allocation and accumulation of the P1 net current moment in each
+  // source region, as needed for angle-informed (FW-CADIS-Omega) weight
+  // window generation. Set at settings parse time, before any source region
+  // is constructed. When false (the default), no current arrays are
+  // allocated and the transport kernels are unchanged.
+  static bool omega_current_enabled_;
   int64_t n_source_regions() const { return n_source_regions_; }
   int64_t n_source_elements() const { return n_source_regions_ * negroups_; }
   int& negroups() { return negroups_; }
@@ -678,6 +741,18 @@ private:
   vector<MomentArray> flux_moments_old_;
   vector<MomentArray> flux_moments_new_;
   vector<MomentArray> flux_moments_t_;
+
+  // P1 net current moment arrays for angle-informed (FW-CADIS-Omega) weight
+  // window generation. Empty unless omega_current_enabled_ is set.
+  vector<MomentArray> current_new_; //!< Current from the current iteration
+  vector<MomentArray>
+    current_t_; //!< Current accumulated over all active iterations
+  vector<MomentArray>
+    current_fwd_; //!< Forward-solve current, snapshotted before the adjoint
+                  //!< solve overwrites the working arrays
+  vector<double>
+    scalar_flux_fwd_; //!< Forward-solve scalar flux, snapshotted before the
+                      //!< adjoint solve overwrites scalar_flux_final_
 
   // SoA 3D array representing values for all source regions x energy groups x
   // tally tasks. The outer two dimensions (source regions and energy groups)

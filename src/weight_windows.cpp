@@ -795,12 +795,21 @@ WeightWindowsGenerator::WeightWindowsGenerator(pugi::xml_node node)
       fatal_error("Random ray weight window generation with MAGIC cannot be "
                   "done in adjoint mode.");
     }
-  } else if (method_string == "fw_cadis") {
-    method_ = WeightWindowUpdateMethod::FW_CADIS;
+  } else if (method_string == "fw_cadis" || method_string == "fw_cadis_omega") {
+    method_ = (method_string == "fw_cadis")
+                ? WeightWindowUpdateMethod::FW_CADIS
+                : WeightWindowUpdateMethod::FW_CADIS_OMEGA;
     if (settings::solver_type != SolverType::RANDOM_RAY) {
       fatal_error("FW-CADIS can only be run in random ray solver mode.");
     }
     FlatSourceDomain::adjoint_requested_ = true;
+    if (method_ == WeightWindowUpdateMethod::FW_CADIS_OMEGA) {
+      // Enable accumulation of P1 current moments in the random ray solver
+      // so that the angle-informed (omega) correction can be formed from the
+      // forward and adjoint solutions
+      FlatSourceDomain::omega_requested_ = true;
+      SourceRegionContainer::omega_current_enabled_ = true;
+    }
     if (check_for_node(node, "targets")) {
       FlatSourceDomain::fw_cadis_local_ = true;
       targets_ = get_node_array<size_t>(node, "targets");
@@ -857,6 +866,13 @@ void WeightWindowsGenerator::create_tally()
   Tally* ww_tally = Tally::create();
   tally_idx_ = model::tally_map[ww_tally->id()];
   ww_tally->set_scores({"flux"});
+
+  // Register the tally for angle-informed (FW-CADIS-Omega) scoring in the
+  // random ray solver. Scoping by tally index is required, as the mesh
+  // filter may be shared with ordinary user tallies.
+  if (method_ == WeightWindowUpdateMethod::FW_CADIS_OMEGA) {
+    FlatSourceDomain::omega_tally_idx_.insert(tally_idx_);
+  }
 
   int32_t mesh_id = wws->mesh()->id();
   int32_t mesh_idx = model::mesh_map.at(mesh_id);

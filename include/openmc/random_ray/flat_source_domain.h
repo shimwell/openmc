@@ -47,6 +47,7 @@ public:
   void flux_swap();
   virtual double evaluate_flux_at_point(Position r, int64_t sr, int g) const;
   double compute_fixed_source_normalization_factor() const;
+  double compute_omega_factor(int64_t sr, int g) const;
   void flatten_xs();
   void transpose_scattering_matrix();
   void serialize_final_fluxes(vector<double>& flux);
@@ -81,6 +82,12 @@ public:
   // The solve currently being executed
   static RandomRaySolve solve_;
   static bool fw_cadis_local_;
+  // If angle-informed (FW-CADIS-Omega) weight window generation is requested
+  static bool omega_requested_;
+  // Indices of weight window generator tallies that should receive the
+  // angle-informed (omega-corrected) adjoint flux instead of the plain
+  // scalar adjoint flux
+  static std::unordered_set<int> omega_tally_idx_;
   static double
     diagonal_stabilization_rho_; // Adjusts strength of diagonal stabilization
                                  // for transport corrected MGXS data
@@ -157,6 +164,11 @@ public:
   // and random ray if used naively. This flag enables a stabilization
   // technique.
   bool is_transport_stabilization_needed_ {false};
+
+  // Maximum forward scalar flux over all source elements, recorded when the
+  // forward solution is snapshotted for FW-CADIS-Omega. Used to floor the
+  // omega correction in regions where the forward flux is effectively zero.
+  double fwd_flux_max_ {0.0};
 
 protected:
   //----------------------------------------------------------------------------

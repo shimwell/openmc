@@ -30,7 +30,7 @@ SourceRegionHandle::SourceRegionHandle(SourceRegion& sr)
     flux_moments_old_(sr.flux_moments_old_.data()),
     flux_moments_new_(sr.flux_moments_new_.data()),
     flux_moments_t_(sr.flux_moments_t_.data()),
-    tally_task_(sr.tally_task_.data())
+    current_new_(sr.current_new_.data()), tally_task_(sr.tally_task_.data())
 {}
 
 //==============================================================================
@@ -59,11 +59,17 @@ SourceRegion::SourceRegion(int negroups, bool is_linear)
     flux_moments_new_.resize(negroups);
     flux_moments_t_.resize(negroups);
   }
+  if (SourceRegionContainer::omega_current_enabled_) {
+    current_new_.assign(negroups, {0.0, 0.0, 0.0});
+  }
 }
 
 //==============================================================================
 // SourceRegionContainer implementation
 //==============================================================================
+
+// Static Variable Declarations
+bool SourceRegionContainer::omega_current_enabled_ {false};
 
 void SourceRegionContainer::push_back(const SourceRegion& sr)
 {
@@ -115,6 +121,16 @@ void SourceRegionContainer::push_back(const SourceRegion& sr)
       flux_moments_t_.push_back(sr.flux_moments_t_[g]);
     }
 
+    // Only store current moments if omega weight window generation is active.
+    // Accumulated and forward-snapshot values are always zero for a source
+    // region that is newly added to the container.
+    if (omega_current_enabled_) {
+      current_new_.push_back(sr.current_new_[g]);
+      current_t_.push_back({0.0, 0.0, 0.0});
+      current_fwd_.push_back({0.0, 0.0, 0.0});
+      scalar_flux_fwd_.push_back(0.0);
+    }
+
     // Tally tasks
     tally_task_.emplace_back(sr.tally_task_[g]);
   }
@@ -161,6 +177,13 @@ void SourceRegionContainer::assign(
     flux_moments_old_.clear();
     flux_moments_new_.clear();
     flux_moments_t_.clear();
+  }
+
+  if (omega_current_enabled_) {
+    current_new_.clear();
+    current_t_.clear();
+    current_fwd_.clear();
+    scalar_flux_fwd_.clear();
   }
 
   tally_task_.clear();
@@ -213,6 +236,10 @@ SourceRegionHandle SourceRegionContainer::get_source_region_handle(int64_t sr)
   handle.scalar_flux_final_ = &scalar_flux_final(sr, 0);
   handle.tally_task_ = &tally_task(sr, 0);
 
+  if (omega_current_enabled_) {
+    handle.current_new_ = &current_new(sr, 0);
+  }
+
   if (handle.is_linear_) {
     handle.centroid_ = &centroid(sr);
     handle.centroid_iteration_ = &centroid_iteration(sr);
@@ -263,6 +290,11 @@ void SourceRegionContainer::adjoint_reset()
     MomentArray {0.0, 0.0, 0.0});
   std::fill(flux_moments_t_.begin(), flux_moments_t_.end(),
     MomentArray {0.0, 0.0, 0.0});
+  // The accumulated current (current_t_) is deliberately left intact here,
+  // mirroring scalar_flux_final_: both hold forward-solve results that
+  // set_fw_adjoint_sources() snapshots and then zeroes.
+  std::fill(
+    current_new_.begin(), current_new_.end(), MomentArray {0.0, 0.0, 0.0});
 }
 
 } // namespace openmc

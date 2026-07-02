@@ -461,6 +461,16 @@ void RandomRay::attenuate_flux_flat_source(
       srh.scalar_flux_new(g) += delta_psi_[g];
     }
 
+    // Accumulate the P1 net current moment estimate, if angle-informed
+    // weight window generation is active. The isotropic source term makes
+    // no contribution to the current, so the delta psi sum uses the same
+    // normalization as the scalar flux.
+    if (SourceRegionContainer::omega_current_enabled_) {
+      for (int g = 0; g < negroups_; g++) {
+        srh.current_new(g) += u() * static_cast<double>(delta_psi_[g]);
+      }
+    }
+
     // Accomulate volume (ray distance) into this iteration's estimate
     // of the source region's volume
     srh.volume() += distance;
@@ -500,6 +510,16 @@ void RandomRay::attenuate_flux_flat_source_void(
     // this iteration
     for (int g = 0; g < negroups_; g++) {
       srh.scalar_flux_new(g) += angular_flux_[g] * distance;
+    }
+
+    // Accumulate the P1 net current moment estimate, if angle-informed
+    // weight window generation is active. In void regions the track-length
+    // scores are used directly, matching the scalar flux treatment.
+    if (SourceRegionContainer::omega_current_enabled_) {
+      for (int g = 0; g < negroups_; g++) {
+        srh.current_new(g) +=
+          u() * static_cast<double>(angular_flux_[g] * distance);
+      }
     }
 
     // Accomulate volume (ray distance) into this iteration's estimate
@@ -633,6 +653,16 @@ void RandomRay::attenuate_flux_linear_source(
       srh.flux_moments_new(g) += delta_moments_[g];
     }
 
+    // Accumulate the P1 net current moment estimate, if angle-informed
+    // weight window generation is active. In the linear source kernel,
+    // delta_psi_ is already track-length scaled, so the current shares the
+    // scalar flux normalization (division by volume).
+    if (SourceRegionContainer::omega_current_enabled_) {
+      for (int g = 0; g < negroups_; g++) {
+        srh.current_new(g) += u() * static_cast<double>(delta_psi_[g]);
+      }
+    }
+
     // Accumulate the volume (ray segment distance), centroid, and spatial
     // momement estimates into the running totals for the iteration for this
     // source region. The centroid and spatial momements estimates are scaled
@@ -735,6 +765,15 @@ void RandomRay::attenuate_flux_linear_source_void(
     for (int g = 0; g < negroups_; g++) {
       srh.scalar_flux_new(g) += angular_flux_[g] * distance;
       srh.flux_moments_new(g) += delta_moments_[g];
+    }
+
+    // Accumulate the P1 net current moment estimate, if angle-informed
+    // weight window generation is active
+    if (SourceRegionContainer::omega_current_enabled_) {
+      for (int g = 0; g < negroups_; g++) {
+        srh.current_new(g) +=
+          u() * static_cast<double>(angular_flux_[g] * distance);
+      }
     }
 
     // Accumulate the volume (ray segment distance), centroid, and spatial

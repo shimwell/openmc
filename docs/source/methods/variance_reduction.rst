@@ -116,6 +116,32 @@ production of weight windows via the FW-CADIS method. As is discussed in the
 user guide, most of these steps are automated together, making the additional
 burden on the user fairly small.
 
+An angle-informed variant, FW-CADIS-:math:`\Omega` (based on the method of
+Munk and Slaybaugh), is available as method ``fw_cadis_omega``. Instead of the
+scalar adjoint flux, it inverts a forward-weighted contraction of the forward
+and adjoint angular fluxes,
+
+.. math::
+    :label: fw_cadis_omega
+
+    \phi^{\dag}_{\Omega}(r) = \frac{\int_{4\pi} \psi(r,\Omega)\,
+    \psi^{\dag}(r,\Omega)\, d\Omega}{\frac{1}{4\pi}\int_{4\pi}
+    \psi(r,\Omega)\, d\Omega}
+    \approx \phi^{\dag}(r) \left(1 + \frac{3\, \mathbf{J}(r) \cdot
+    \mathbf{J}^{\dag}(r)}{\phi(r)\, \phi^{\dag}(r)}\right)
+
+where the second form is the P1 truncation implemented in OpenMC, with
+:math:`\mathbf{J}` and :math:`\mathbf{J}^{\dag}` the forward and adjoint net
+currents accumulated by the random ray solver. The correction emphasizes
+regions where the forward and adjoint currents align (for example, along a
+streaming path or through a deep shield, where the angular flux is strongly
+forward-peaked) while leaving the weight window file format and the Monte
+Carlo transport step unchanged. The correction factor is clamped to a
+positive range and falls back to unity wherever the forward flux, adjoint
+flux, or current moments are unreliable (voids below the flux cutoff, source
+regions with too few ray crossings), in which case the method reduces to
+plain FW-CADIS.
+
 The major advantage of this technique is that it typically produces much more
 numerically efficient weight windows as compared to those generated with MAGIC,
 sometimes with an order-of-magnitude improvement in the figure of merit

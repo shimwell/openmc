@@ -17,6 +17,7 @@
 #include "openmc/timer.h"
 #include "openmc/weight_windows.h"
 
+#include <algorithm>
 #include <cstdio>
 #include <numeric>
 
@@ -33,6 +34,8 @@ bool FlatSourceDomain::volume_normalized_flux_tallies_ {false};
 bool FlatSourceDomain::adjoint_requested_ {false};
 RandomRaySolve FlatSourceDomain::solve_ {RandomRaySolve::FORWARD};
 bool FlatSourceDomain::fw_cadis_local_ {false};
+bool FlatSourceDomain::omega_requested_ {false};
+std::unordered_set<int> FlatSourceDomain::omega_tally_idx_;
 double FlatSourceDomain::diagonal_stabilization_rho_ {1.0};
 std::unordered_map<int, vector<std::pair<Source::DomainType, int>>>
   FlatSourceDomain::mesh_domain_map_;
@@ -92,6 +95,13 @@ void FlatSourceDomain::batch_reset()
   for (int64_t se = 0; se < n_source_elements(); se++) {
     source_regions_.scalar_flux_new(se) = 0.0;
   }
+
+  if (SourceRegionContainer::omega_current_enabled_) {
+#pragma omp parallel for
+    for (int64_t se = 0; se < n_source_elements(); se++) {
+      source_regions_.current_new(se) = {0.0, 0.0, 0.0};
+    }
+  }
 }
 
 void FlatSourceDomain::accumulate_iteration_flux()
@@ -100,6 +110,13 @@ void FlatSourceDomain::accumulate_iteration_flux()
   for (int64_t se = 0; se < n_source_elements(); se++) {
     source_regions_.scalar_flux_final(se) +=
       source_regions_.scalar_flux_new(se);
+  }
+
+  if (SourceRegionContainer::omega_current_enabled_) {
+#pragma omp parallel for
+    for (int64_t se = 0; se < n_source_elements(); se++) {
+      source_regions_.current_t(se) += source_regions_.current_new(se);
+    }
   }
 }
 
@@ -179,6 +196,13 @@ void FlatSourceDomain::normalize_scalar_flux_and_volumes(
     source_regions_.scalar_flux_new(se) *= normalization_factor;
   }
 
+  if (SourceRegionContainer::omega_current_enabled_) {
+#pragma omp parallel for
+    for (int64_t se = 0; se < n_source_elements(); se++) {
+      source_regions_.current_new(se) *= normalization_factor;
+    }
+  }
+
 // Accumulate cell-wise ray length tallies collected this iteration, then
 // update the simulation-averaged cell-wise volume estimates
 #pragma omp parallel for
@@ -206,12 +230,20 @@ void FlatSourceDomain::set_flux_to_flux_plus_source(
         0.5f * source_regions_.external_source(sr, g) *
         source_regions_.volume_sq(sr);
     }
+    if (SourceRegionContainer::omega_current_enabled_) {
+      source_regions_.current_new(sr, g) *= (1.0 / volume);
+    }
   } else {
     double sigma_t =
       sigma_t_[(material * ntemperature_ + temp) * negroups_ + g] *
       source_regions_.density_mult(sr);
     source_regions_.scalar_flux_new(sr, g) /= (sigma_t * volume);
     source_regions_.scalar_flux_new(sr, g) += source_regions_.source(sr, g);
+    // The isotropic source makes no contribution to the net current, so
+    // only the transport sweep sum is normalized.
+    if (SourceRegionContainer::omega_current_enabled_) {
+      source_regions_.current_new(sr, g) *= (1.0 / (sigma_t * volume));
+    }
   }
 }
 
@@ -618,6 +650,13 @@ void FlatSourceDomain::random_ray_tally()
   double source_normalization_factor =
     compute_fixed_source_normalization_factor();
 
+  // Determine if any weight window generator tallies need the
+  // angle-informed (FW-CADIS-Omega) adjoint flux. The correction is only
+  // applied while scoring the adjoint solve.
+  const bool omega_active = omega_requested_ &&
+                            solve_ == RandomRaySolve::ADJOINT &&
+                            !omega_tally_idx_.empty();
+
 // We loop over all source regions and energy groups. For each
 // element, we check if there are any scores needed and apply
 // them.
@@ -641,6 +680,11 @@ void FlatSourceDomain::random_ray_tally()
       double flux =
         source_regions_.scalar_flux_new(sr, g) * source_normalization_factor;
 
+      // The FW-CADIS-Omega correction factor for this source element.
+      // Computed lazily, as most source elements score no omega tallies.
+      double omega_factor = 1.0;
+      bool omega_factor_computed = false;
+
       // Determine numerical score value
       for (auto& task : source_regions_.tally_task(sr, g)) {
         double score = 0.0;
@@ -648,6 +692,15 @@ void FlatSourceDomain::random_ray_tally()
 
         case SCORE_FLUX:
           score = flux * volume;
+          // Substitute the angle-informed adjoint flux, scoped strictly to
+          // flux scores of omega weight window generator tallies
+          if (omega_active && omega_tally_idx_.count(task.tally_idx)) {
+            if (!omega_factor_computed) {
+              omega_factor = compute_omega_factor(sr, g);
+              omega_factor_computed = true;
+            }
+            score *= omega_factor;
+          }
           break;
 
         case SCORE_TOTAL:
@@ -747,6 +800,51 @@ double FlatSourceDomain::evaluate_flux_at_point(
 {
   return source_regions_.scalar_flux_final(sr, g) /
          (settings::n_batches - settings::n_inactive);
+}
+
+// Computes the FW-CADIS-Omega correction factor for a source element. The
+// angle-informed adjoint flux (Munk & Slaybaugh, "FW/CADIS-Omega: An
+// Angle-Informed Hybrid Method for Deep-Penetration Radiation Transport")
+// is phi_omega = [integral of psi * psi_adj over angle] / [phi / (4 pi)].
+// Expanded to P1, phi_omega = phi_adj * (1 + 3 (J . J_adj) / (phi phi_adj)),
+// so the correction enters as a multiplicative factor on the scalar adjoint
+// flux. The adjoint solve reuses the forward transport kernel (solving for
+// psi_adj(-omega)), so the accumulated adjoint current is the negative of
+// the physical adjoint current, hence the minus sign below. The factor is
+// clamped to a positive range so that the downstream CADIS inversion
+// (ww = 1 / phi_omega) remains well behaved, and falls back to 1 (plain
+// FW-CADIS) wherever the forward or adjoint solutions are unreliable.
+double FlatSourceDomain::compute_omega_factor(int64_t sr, int g) const
+{
+  // Fall back to plain FW-CADIS in regions with too few ray crossings for
+  // reliable moment estimates
+  if (source_regions_.is_small(sr)) {
+    return 1.0;
+  }
+
+  // Forward quantities are normalized batch means snapshotted at the end of
+  // the forward solve
+  double phi_fwd = source_regions_.scalar_flux_fwd(sr, g);
+  if (phi_fwd <= ZERO_FLUX_CUTOFF * fwd_flux_max_) {
+    return 1.0;
+  }
+
+  // Adjoint quantities are running totals over the adjoint solve's active
+  // batches; the batch count cancels in the ratio
+  double phi_adj = source_regions_.scalar_flux_final(sr, g);
+  if (phi_adj <= 0.0) {
+    return 1.0;
+  }
+
+  const MomentArray j_fwd = source_regions_.current_fwd(sr, g);
+  const MomentArray j_adj = source_regions_.current_t(sr, g);
+
+  double omega = 1.0 - 3.0 * j_fwd.dot(j_adj) / (phi_fwd * phi_adj);
+  if (!std::isfinite(omega)) {
+    return 1.0;
+  }
+
+  return std::clamp(omega, OMEGA_FACTOR_MIN, OMEGA_FACTOR_MAX);
 }
 
 // Outputs all basic material, FSR ID, multigroup flux, and
@@ -1256,6 +1354,21 @@ void FlatSourceDomain::set_fw_adjoint_sources()
     double flux = source_regions_.scalar_flux_final(se);
     if (flux > max_flux) {
       max_flux = flux;
+    }
+  }
+
+  // If angle-informed (FW-CADIS-Omega) weight windows were requested,
+  // snapshot the forward scalar flux and forward current before the working
+  // arrays are consumed and reset for the adjoint solve. The snapshots are
+  // combined with the adjoint solution when scoring the weight window tally.
+  if (SourceRegionContainer::omega_current_enabled_) {
+    fwd_flux_max_ = max_flux;
+#pragma omp parallel for
+    for (int64_t se = 0; se < n_source_elements(); se++) {
+      source_regions_.scalar_flux_fwd(se) =
+        source_regions_.scalar_flux_final(se);
+      source_regions_.current_fwd(se) = source_regions_.current_t(se);
+      source_regions_.current_t(se) = {0.0, 0.0, 0.0};
     }
   }
 

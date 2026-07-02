@@ -261,6 +261,23 @@ void validate_random_ray_inputs()
     }
   }
 
+  // Warn if the FW-CADIS-Omega correction cannot be active
+  ///////////////////////////////////////////////////////////////////
+  if (FlatSourceDomain::omega_requested_) {
+    if (!model::adjoint_sources.empty()) {
+      warning(
+        "FW-CADIS-Omega weight window generation requires a forward solve to "
+        "snapshot forward flux moments, but user-defined adjoint sources skip "
+        "the forward solve. The angle-informed correction will be inactive "
+        "and plain FW-CADIS weight windows will be produced.");
+    } else if (settings::run_mode != RunMode::FIXED_SOURCE) {
+      warning(
+        "FW-CADIS-Omega weight window generation is only supported in fixed "
+        "source mode. The angle-informed correction will be inactive and "
+        "plain FW-CADIS weight windows will be produced.");
+    }
+  }
+
   // Warn about slow MPI domain replication, if detected
   ///////////////////////////////////////////////////////////////////
 #ifdef OPENMC_MPI
@@ -294,6 +311,9 @@ void openmc_finalize_random_ray()
   FlatSourceDomain::fw_cadis_local_ = false;
   FlatSourceDomain::fw_cadis_local_targets_.clear();
   FlatSourceDomain::mesh_domain_map_.clear();
+  FlatSourceDomain::omega_requested_ = false;
+  FlatSourceDomain::omega_tally_idx_.clear();
+  SourceRegionContainer::omega_current_enabled_ = false;
   RandomRay::ray_source_.reset();
   RandomRay::source_shape_ = RandomRaySourceShape::FLAT;
   RandomRay::sample_method_ = RandomRaySampleMethod::PRNG;
@@ -493,6 +513,16 @@ void RandomRaySimulation::simulate()
   for (uint64_t se = 0; se < domain_->n_source_elements(); se++) {
     domain_->source_regions_.scalar_flux_final(se) *=
       source_normalization_factor;
+  }
+
+  // The accumulated current must share the final flux normalization, as the
+  // FW-CADIS-Omega correction pairs the forward current with the forward
+  // scalar flux
+  if (SourceRegionContainer::omega_current_enabled_) {
+#pragma omp parallel for
+    for (uint64_t se = 0; se < domain_->n_source_elements(); se++) {
+      domain_->source_regions_.current_t(se) *= source_normalization_factor;
+    }
   }
 
   // Finalize OpenMC
