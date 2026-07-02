@@ -116,9 +116,29 @@ production of weight windows via the FW-CADIS method. As is discussed in the
 user guide, most of these steps are automated together, making the additional
 burden on the user fairly small.
 
-An angle-informed variant, FW-CADIS-:math:`\Omega` (based on the method of
-Munk and Slaybaugh), is available as method ``fw_cadis_omega``. Instead of the
-scalar adjoint flux, it inverts a forward-weighted contraction of the forward
+The major advantage of this technique is that it typically produces much more
+numerically efficient weight windows as compared to those generated with MAGIC,
+sometimes with an order-of-magnitude improvement in the figure of merit
+(Equation :eq:`variance_fom`), which accounts for both the variance and the
+execution time. Another major advantage is that the cost of the random ray
+solver is typically negligible compared to the cost of the subsequent Monte
+Carlo solve itself, making it a very cheap method to deploy. The downside to
+this method is that it introduces a second transport method into the mix (random
+ray), such that there are more free input parameters for the user to know about
+and adjust, potentially making the method more complex to use. However, as many
+of the parameters have natural choices, much of this parameterization can be
+handled automatically behind the scenes without the need for the user to be
+aware of this.
+
+.. math::
+    :label: variance_fom
+
+    \text{FOM} = \frac{1}{\text{Time} \times \sigma^2}
+
+An angle-informed variant of FW-CADIS, FW-CADIS-:math:`\Omega` (based on the
+method of `Munk and Slaybaugh <https://arxiv.org/abs/1612.00793>`_), is
+available as method ``fw_cadis_omega``. Instead of the scalar adjoint flux,
+FW-CADIS-:math:`\Omega` inverts a forward-weighted contraction of the forward
 and adjoint angular fluxes,
 
 .. math::
@@ -142,26 +162,7 @@ flux, or current moments are unreliable (voids below the flux cutoff, source
 regions with too few ray crossings), in which case the method reduces to
 plain FW-CADIS.
 
-The major advantage of this technique is that it typically produces much more
-numerically efficient weight windows as compared to those generated with MAGIC,
-sometimes with an order-of-magnitude improvement in the figure of merit
-(Equation :eq:`variance_fom`), which accounts for both the variance and the
-execution time. Another major advantage is that the cost of the random ray
-solver is typically negligible compared to the cost of the subsequent Monte
-Carlo solve itself, making it a very cheap method to deploy. The downside to
-this method is that it introduces a second transport method into the mix (random
-ray), such that there are more free input parameters for the user to know about
-and adjust, potentially making the method more complex to use. However, as many
-of the parameters have natural choices, much of this parameterization can be
-handled automatically behind the scenes without the need for the user to be
-aware of this.
-
-.. math::
-    :label: variance_fom
-
-    \text{FOM} = \frac{1}{\text{Time} \times \sigma^2}
-
-Finally, one unique capability of the FW-CADIS weight window generator is to 
+Finally, one unique capability of the FW-CADIS weight window generator is to
 produce weight windows for local variance reduction, given a list of the 
 responses of interest. This is controlled by optionally specifying target 
 tallies from the :class:`openmc.model.Model` to the 

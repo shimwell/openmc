@@ -677,6 +677,14 @@ public:
   void push_back(const SourceRegion& sr);
   void assign(int n_source_regions, const SourceRegion& source_region);
   void flux_swap();
+  int64_t n_source_regions() const { return n_source_regions_; }
+  int64_t n_source_elements() const { return n_source_regions_ * negroups_; }
+  int& negroups() { return negroups_; }
+  const int negroups() const { return negroups_; }
+  bool& is_linear() { return is_linear_; }
+  const bool is_linear() const { return is_linear_; }
+  SourceRegionHandle get_source_region_handle(int64_t sr);
+  void adjoint_reset();
 
   //----------------------------------------------------------------------------
   // Static Data members
@@ -687,14 +695,6 @@ public:
   // is constructed. When false (the default), no current arrays are
   // allocated and the transport kernels are unchanged.
   static bool omega_current_enabled_;
-  int64_t n_source_regions() const { return n_source_regions_; }
-  int64_t n_source_elements() const { return n_source_regions_ * negroups_; }
-  int& negroups() { return negroups_; }
-  const int negroups() const { return negroups_; }
-  bool& is_linear() { return is_linear_; }
-  const bool is_linear() const { return is_linear_; }
-  SourceRegionHandle get_source_region_handle(int64_t sr);
-  void adjoint_reset();
 
 private:
   //----------------------------------------------------------------------------

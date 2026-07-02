@@ -517,8 +517,10 @@ void RandomRaySimulation::simulate()
 
   // The accumulated current must share the final flux normalization, as the
   // FW-CADIS-Omega correction pairs the forward current with the forward
-  // scalar flux
-  if (SourceRegionContainer::omega_current_enabled_) {
+  // scalar flux. Only needed at the end of a forward solve; the adjoint
+  // solve's current has already been consumed during tallying.
+  if (SourceRegionContainer::omega_current_enabled_ &&
+      FlatSourceDomain::solve_ != RandomRaySolve::ADJOINT) {
 #pragma omp parallel for
     for (uint64_t se = 0; se < domain_->n_source_elements(); se++) {
       domain_->source_regions_.current_t(se) *= source_normalization_factor;

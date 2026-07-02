@@ -800,15 +800,25 @@ WeightWindowsGenerator::WeightWindowsGenerator(pugi::xml_node node)
                 ? WeightWindowUpdateMethod::FW_CADIS
                 : WeightWindowUpdateMethod::FW_CADIS_OMEGA;
     if (settings::solver_type != SolverType::RANDOM_RAY) {
-      fatal_error("FW-CADIS can only be run in random ray solver mode.");
+      fatal_error(fmt::format(
+        "The {} weight window generation method can only be run in random "
+        "ray solver mode.",
+        method_string));
     }
     FlatSourceDomain::adjoint_requested_ = true;
     if (method_ == WeightWindowUpdateMethod::FW_CADIS_OMEGA) {
       // Enable accumulation of P1 current moments in the random ray solver
       // so that the angle-informed (omega) correction can be formed from the
-      // forward and adjoint solutions
+      // forward and adjoint solutions. The correction requires a forward
+      // solve to snapshot forward flux moments, which only happens in fixed
+      // source mode with no user-defined adjoint sources. In other modes the
+      // moment storage and accumulation are left disabled and the method
+      // falls back to plain FW-CADIS (a warning is issued at validation).
       FlatSourceDomain::omega_requested_ = true;
-      SourceRegionContainer::omega_current_enabled_ = true;
+      if (settings::run_mode == RunMode::FIXED_SOURCE &&
+          model::adjoint_sources.empty()) {
+        SourceRegionContainer::omega_current_enabled_ = true;
+      }
     }
     if (check_for_node(node, "targets")) {
       FlatSourceDomain::fw_cadis_local_ = true;

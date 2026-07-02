@@ -26,11 +26,12 @@ SourceRegionHandle::SourceRegionHandle(SourceRegion& sr)
     scalar_flux_new_(sr.scalar_flux_new_.data()), source_(sr.source_.data()),
     external_source_(sr.external_source_.data()),
     scalar_flux_final_(sr.scalar_flux_final_.data()),
+    current_new_(sr.current_new_.data()),
     source_gradients_(sr.source_gradients_.data()),
     flux_moments_old_(sr.flux_moments_old_.data()),
     flux_moments_new_(sr.flux_moments_new_.data()),
     flux_moments_t_(sr.flux_moments_t_.data()),
-    current_new_(sr.current_new_.data()), tally_task_(sr.tally_task_.data())
+    tally_task_(sr.tally_task_.data())
 {}
 
 //==============================================================================
@@ -292,9 +293,12 @@ void SourceRegionContainer::adjoint_reset()
     MomentArray {0.0, 0.0, 0.0});
   // The accumulated current (current_t_) is deliberately left intact here,
   // mirroring scalar_flux_final_: both hold forward-solve results that
-  // set_fw_adjoint_sources() snapshots and then zeroes.
-  std::fill(
-    current_new_.begin(), current_new_.end(), MomentArray {0.0, 0.0, 0.0});
+  // set_fw_adjoint_sources() snapshots into scalar_flux_fwd_/current_fwd_
+  // and then zeroes.
+  if (omega_current_enabled_) {
+    std::fill(
+      current_new_.begin(), current_new_.end(), MomentArray {0.0, 0.0, 0.0});
+  }
 }
 
 } // namespace openmc

@@ -280,6 +280,34 @@ def test_ww_gen_roundtrip(run_in_tmpdir, model):
         wwg.max_realizations = -1
 
 
+def test_ww_gen_omega_method(run_in_tmpdir, model):
+    mesh = openmc.RegularMesh.from_domain(model.geometry.root_universe)
+
+    target = openmc.Tally()
+    target.scores = ['flux']
+    model.tallies = openmc.Tallies([target])
+
+    # fw_cadis_omega is an accepted method and round-trips through XML,
+    # including target tallies (allowed for both fw_cadis variants)
+    wwg = openmc.WeightWindowGenerator(mesh, method='fw_cadis_omega')
+    wwg.targets = [target.id]
+
+    model.settings.weight_window_generators = wwg
+    model.export_to_xml()
+
+    model_in = openmc.Model.from_xml()
+    wwg_in = model_in.settings.weight_window_generators[0]
+    assert wwg_in.method == 'fw_cadis_omega'
+    assert list(wwg_in.targets) == [target.id]
+
+    # targets remain invalid for magic
+    wwg_magic = openmc.WeightWindowGenerator(mesh, method='magic')
+    wwg_magic.targets = [target.id]
+    model.settings.weight_window_generators = wwg_magic
+    with pytest.raises(ValueError):
+        model.export_to_xml()
+
+
 def test_python_hdf5_roundtrip(run_in_tmpdir, model):
 
     # add a tally to the model

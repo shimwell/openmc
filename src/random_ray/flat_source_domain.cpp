@@ -652,8 +652,11 @@ void FlatSourceDomain::random_ray_tally()
 
   // Determine if any weight window generator tallies need the
   // angle-informed (FW-CADIS-Omega) adjoint flux. The correction is only
-  // applied while scoring the adjoint solve.
+  // applied while scoring the adjoint solve, and only when the current
+  // moment storage was actually enabled (fixed source mode with a forward
+  // solve).
   const bool omega_active = omega_requested_ &&
+                            SourceRegionContainer::omega_current_enabled_ &&
                             solve_ == RandomRaySolve::ADJOINT &&
                             !omega_tally_idx_.empty();
 
