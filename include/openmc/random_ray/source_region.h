@@ -181,6 +181,7 @@ public:
   float* external_source_;
   double* scalar_flux_final_;
   MomentArray* current_new_ {nullptr};
+  double* ho_moments_new_ {nullptr};
 
   MomentArray* source_gradients_;
   MomentArray* flux_moments_old_;
@@ -310,6 +311,15 @@ public:
   MomentArray& current_new(int g) { return current_new_[g]; }
   const MomentArray current_new(int g) const { return current_new_[g]; }
 
+  double& ho_moments_new(int g, int c)
+  {
+    return ho_moments_new_[g * OMEGA_N_HO_MOMENTS + c];
+  }
+  const double ho_moments_new(int g, int c) const
+  {
+    return ho_moments_new_[g * OMEGA_N_HO_MOMENTS + c];
+  }
+
   vector<TallyTask>& tally_task(int g) { return tally_task_[g]; }
   const vector<TallyTask>& tally_task(int g) const { return tally_task_[g]; }
 
@@ -392,6 +402,13 @@ public:
     current_new_; //!< The P1 net current moment from the current iteration.
                   //!< Only allocated when angle-informed (FW-CADIS-Omega)
                   //!< weight window generation is requested.
+
+  vector<double>
+    ho_moments_new_; //!< The l = 2, 3 real spherical harmonic angular flux
+                     //!< moments from the current iteration
+                     //!< (OMEGA_N_HO_MOMENTS values per group). Only
+                     //!< allocated when an FW-CADIS-Omega expansion order
+                     //!< above 1 is requested.
 
   //---------------------------------------
   // 2D array representing values for all energy groups x tally
@@ -583,6 +600,44 @@ public:
     return scalar_flux_fwd_[se];
   }
 
+  double& ho_moments_new(int64_t sr, int g, int c)
+  {
+    return ho_moments_new_[ho_index(sr, g, c)];
+  }
+  const double ho_moments_new(int64_t sr, int g, int c) const
+  {
+    return ho_moments_new_[ho_index(sr, g, c)];
+  }
+  double& ho_moments_new(int64_t he) { return ho_moments_new_[he]; }
+  const double ho_moments_new(int64_t he) const { return ho_moments_new_[he]; }
+
+  double& ho_moments_t(int64_t sr, int g, int c)
+  {
+    return ho_moments_t_[ho_index(sr, g, c)];
+  }
+  const double ho_moments_t(int64_t sr, int g, int c) const
+  {
+    return ho_moments_t_[ho_index(sr, g, c)];
+  }
+  double& ho_moments_t(int64_t he) { return ho_moments_t_[he]; }
+  const double ho_moments_t(int64_t he) const { return ho_moments_t_[he]; }
+
+  double& ho_moments_fwd(int64_t sr, int g, int c)
+  {
+    return ho_moments_fwd_[ho_index(sr, g, c)];
+  }
+  const double ho_moments_fwd(int64_t sr, int g, int c) const
+  {
+    return ho_moments_fwd_[ho_index(sr, g, c)];
+  }
+  double& ho_moments_fwd(int64_t he) { return ho_moments_fwd_[he]; }
+  const double ho_moments_fwd(int64_t he) const { return ho_moments_fwd_[he]; }
+
+  int64_t n_ho_elements() const
+  {
+    return n_source_regions_ * negroups_ * OMEGA_N_HO_MOMENTS;
+  }
+
   double& scalar_flux_old(int64_t sr, int g)
   {
     return scalar_flux_old_[index(sr, g)];
@@ -696,6 +751,11 @@ public:
   // allocated and the transport kernels are unchanged.
   static bool omega_current_enabled_;
 
+  // Enables allocation and accumulation of the l = 2, 3 spherical harmonic
+  // angular flux moments, needed when an FW-CADIS-Omega expansion order
+  // above 1 is requested. Implies omega_current_enabled_.
+  static bool omega_ho_enabled_;
+
 private:
   //----------------------------------------------------------------------------
   // Private Data Members
@@ -754,6 +814,16 @@ private:
     scalar_flux_fwd_; //!< Forward-solve scalar flux, snapshotted before the
                       //!< adjoint solve overwrites scalar_flux_final_
 
+  // Higher-order (l = 2, 3) real spherical harmonic angular flux moment
+  // arrays, flattened over (source region, group, component). Empty unless
+  // omega_ho_enabled_ is set.
+  vector<double> ho_moments_new_; //!< Moments from the current iteration
+  vector<double>
+    ho_moments_t_; //!< Moments accumulated over all active iterations
+  vector<double>
+    ho_moments_fwd_; //!< Forward-solve moments, snapshotted before the
+                     //!< adjoint solve overwrites the working arrays
+
   // SoA 3D array representing values for all source regions x energy groups x
   // tally tasks. The outer two dimensions (source regions and energy groups)
   // are flattened to 1D. Each group may have a different number of tally tasks
@@ -766,6 +836,12 @@ private:
 
   // Helper function for indexing
   inline int index(int64_t sr, int g) const { return sr * negroups_ + g; }
+
+  // Helper function for indexing the higher-order moment arrays
+  inline int64_t ho_index(int64_t sr, int g, int c) const
+  {
+    return (sr * negroups_ + g) * OMEGA_N_HO_MOMENTS + c;
+  }
 };
 
 } // namespace openmc

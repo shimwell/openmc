@@ -1772,6 +1772,28 @@ mesh-based weight windows.
 
         *Default*: None
 
+    For FW-CADIS-Omega (in addition to the parameters above):
+
+      :order:
+        Spherical harmonic expansion order of the angle-informed contraction
+        (1, 2, or 3). Order 1 uses only the net current term; orders 2 and 3
+        add the corresponding higher-order angular flux moment terms.
+
+        *Default*: 1
+
+      :clamp_min:
+        Lower clamp applied to the omega correction factor. Must be
+        positive. A value of 1.0 restricts the correction to amplification
+        only (the angle-informed map never suppresses importance below the
+        scalar adjoint map).
+
+        *Default*: 0.05
+
+      :clamp_max:
+        Upper clamp applied to the omega correction factor.
+
+        *Default*: 4.0
+
 ---------------------------------------
 ``<weight_window_checkpoints>`` Element
 ---------------------------------------

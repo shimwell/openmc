@@ -150,9 +150,15 @@ and adjoint angular fluxes,
     \approx \phi^{\dag}(r) \left(1 + \frac{3\, \mathbf{J}(r) \cdot
     \mathbf{J}^{\dag}(r)}{\phi(r)\, \phi^{\dag}(r)}\right)
 
-where the second form is the P1 truncation implemented in OpenMC, with
-:math:`\mathbf{J}` and :math:`\mathbf{J}^{\dag}` the forward and adjoint net
-currents accumulated by the random ray solver. The correction emphasizes
+where the second form is the P1 truncation implemented in OpenMC (the
+default), with :math:`\mathbf{J}` and :math:`\mathbf{J}^{\dag}` the forward
+and adjoint net currents accumulated by the random ray solver. The
+contraction may optionally be extended to expansion order 2 or 3, in which
+case the corresponding real spherical harmonic angular flux moments
+:math:`\psi_{\ell m}` of both solves are accumulated as well and the
+correction becomes :math:`1 + 4\pi \sum_{\ell \ge 1, m} \psi_{\ell m}
+\psi^{\dag}_{\ell m} / (\phi\, \phi^{\dag})`, which better represents
+multi-lobed angular fluxes such as those found at duct bends. The correction emphasizes
 regions where the forward and adjoint currents align (for example, along a
 streaming path or through a deep shield, where the angular flux is strongly
 forward-peaked) while leaving the weight window file format and the Monte

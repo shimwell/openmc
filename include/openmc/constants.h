@@ -75,13 +75,19 @@ constexpr double ZERO_FLUX_CUTOFF {1e-22};
 // value will be converted to pure void.
 constexpr double MINIMUM_MACRO_XS {1e-6};
 
-// Clamping range for the FW-CADIS-Omega angle-informed correction factor
-// applied to the scalar adjoint flux when scoring weight window tallies.
-// The P1 expansion bounds the exact factor to [-2, 4]; the lower clamp is
-// kept positive so the downstream CADIS inversion (ww = 1 / phi) remains
-// well behaved when noisy current moments drive the factor negative.
+// Default clamping range for the FW-CADIS-Omega angle-informed correction
+// factor applied to the scalar adjoint flux when scoring weight window
+// tallies. The P1 expansion bounds the exact factor to [-2, 4]; the lower
+// clamp is kept positive so the downstream CADIS inversion (ww = 1 / phi)
+// remains well behaved when noisy current moments drive the factor negative.
 constexpr double OMEGA_FACTOR_MIN {0.05};
 constexpr double OMEGA_FACTOR_MAX {4.0};
+
+// Number of higher-order (l = 2 and l = 3) real spherical harmonic angular
+// flux moment components accumulated per source element when an
+// FW-CADIS-Omega expansion order above 1 is requested (5 components for
+// l = 2 plus 7 components for l = 3).
+constexpr int OMEGA_N_HO_MOMENTS {12};
 
 // ============================================================================
 // MATH AND PHYSICAL CONSTANTS

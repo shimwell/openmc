@@ -27,6 +27,7 @@ SourceRegionHandle::SourceRegionHandle(SourceRegion& sr)
     external_source_(sr.external_source_.data()),
     scalar_flux_final_(sr.scalar_flux_final_.data()),
     current_new_(sr.current_new_.data()),
+    ho_moments_new_(sr.ho_moments_new_.data()),
     source_gradients_(sr.source_gradients_.data()),
     flux_moments_old_(sr.flux_moments_old_.data()),
     flux_moments_new_(sr.flux_moments_new_.data()),
@@ -63,6 +64,9 @@ SourceRegion::SourceRegion(int negroups, bool is_linear)
   if (SourceRegionContainer::omega_current_enabled_) {
     current_new_.assign(negroups, {0.0, 0.0, 0.0});
   }
+  if (SourceRegionContainer::omega_ho_enabled_) {
+    ho_moments_new_.assign(negroups * OMEGA_N_HO_MOMENTS, 0.0);
+  }
 }
 
 //==============================================================================
@@ -71,6 +75,7 @@ SourceRegion::SourceRegion(int negroups, bool is_linear)
 
 // Static Variable Declarations
 bool SourceRegionContainer::omega_current_enabled_ {false};
+bool SourceRegionContainer::omega_ho_enabled_ {false};
 
 void SourceRegionContainer::push_back(const SourceRegion& sr)
 {
@@ -131,6 +136,14 @@ void SourceRegionContainer::push_back(const SourceRegion& sr)
       current_fwd_.push_back({0.0, 0.0, 0.0});
       scalar_flux_fwd_.push_back(0.0);
     }
+    if (omega_ho_enabled_) {
+      for (int c = 0; c < OMEGA_N_HO_MOMENTS; c++) {
+        ho_moments_new_.push_back(
+          sr.ho_moments_new_[g * OMEGA_N_HO_MOMENTS + c]);
+        ho_moments_t_.push_back(0.0);
+        ho_moments_fwd_.push_back(0.0);
+      }
+    }
 
     // Tally tasks
     tally_task_.emplace_back(sr.tally_task_[g]);
@@ -187,6 +200,12 @@ void SourceRegionContainer::assign(
     scalar_flux_fwd_.clear();
   }
 
+  if (omega_ho_enabled_) {
+    ho_moments_new_.clear();
+    ho_moments_t_.clear();
+    ho_moments_fwd_.clear();
+  }
+
   tally_task_.clear();
   volume_task_.clear();
 
@@ -240,6 +259,9 @@ SourceRegionHandle SourceRegionContainer::get_source_region_handle(int64_t sr)
   if (omega_current_enabled_) {
     handle.current_new_ = &current_new(sr, 0);
   }
+  if (omega_ho_enabled_) {
+    handle.ho_moments_new_ = &ho_moments_new(sr, 0, 0);
+  }
 
   if (handle.is_linear_) {
     handle.centroid_ = &centroid(sr);
@@ -291,13 +313,16 @@ void SourceRegionContainer::adjoint_reset()
     MomentArray {0.0, 0.0, 0.0});
   std::fill(flux_moments_t_.begin(), flux_moments_t_.end(),
     MomentArray {0.0, 0.0, 0.0});
-  // The accumulated current (current_t_) is deliberately left intact here,
-  // mirroring scalar_flux_final_: both hold forward-solve results that
-  // set_fw_adjoint_sources() snapshots into scalar_flux_fwd_/current_fwd_
+  // The accumulated moments (current_t_ and ho_moments_t_) are deliberately
+  // left intact here, mirroring scalar_flux_final_: they hold forward-solve
+  // results that set_fw_adjoint_sources() snapshots into the *_fwd_ arrays
   // and then zeroes.
   if (omega_current_enabled_) {
     std::fill(
       current_new_.begin(), current_new_.end(), MomentArray {0.0, 0.0, 0.0});
+  }
+  if (omega_ho_enabled_) {
+    std::fill(ho_moments_new_.begin(), ho_moments_new_.end(), 0.0);
   }
 }
 

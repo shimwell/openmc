@@ -88,6 +88,12 @@ public:
   // angle-informed (omega-corrected) adjoint flux instead of the plain
   // scalar adjoint flux
   static std::unordered_set<int> omega_tally_idx_;
+  // Spherical harmonic expansion order of the FW-CADIS-Omega contraction
+  // (1 = current only, 2 or 3 add the higher-order moment terms)
+  static int omega_order_;
+  // Clamping range applied to the omega correction factor
+  static double omega_clamp_min_;
+  static double omega_clamp_max_;
   static double
     diagonal_stabilization_rho_; // Adjusts strength of diagonal stabilization
                                  // for transport corrected MGXS data

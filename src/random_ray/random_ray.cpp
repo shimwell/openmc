@@ -179,6 +179,31 @@ float exponentialG2(float tau)
   return num / den;
 }
 
+// Evaluates the l = 2 and l = 3 orthonormal real spherical harmonics of a
+// unit direction vector, in the component order used by the FW-CADIS-Omega
+// higher-order moment arrays: (2,-2), (2,-1), (2,0), (2,1), (2,2), (3,-3),
+// (3,-2), (3,-1), (3,0), (3,1), (3,2), (3,3). The numerical prefactors are
+// the standard orthonormalization constants, e.g. Y_2,-2 = sqrt(15/4pi) xy.
+void evaluate_ho_spherical_harmonics(
+  const Direction& u, std::array<double, OMEGA_N_HO_MOMENTS>& y)
+{
+  const double x = u.x;
+  const double yy = u.y;
+  const double z = u.z;
+  y[0] = 1.0925484305920792 * x * yy;
+  y[1] = 1.0925484305920792 * yy * z;
+  y[2] = 0.31539156525252005 * (3.0 * z * z - 1.0);
+  y[3] = 1.0925484305920792 * x * z;
+  y[4] = 0.5462742152960396 * (x * x - yy * yy);
+  y[5] = 0.5900435899266435 * yy * (3.0 * x * x - yy * yy);
+  y[6] = 2.8906114426405543 * x * yy * z;
+  y[7] = 0.4570457994644658 * yy * (5.0 * z * z - 1.0);
+  y[8] = 0.3731763325901154 * z * (5.0 * z * z - 3.0);
+  y[9] = 0.4570457994644658 * x * (5.0 * z * z - 1.0);
+  y[10] = 1.4453057213202771 * z * (x * x - yy * yy);
+  y[11] = 0.5900435899266435 * x * (x * x - 3.0 * yy * yy);
+}
+
 // Implementation of the Fisher-Yates shuffle algorithm.
 // Algorithm adapted from:
 //    https://en.cppreference.com/w/cpp/algorithm/random_shuffle#Version_3
@@ -469,6 +494,15 @@ void RandomRay::attenuate_flux_flat_source(
       for (int g = 0; g < negroups_; g++) {
         srh.current_new(g) += u() * static_cast<double>(delta_psi_[g]);
       }
+      if (SourceRegionContainer::omega_ho_enabled_) {
+        evaluate_ho_spherical_harmonics(u(), sh_ho_);
+        for (int g = 0; g < negroups_; g++) {
+          double dp = delta_psi_[g];
+          for (int c = 0; c < OMEGA_N_HO_MOMENTS; c++) {
+            srh.ho_moments_new(g, c) += sh_ho_[c] * dp;
+          }
+        }
+      }
     }
 
     // Accomulate volume (ray distance) into this iteration's estimate
@@ -519,6 +553,15 @@ void RandomRay::attenuate_flux_flat_source_void(
       for (int g = 0; g < negroups_; g++) {
         srh.current_new(g) +=
           u() * static_cast<double>(angular_flux_[g] * distance);
+      }
+      if (SourceRegionContainer::omega_ho_enabled_) {
+        evaluate_ho_spherical_harmonics(u(), sh_ho_);
+        for (int g = 0; g < negroups_; g++) {
+          double tl = angular_flux_[g] * distance;
+          for (int c = 0; c < OMEGA_N_HO_MOMENTS; c++) {
+            srh.ho_moments_new(g, c) += sh_ho_[c] * tl;
+          }
+        }
       }
     }
 
@@ -661,6 +704,15 @@ void RandomRay::attenuate_flux_linear_source(
       for (int g = 0; g < negroups_; g++) {
         srh.current_new(g) += u() * static_cast<double>(delta_psi_[g]);
       }
+      if (SourceRegionContainer::omega_ho_enabled_) {
+        evaluate_ho_spherical_harmonics(u(), sh_ho_);
+        for (int g = 0; g < negroups_; g++) {
+          double dp = delta_psi_[g];
+          for (int c = 0; c < OMEGA_N_HO_MOMENTS; c++) {
+            srh.ho_moments_new(g, c) += sh_ho_[c] * dp;
+          }
+        }
+      }
     }
 
     // Accumulate the volume (ray segment distance), centroid, and spatial
@@ -773,6 +825,15 @@ void RandomRay::attenuate_flux_linear_source_void(
       for (int g = 0; g < negroups_; g++) {
         srh.current_new(g) +=
           u() * static_cast<double>(angular_flux_[g] * distance);
+      }
+      if (SourceRegionContainer::omega_ho_enabled_) {
+        evaluate_ho_spherical_harmonics(u(), sh_ho_);
+        for (int g = 0; g < negroups_; g++) {
+          double tl = angular_flux_[g] * distance;
+          for (int c = 0; c < OMEGA_N_HO_MOMENTS; c++) {
+            srh.ho_moments_new(g, c) += sh_ho_[c] * tl;
+          }
+        }
       }
     }
 

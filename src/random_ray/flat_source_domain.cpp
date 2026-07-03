@@ -36,6 +36,9 @@ RandomRaySolve FlatSourceDomain::solve_ {RandomRaySolve::FORWARD};
 bool FlatSourceDomain::fw_cadis_local_ {false};
 bool FlatSourceDomain::omega_requested_ {false};
 std::unordered_set<int> FlatSourceDomain::omega_tally_idx_;
+int FlatSourceDomain::omega_order_ {1};
+double FlatSourceDomain::omega_clamp_min_ {OMEGA_FACTOR_MIN};
+double FlatSourceDomain::omega_clamp_max_ {OMEGA_FACTOR_MAX};
 double FlatSourceDomain::diagonal_stabilization_rho_ {1.0};
 std::unordered_map<int, vector<std::pair<Source::DomainType, int>>>
   FlatSourceDomain::mesh_domain_map_;
@@ -102,6 +105,13 @@ void FlatSourceDomain::batch_reset()
       source_regions_.current_new(se) = {0.0, 0.0, 0.0};
     }
   }
+
+  if (SourceRegionContainer::omega_ho_enabled_) {
+#pragma omp parallel for
+    for (int64_t he = 0; he < source_regions_.n_ho_elements(); he++) {
+      source_regions_.ho_moments_new(he) = 0.0;
+    }
+  }
 }
 
 void FlatSourceDomain::accumulate_iteration_flux()
@@ -116,6 +126,13 @@ void FlatSourceDomain::accumulate_iteration_flux()
 #pragma omp parallel for
     for (int64_t se = 0; se < n_source_elements(); se++) {
       source_regions_.current_t(se) += source_regions_.current_new(se);
+    }
+  }
+
+  if (SourceRegionContainer::omega_ho_enabled_) {
+#pragma omp parallel for
+    for (int64_t he = 0; he < source_regions_.n_ho_elements(); he++) {
+      source_regions_.ho_moments_t(he) += source_regions_.ho_moments_new(he);
     }
   }
 }
@@ -203,6 +220,13 @@ void FlatSourceDomain::normalize_scalar_flux_and_volumes(
     }
   }
 
+  if (SourceRegionContainer::omega_ho_enabled_) {
+#pragma omp parallel for
+    for (int64_t he = 0; he < source_regions_.n_ho_elements(); he++) {
+      source_regions_.ho_moments_new(he) *= normalization_factor;
+    }
+  }
+
 // Accumulate cell-wise ray length tallies collected this iteration, then
 // update the simulation-averaged cell-wise volume estimates
 #pragma omp parallel for
@@ -232,6 +256,11 @@ void FlatSourceDomain::set_flux_to_flux_plus_source(
     }
     if (SourceRegionContainer::omega_current_enabled_) {
       source_regions_.current_new(sr, g) *= (1.0 / volume);
+      if (SourceRegionContainer::omega_ho_enabled_) {
+        for (int c = 0; c < OMEGA_N_HO_MOMENTS; c++) {
+          source_regions_.ho_moments_new(sr, g, c) *= (1.0 / volume);
+        }
+      }
     }
   } else {
     double sigma_t =
@@ -239,10 +268,16 @@ void FlatSourceDomain::set_flux_to_flux_plus_source(
       source_regions_.density_mult(sr);
     source_regions_.scalar_flux_new(sr, g) /= (sigma_t * volume);
     source_regions_.scalar_flux_new(sr, g) += source_regions_.source(sr, g);
-    // The isotropic source makes no contribution to the net current, so
-    // only the transport sweep sum is normalized.
+    // The isotropic source makes no contribution to the net current or to
+    // the higher angular moments, so only the transport sweep sums are
+    // normalized.
     if (SourceRegionContainer::omega_current_enabled_) {
       source_regions_.current_new(sr, g) *= (1.0 / (sigma_t * volume));
+      if (SourceRegionContainer::omega_ho_enabled_) {
+        for (int c = 0; c < OMEGA_N_HO_MOMENTS; c++) {
+          source_regions_.ho_moments_new(sr, g, c) *= (1.0 / (sigma_t * volume));
+        }
+      }
     }
   }
 }
@@ -809,12 +844,15 @@ double FlatSourceDomain::evaluate_flux_at_point(
 // angle-informed adjoint flux (Munk & Slaybaugh, "FW/CADIS-Omega: An
 // Angle-Informed Hybrid Method for Deep-Penetration Radiation Transport")
 // is phi_omega = [integral of psi * psi_adj over angle] / [phi / (4 pi)].
-// Expanded to P1, phi_omega = phi_adj * (1 + 3 (J . J_adj) / (phi phi_adj)),
-// so the correction enters as a multiplicative factor on the scalar adjoint
-// flux. The adjoint solve reuses the forward transport kernel (solving for
-// psi_adj(-omega)), so the accumulated adjoint current is the negative of
-// the physical adjoint current, hence the minus sign below. The factor is
-// clamped to a positive range so that the downstream CADIS inversion
+// Expanding both angular fluxes in orthonormal real spherical harmonics
+// gives phi_omega = phi_adj * (1 + 4 pi sum_{l>=1,m} psi_lm psi_adj_lm /
+// (phi phi_adj)), so the correction enters as a multiplicative factor on
+// the scalar adjoint flux. At l = 1 the term reduces to the familiar
+// 3 (J . J_adj) / (phi phi_adj). The adjoint solve reuses the forward
+// transport kernel (solving for psi_adj(-omega)), so each accumulated
+// adjoint moment of parity l picks up a factor (-1)^l relative to the
+// physical adjoint moment, hence the alternating signs below. The factor
+// is clamped to a positive range so that the downstream CADIS inversion
 // (ww = 1 / phi_omega) remains well behaved, and falls back to 1 (plain
 // FW-CADIS) wherever the forward or adjoint solutions are unreliable.
 double FlatSourceDomain::compute_omega_factor(int64_t sr, int g) const
@@ -839,15 +877,38 @@ double FlatSourceDomain::compute_omega_factor(int64_t sr, int g) const
     return 1.0;
   }
 
+  const double inv_phi = 1.0 / (phi_fwd * phi_adj);
+
   const MomentArray j_fwd = source_regions_.current_fwd(sr, g);
   const MomentArray j_adj = source_regions_.current_t(sr, g);
 
-  double omega = 1.0 - 3.0 * j_fwd.dot(j_adj) / (phi_fwd * phi_adj);
+  // l = 1 term (odd parity)
+  double omega = 1.0 - 3.0 * j_fwd.dot(j_adj) * inv_phi;
+
+  // l = 2 (even parity) and l = 3 (odd parity) terms
+  if (omega_order_ >= 2 && SourceRegionContainer::omega_ho_enabled_) {
+    double s2 = 0.0;
+    for (int c = 0; c < 5; c++) {
+      s2 += source_regions_.ho_moments_fwd(sr, g, c) *
+            source_regions_.ho_moments_t(sr, g, c);
+    }
+    omega += 4.0 * PI * s2 * inv_phi;
+
+    if (omega_order_ >= 3) {
+      double s3 = 0.0;
+      for (int c = 5; c < OMEGA_N_HO_MOMENTS; c++) {
+        s3 += source_regions_.ho_moments_fwd(sr, g, c) *
+              source_regions_.ho_moments_t(sr, g, c);
+      }
+      omega -= 4.0 * PI * s3 * inv_phi;
+    }
+  }
+
   if (!std::isfinite(omega)) {
     return 1.0;
   }
 
-  return std::clamp(omega, OMEGA_FACTOR_MIN, OMEGA_FACTOR_MAX);
+  return std::clamp(omega, omega_clamp_min_, omega_clamp_max_);
 }
 
 // Outputs all basic material, FSR ID, multigroup flux, and
@@ -1372,6 +1433,13 @@ void FlatSourceDomain::set_fw_adjoint_sources()
         source_regions_.scalar_flux_final(se);
       source_regions_.current_fwd(se) = source_regions_.current_t(se);
       source_regions_.current_t(se) = {0.0, 0.0, 0.0};
+    }
+    if (SourceRegionContainer::omega_ho_enabled_) {
+#pragma omp parallel for
+      for (int64_t he = 0; he < source_regions_.n_ho_elements(); he++) {
+        source_regions_.ho_moments_fwd(he) = source_regions_.ho_moments_t(he);
+        source_regions_.ho_moments_t(he) = 0.0;
+      }
     }
   }
 

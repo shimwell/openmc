@@ -134,6 +134,13 @@ void LinearSourceDomain::normalize_scalar_flux_and_volumes(
     }
   }
 
+  if (SourceRegionContainer::omega_ho_enabled_) {
+#pragma omp parallel for
+    for (int64_t he = 0; he < source_regions_.n_ho_elements(); he++) {
+      source_regions_.ho_moments_new(he) *= normalization_factor;
+    }
+  }
+
 // Accumulate cell-wise ray length tallies collected this iteration, then
 // update the simulation-averaged cell-wise volume estimates
 #pragma omp parallel for
@@ -172,6 +179,11 @@ void LinearSourceDomain::set_flux_to_flux_plus_source(
     // track-length scaled, so it shares the scalar flux normalization
     if (SourceRegionContainer::omega_current_enabled_) {
       source_regions_.current_new(sr, g) *= (1.0 / volume);
+      if (SourceRegionContainer::omega_ho_enabled_) {
+        for (int c = 0; c < OMEGA_N_HO_MOMENTS; c++) {
+          source_regions_.ho_moments_new(sr, g, c) *= (1.0 / volume);
+        }
+      }
     }
   }
   // If a source region is small, then the moments are likely noisy, so we zero

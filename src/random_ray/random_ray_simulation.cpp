@@ -313,7 +313,11 @@ void openmc_finalize_random_ray()
   FlatSourceDomain::mesh_domain_map_.clear();
   FlatSourceDomain::omega_requested_ = false;
   FlatSourceDomain::omega_tally_idx_.clear();
+  FlatSourceDomain::omega_order_ = 1;
+  FlatSourceDomain::omega_clamp_min_ = OMEGA_FACTOR_MIN;
+  FlatSourceDomain::omega_clamp_max_ = OMEGA_FACTOR_MAX;
   SourceRegionContainer::omega_current_enabled_ = false;
+  SourceRegionContainer::omega_ho_enabled_ = false;
   RandomRay::ray_source_.reset();
   RandomRay::source_shape_ = RandomRaySourceShape::FLAT;
   RandomRay::sample_method_ = RandomRaySampleMethod::PRNG;
@@ -524,6 +528,14 @@ void RandomRaySimulation::simulate()
 #pragma omp parallel for
     for (uint64_t se = 0; se < domain_->n_source_elements(); se++) {
       domain_->source_regions_.current_t(se) *= source_normalization_factor;
+    }
+    if (SourceRegionContainer::omega_ho_enabled_) {
+#pragma omp parallel for
+      for (uint64_t he = 0; he < domain_->source_regions_.n_ho_elements();
+           he++) {
+        domain_->source_regions_.ho_moments_t(he) *=
+          source_normalization_factor;
+      }
     }
   }
 

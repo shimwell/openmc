@@ -65,6 +65,11 @@ private:
   vector<int> mesh_bins_;
   vector<double> mesh_fractional_lengths_;
 
+  // Scratch space for the l = 2, 3 real spherical harmonics of the ray
+  // direction, evaluated once per segment when higher-order FW-CADIS-Omega
+  // moments are being accumulated
+  std::array<double, OMEGA_N_HO_MOMENTS> sh_ho_;
+
   int negroups_;
   int ntemperature_;
   FlatSourceDomain* domain_ {nullptr}; // pointer to domain that has flat source

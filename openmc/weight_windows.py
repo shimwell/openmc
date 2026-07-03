@@ -540,6 +540,12 @@ class WeightWindowGenerator:
 
     _WWG_PARAMS = {'value': str, 'threshold': float, 'ratio': float}
 
+    # Additional parameters accepted by the 'fw_cadis_omega' method: the
+    # spherical harmonic expansion order of the angle-informed contraction
+    # (1 = current only, 2 or 3 add higher-order moment terms) and the
+    # clamping range applied to the correction factor.
+    _WWG_OMEGA_PARAMS = {'order': int, 'clamp_min': float, 'clamp_max': float}
+
     def __init__(
         self,
         mesh: openmc.MeshBase,
@@ -665,14 +671,15 @@ class WeightWindowGenerator:
         return self._update_parameters
 
     def _check_update_parameters(self, params: dict):
-        if self.method in ('magic', 'fw_cadis', 'fw_cadis_omega'):
-            check_params = self._WWG_PARAMS
+        check_params = dict(self._WWG_PARAMS)
+        if self.method == 'fw_cadis_omega':
+            check_params.update(self._WWG_OMEGA_PARAMS)
 
         for key, val in params.items():
             if key not in check_params:
                 raise ValueError(f'Invalid param "{key}" for {self.method} '
                                   'weight window generation')
-            cv.check_type(f'weight window generation param: "{key}"', val, self._WWG_PARAMS[key])
+            cv.check_type(f'weight window generation param: "{key}"', val, check_params[key])
 
     @update_parameters.setter
     def update_parameters(self, params: dict):
@@ -708,8 +715,9 @@ class WeightWindowGenerator:
         update_parameters : dict
             The update parameters as-read from the XML node (keys: str, values: str)
         """
-        if method in ('magic', 'fw_cadis', 'fw_cadis_omega'):
-            check_params = cls._WWG_PARAMS
+        check_params = dict(cls._WWG_PARAMS)
+        if method == 'fw_cadis_omega':
+            check_params.update(cls._WWG_OMEGA_PARAMS)
 
         for param, param_type in check_params.items():
             if param in update_parameters:

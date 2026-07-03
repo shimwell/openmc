@@ -842,6 +842,42 @@ WeightWindowsGenerator::WeightWindowsGenerator(pugi::xml_node node)
     if (check_for_node(params_node, "ratio")) {
       ratio_ = std::stod(get_node_value(params_node, "ratio"));
     }
+
+    // Parameters specific to the FW-CADIS-Omega method: spherical harmonic
+    // expansion order of the contraction and the clamping range applied to
+    // the correction factor
+    if (method_ == WeightWindowUpdateMethod::FW_CADIS_OMEGA) {
+      if (check_for_node(params_node, "order")) {
+        int order = std::stoi(get_node_value(params_node, "order"));
+        if (order < 1 || order > 3) {
+          fatal_error(fmt::format(
+            "Invalid FW-CADIS-Omega expansion order '{}'. Must be 1, 2, or 3.",
+            order));
+        }
+        FlatSourceDomain::omega_order_ = order;
+      }
+      if (check_for_node(params_node, "clamp_min")) {
+        FlatSourceDomain::omega_clamp_min_ =
+          std::stod(get_node_value(params_node, "clamp_min"));
+      }
+      if (check_for_node(params_node, "clamp_max")) {
+        FlatSourceDomain::omega_clamp_max_ =
+          std::stod(get_node_value(params_node, "clamp_max"));
+      }
+      if (FlatSourceDomain::omega_clamp_min_ <= 0.0 ||
+          FlatSourceDomain::omega_clamp_max_ <=
+            FlatSourceDomain::omega_clamp_min_) {
+        fatal_error("Invalid FW-CADIS-Omega clamp range. Requires "
+                    "0 < clamp_min < clamp_max.");
+      }
+    }
+  }
+
+  // Enable higher-order moment storage if the omega contraction needs it
+  if (method_ == WeightWindowUpdateMethod::FW_CADIS_OMEGA &&
+      SourceRegionContainer::omega_current_enabled_ &&
+      FlatSourceDomain::omega_order_ >= 2) {
+    SourceRegionContainer::omega_ho_enabled_ = true;
   }
 
   // check update parameter values
