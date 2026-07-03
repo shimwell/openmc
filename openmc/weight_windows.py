@@ -121,7 +121,8 @@ class WeightWindows(IDManagerMixin):
         max_lower_bound_ratio: float | None = None,
         max_split: int = 10,
         weight_cutoff: float = 1.e-38,
-        id: int | None = None
+        id: int | None = None,
+        num_angle: int = 1
     ):
         self.mesh = mesh
         self.id = id
@@ -129,6 +130,7 @@ class WeightWindows(IDManagerMixin):
         self._energy_bounds = None
         if energy_bounds is not None:
             self.energy_bounds = energy_bounds
+        self.num_angle = num_angle
         self.lower_ww_bounds = lower_ww_bounds
 
         if upper_ww_bounds is not None and upper_bound_ratio:
@@ -239,6 +241,16 @@ class WeightWindows(IDManagerMixin):
         return self.energy_bounds.size - 1
 
     @property
+    def num_angle(self) -> int:
+        return self._num_angle
+
+    @num_angle.setter
+    def num_angle(self, n: int):
+        cv.check_type('number of angular bins', n, Integral)
+        cv.check_value('number of angular bins', n, (1, 8))
+        self._num_angle = int(n)
+
+    @property
     def lower_ww_bounds(self) -> np.ndarray:
         return self._lower_ww_bounds
 
@@ -248,13 +260,15 @@ class WeightWindows(IDManagerMixin):
                                bounds,
                                Real,
                                min_depth=1,
-                               max_depth=4)
-        # reshape data according to mesh and energy bins
+                               max_depth=5)
+        # reshape data according to angular bins, mesh, and energy bins
         bounds = np.asarray(bounds)
+        shape = (self.num_angle,) if self.num_angle > 1 else ()
         if isinstance(self.mesh, UnstructuredMesh):
-            bounds = bounds.reshape(-1, self.num_energy_bins)
+            bounds = bounds.reshape(*shape, -1, self.num_energy_bins)
         else:
-            bounds = bounds.reshape(*self.mesh.dimension, self.num_energy_bins)
+            bounds = bounds.reshape(
+                *shape, *self.mesh.dimension, self.num_energy_bins)
         self._lower_ww_bounds = bounds
 
     @property
@@ -267,13 +281,15 @@ class WeightWindows(IDManagerMixin):
                                bounds,
                                Real,
                                min_depth=1,
-                               max_depth=4)
-        # reshape data according to mesh and energy bins
+                               max_depth=5)
+        # reshape data according to angular bins, mesh, and energy bins
         bounds = np.asarray(bounds)
+        shape = (self.num_angle,) if self.num_angle > 1 else ()
         if isinstance(self.mesh, UnstructuredMesh):
-            bounds = bounds.reshape(-1, self.num_energy_bins)
+            bounds = bounds.reshape(*shape, -1, self.num_energy_bins)
         else:
-            bounds = bounds.reshape(*self.mesh.dimension, self.num_energy_bins)
+            bounds = bounds.reshape(
+                *shape, *self.mesh.dimension, self.num_energy_bins)
         self._upper_ww_bounds = bounds
 
     @property
@@ -337,6 +353,10 @@ class WeightWindows(IDManagerMixin):
             subelement = ET.SubElement(element, 'energy_bounds')
             subelement.text = ' '.join(str(e) for e in self.energy_bounds)
 
+        if self.num_angle > 1:
+            subelement = ET.SubElement(element, 'num_angle')
+            subelement.text = str(self.num_angle)
+
         subelement = ET.SubElement(element, 'lower_ww_bounds')
         subelement.text = ' '.join(str(b) for b in self.lower_ww_bounds.ravel('F'))
 
@@ -387,7 +407,13 @@ class WeightWindows(IDManagerMixin):
         particle_type = get_text(elem, 'particle_type')
         survival_ratio = float(get_text(elem, 'survival_ratio'))
 
+        num_angle = 1
+        if get_text(elem, 'num_angle'):
+            num_angle = int(get_text(elem, 'num_angle'))
+
         ww_shape = (len(e_bounds) - 1,) + mesh.dimension[::-1]
+        if num_angle > 1:
+            ww_shape += (num_angle,)
         lower_ww_bounds = np.array(lower_ww_bounds).reshape(ww_shape).T
         upper_ww_bounds = np.array(upper_ww_bounds).reshape(ww_shape).T
 
@@ -409,7 +435,8 @@ class WeightWindows(IDManagerMixin):
             max_lower_bound_ratio=max_lower_bound_ratio,
             max_split=max_split,
             weight_cutoff=weight_cutoff,
-            id=id
+            id=id,
+            num_angle=num_angle
         )
 
     @classmethod
@@ -435,9 +462,18 @@ class WeightWindows(IDManagerMixin):
 
         ptype = group['particle_type'][()].decode()
         e_bounds = group['energy_bounds'][()]
-        # weight window bounds are stored with the shape (e, k, j, i)
-        # in C++ and HDF5 -- the opposite of how they are stored here
+
+        num_angle = 1
+        if group.get('num_angle') is not None:
+            num_angle = int(group['num_angle'][()])
+
+        # weight window bounds are stored with the shape (e, k, j, i) in C++
+        # and HDF5 -- the opposite of how they are stored here. For
+        # angle-dependent windows the angular index varies fastest, adding a
+        # trailing axis on the C++ side (leading here after the transpose).
         shape = (e_bounds.size - 1,  *mesh.dimension[::-1])
+        if num_angle > 1:
+            shape += (num_angle,)
         lower_ww_bounds = group['lower_ww_bounds'][()].reshape(shape).T
         upper_ww_bounds = group['upper_ww_bounds'][()].reshape(shape).T
         survival_ratio = group['survival_ratio'][()]
@@ -459,7 +495,8 @@ class WeightWindows(IDManagerMixin):
             max_lower_bound_ratio=max_lower_bound_ratio,
             max_split=max_split,
             weight_cutoff=weight_cutoff,
-            id=id
+            id=id,
+            num_angle=num_angle
         )
 
 
@@ -542,9 +579,12 @@ class WeightWindowGenerator:
 
     # Additional parameters accepted by the 'fw_cadis_omega' method: the
     # spherical harmonic expansion order of the angle-informed contraction
-    # (1 = current only, 2 or 3 add higher-order moment terms) and the
-    # clamping range applied to the correction factor.
-    _WWG_OMEGA_PARAMS = {'order': int, 'clamp_min': float, 'clamp_max': float}
+    # (1 = current only, 2 or 3 add higher-order moment terms), the clamping
+    # range applied to the correction factor, and the number of angular bins
+    # for angle-dependent weight windows (0 = angle-independent, 8 =
+    # direction octants).
+    _WWG_OMEGA_PARAMS = {'order': int, 'clamp_min': float, 'clamp_max': float,
+                         'angular_bins': int}
 
     def __init__(
         self,

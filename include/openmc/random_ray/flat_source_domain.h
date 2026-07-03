@@ -94,6 +94,14 @@ public:
   // Clamping range applied to the omega correction factor
   static double omega_clamp_min_;
   static double omega_clamp_max_;
+  // If angle-dependent (octant) weight windows were requested. In this mode
+  // the weight window tally scores the plain scalar adjoint flux and the
+  // octant-resolved adjoint flux is accumulated separately.
+  static bool omega_angular_;
+  // Octant-resolved adjoint flux accumulated over the adjoint solve's
+  // active batches, keyed by tally index. Each entry holds
+  // n_filter_bins x 8 values with the octant index varying fastest.
+  static std::unordered_map<int, vector<double>> omega_ang_map_;
   static double
     diagonal_stabilization_rho_; // Adjusts strength of diagonal stabilization
                                  // for transport corrected MGXS data

@@ -117,7 +117,8 @@ public:
   //! weight window bounds
   void update_weights(const Tally* tally, const std::string& value = "mean",
     double threshold = 1.0, double ratio = 5.0,
-    WeightWindowUpdateMethod method = WeightWindowUpdateMethod::MAGIC);
+    WeightWindowUpdateMethod method = WeightWindowUpdateMethod::MAGIC,
+    const vector<double>* angular_flux = nullptr);
 
   // NOTE: This is unused for now but may be used in the future
   //! Write weight window settings to an HDF5 file
@@ -179,6 +180,12 @@ public:
 
   ParticleType particle_type() const { return particle_type_; }
 
+  int num_angle() const { return n_angle_; }
+
+  //! Set the number of angular bins (1 = angle-independent windows, 8 =
+  //! direction octants), resizing the bounds arrays if a mesh is present
+  void set_num_angle(int n_angle);
+
 private:
   //----------------------------------------------------------------------------
   // Data members
@@ -195,6 +202,10 @@ private:
   double weight_cutoff_ {DEFAULT_WEIGHT_CUTOFF}; //!< Weight cutoff
   int max_split_ {10};    //!< Maximum value for particle splitting
   int32_t mesh_idx_ {-1}; //!< Index in meshes vector
+  int n_angle_ {1}; //!< Number of angular bins (1 = angle-independent, 8 =
+                    //!< direction octants). Angular bins are folded into the
+                    //!< second dimension of the bounds tensors, with the
+                    //!< angular index varying fastest.
 };
 
 class WeightWindowsGenerator {
@@ -226,6 +237,10 @@ public:
 
   // Local FW-CADIS target tallies
   std::vector<size_t> targets_;
+
+  // Number of angular bins for angle-dependent weight window generation
+  // (FW-CADIS-Omega only; 0 = angle-independent, 8 = direction octants)
+  int angular_bins_ {0};
 };
 
 //==============================================================================

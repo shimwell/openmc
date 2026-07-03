@@ -39,6 +39,8 @@ std::unordered_set<int> FlatSourceDomain::omega_tally_idx_;
 int FlatSourceDomain::omega_order_ {1};
 double FlatSourceDomain::omega_clamp_min_ {OMEGA_FACTOR_MIN};
 double FlatSourceDomain::omega_clamp_max_ {OMEGA_FACTOR_MAX};
+bool FlatSourceDomain::omega_angular_ {false};
+std::unordered_map<int, vector<double>> FlatSourceDomain::omega_ang_map_;
 double FlatSourceDomain::diagonal_stabilization_rho_ {1.0};
 std::unordered_map<int, vector<std::pair<Source::DomainType, int>>>
   FlatSourceDomain::mesh_domain_map_;
@@ -695,6 +697,29 @@ void FlatSourceDomain::random_ray_tally()
                             solve_ == RandomRaySolve::ADJOINT &&
                             !omega_tally_idx_.empty();
 
+  // For angle-dependent (octant) weight windows, prepare the octant flux
+  // accumulators and precompute the reversed octant center directions and
+  // their spherical harmonics. The reversal accounts for the adjoint solve
+  // computing psi_adj(-omega).
+  const bool omega_ang_active = omega_active && omega_angular_;
+  std::array<Direction, 8> oct_rev_dir;
+  std::array<std::array<double, OMEGA_N_HO_MOMENTS>, 8> oct_rev_sh;
+  if (omega_ang_active) {
+    for (int idx : omega_tally_idx_) {
+      if (omega_ang_map_.find(idx) == omega_ang_map_.end()) {
+        omega_ang_map_[idx].assign(
+          model::tallies[idx]->n_filter_bins() * 8, 0.0);
+      }
+    }
+    const double inv_sqrt3 = 1.0 / std::sqrt(3.0);
+    for (int a = 0; a < 8; a++) {
+      Direction s {(a & 4) ? -1.0 : 1.0, (a & 2) ? -1.0 : 1.0,
+        (a & 1) ? -1.0 : 1.0};
+      oct_rev_dir[a] = s * (-inv_sqrt3);
+      evaluate_ho_spherical_harmonics(oct_rev_dir[a], oct_rev_sh[a]);
+    }
+  }
+
 // We loop over all source regions and energy groups. For each
 // element, we check if there are any scores needed and apply
 // them.
@@ -733,11 +758,46 @@ void FlatSourceDomain::random_ray_tally()
           // Substitute the angle-informed adjoint flux, scoped strictly to
           // flux scores of omega weight window generator tallies
           if (omega_active && omega_tally_idx_.count(task.tally_idx)) {
-            if (!omega_factor_computed) {
-              omega_factor = compute_omega_factor(sr, g);
-              omega_factor_computed = true;
+            if (omega_ang_active) {
+              // Angle-dependent windows: the tally keeps the plain scalar
+              // adjoint flux (for statistics and thresholds) and the
+              // octant-resolved adjoint flux, reconstructed from this
+              // batch's angular moments, is accumulated separately
+              vector<double>& ang = omega_ang_map_[task.tally_idx];
+              const MomentArray j =
+                source_regions_.current_new(sr, g) *
+                source_normalization_factor;
+              for (int a = 0; a < 8; a++) {
+                double f_oct = flux + 3.0 * j.dot(oct_rev_dir[a]);
+                if (SourceRegionContainer::omega_ho_enabled_) {
+                  double s2 = 0.0;
+                  for (int c = 0; c < 5; c++) {
+                    s2 += source_regions_.ho_moments_new(sr, g, c) *
+                          oct_rev_sh[a][c];
+                  }
+                  f_oct += 4.0 * PI * s2 * source_normalization_factor;
+                  if (omega_order_ >= 3) {
+                    double s3 = 0.0;
+                    for (int c = 5; c < OMEGA_N_HO_MOMENTS; c++) {
+                      s3 += source_regions_.ho_moments_new(sr, g, c) *
+                            oct_rev_sh[a][c];
+                    }
+                    f_oct += 4.0 * PI * s3 * source_normalization_factor;
+                  }
+                }
+                // Floor the octant flux at a fraction of the isotropic
+                // value so the reconstruction stays positive
+                f_oct = std::max(f_oct, omega_clamp_min_ * flux);
+#pragma omp atomic
+                ang[task.filter_idx * 8 + a] += f_oct * volume;
+              }
+            } else {
+              if (!omega_factor_computed) {
+                omega_factor = compute_omega_factor(sr, g);
+                omega_factor_computed = true;
+              }
+              score *= omega_factor;
             }
-            score *= omega_factor;
           }
           break;
 

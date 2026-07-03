@@ -74,6 +74,12 @@ WeightWindows::WeightWindows(pugi::xml_node node)
   auto particle_type_str = std::string(get_node_value(node, "particle_type"));
   particle_type_ = ParticleType {particle_type_str};
 
+  // number of angular bins - optional, must be read before the mesh is set
+  // so that the bounds arrays are sized correctly
+  if (check_for_node(node, "num_angle")) {
+    set_num_angle(std::stoi(get_node_value(node, "num_angle")));
+  }
+
   // Determine associated mesh
   int32_t mesh_id = std::stoi(get_node_value(node, "mesh"));
   set_mesh(model::mesh_map.at(mesh_id));
@@ -156,6 +162,13 @@ WeightWindows* WeightWindows::from_hdf5(
     fatal_error(
       fmt::format("Mesh {} used in weight windows does not exist.", mesh_id));
   }
+
+  if (object_exists(ww_group, "num_angle")) {
+    int n_angle;
+    read_dataset(ww_group, "num_angle", n_angle);
+    wws->set_num_angle(n_angle);
+  }
+
   wws->set_mesh(model::mesh_map[mesh_id]);
 
   wws->lower_ww_ =
@@ -300,11 +313,19 @@ std::pair<bool, WeightWindow> WeightWindows::get_weight_window(
   int energy_bin =
     lower_bound_index(energy_bounds_.begin(), energy_bounds_.end(), E);
 
-  // mesh_bin += energy_bin * mesh->n_bins();
+  // For angle-dependent weight windows, select the octant bin matching the
+  // particle's direction of flight
+  int bin = mesh_bin;
+  if (n_angle_ == 8) {
+    const auto& u = p.u();
+    int octant = 4 * (u.x < 0.0) + 2 * (u.y < 0.0) + (u.z < 0.0);
+    bin = mesh_bin * n_angle_ + octant;
+  }
+
   // Create individual weight window
   WeightWindow ww;
-  ww.lower_weight = lower_ww_(energy_bin, mesh_bin);
-  ww.upper_weight = upper_ww_(energy_bin, mesh_bin);
+  ww.lower_weight = lower_ww_(energy_bin, bin);
+  ww.upper_weight = upper_ww_(energy_bin, bin);
   ww.survival_weight = ww.lower_weight * survival_ratio_;
   ww.max_lb_ratio = max_lb_ratio_;
   ww.max_split = max_split_;
@@ -314,10 +335,26 @@ std::pair<bool, WeightWindow> WeightWindows::get_weight_window(
 
 std::array<int, 2> WeightWindows::bounds_size() const
 {
-  int num_spatial_bins = this->mesh()->n_bins();
+  // Angular bins are folded into the spatial dimension, with the angular
+  // index varying fastest
+  int num_spatial_bins = this->mesh()->n_bins() * n_angle_;
   int num_energy_bins =
     energy_bounds_.size() > 0 ? energy_bounds_.size() - 1 : 1;
   return {num_energy_bins, num_spatial_bins};
+}
+
+void WeightWindows::set_num_angle(int n_angle)
+{
+  if (n_angle != 1 && n_angle != 8) {
+    fatal_error(fmt::format(
+      "Invalid number of weight window angular bins '{}'. Only 1 "
+      "(angle-independent) or 8 (direction octants) are supported.",
+      n_angle));
+  }
+  n_angle_ = n_angle;
+  if (mesh_idx_ != C_NONE) {
+    allocate_ww_bounds();
+  }
 }
 
 template<class T>
@@ -406,23 +443,34 @@ void WeightWindows::set_bounds(span<const double> lower_bounds, double ratio)
 }
 
 void WeightWindows::update_weights(const Tally* tally, const std::string& value,
-  double threshold, double ratio, WeightWindowUpdateMethod method)
+  double threshold, double ratio, WeightWindowUpdateMethod method,
+  const vector<double>* angular_flux)
 {
   ///////////////////////////
   // Setup and checks
   ///////////////////////////
   this->check_tally_update_compatibility(tally);
 
-  // Dimensions of weight window arrays
+  if (n_angle_ > 1 && !angular_flux) {
+    fatal_error(
+      fmt::format("Weight windows {} has angular bins, which can only be "
+                  "updated from an angle-informed (FW-CADIS-Omega) random "
+                  "ray adjoint solve.",
+        id()));
+  }
+
+  // Dimensions of weight window arrays. For angle-dependent windows the
+  // angular bins are folded into the second dimension (angular index
+  // fastest); the tally itself is only resolved in energy and space.
   int e_bins = lower_ww_.shape(0);
-  int64_t mesh_bins = lower_ww_.shape(1);
+  int64_t mesh_bins = lower_ww_.shape(1) / n_angle_;
 
   // Initialize weight window arrays to -1.0 by default
 #pragma omp parallel for collapse(2) schedule(static)
   for (int e = 0; e < e_bins; e++) {
-    for (int64_t m = 0; m < mesh_bins; m++) {
-      lower_ww_(e, m) = -1.0;
-      upper_ww_(e, m) = -1.0;
+    for (int64_t b = 0; b < lower_ww_.shape(1); b++) {
+      lower_ww_(e, b) = -1.0;
+      upper_ww_(e, b) = -1.0;
     }
   }
 
@@ -560,9 +608,20 @@ void WeightWindows::update_weights(const Tally* tally, const std::string& value,
 
   // up to this point the data arrays are views into the tally results (no
   // computation has been performed) now we'll switch references to the tally's
-  // bounds to avoid allocating additional memory
-  auto& new_bounds = this->lower_ww_;
-  auto& rel_err = this->upper_ww_;
+  // bounds to avoid allocating additional memory. For angle-dependent
+  // windows the bounds arrays have an extra angular dimension, so the
+  // energy/space statistics are computed in temporaries instead and
+  // expanded over the angular bins at the end.
+  tensor::Tensor<double> mean_tmp;
+  tensor::Tensor<double> relerr_tmp;
+  if (n_angle_ > 1) {
+    mean_tmp = tensor::Tensor<double>(
+      {static_cast<size_t>(e_bins), static_cast<size_t>(mesh_bins)});
+    relerr_tmp = tensor::Tensor<double>(
+      {static_cast<size_t>(e_bins), static_cast<size_t>(mesh_bins)});
+  }
+  auto& new_bounds = (n_angle_ > 1) ? mean_tmp : this->lower_ww_;
+  auto& rel_err = (n_angle_ > 1) ? relerr_tmp : this->upper_ww_;
 
   // get mesh volumes
   auto mesh_vols = this->mesh()->volumes();
@@ -675,6 +734,69 @@ void WeightWindows::update_weights(const Tally* tally, const std::string& value,
       upper_ww_(e, m) = ratio * lower_ww_(e, m);
     }
   }
+
+  // For angle-dependent windows, expand the finished energy/space CADIS map
+  // over the angular bins using the octant flux shape accumulated by the
+  // random ray adjoint solve: ww(e, m, a) = ww(e, m) / f_a, where f_a is
+  // the octant flux normalized to an octant-mean of one. Bins with no
+  // angular data fall back to the scalar value in every octant.
+  if (n_angle_ > 1) {
+    const auto& af = *angular_flux;
+#pragma omp parallel for collapse(2) schedule(static)
+    for (int e = 0; e < e_bins; e++) {
+      for (int64_t m = 0; m < mesh_bins; m++) {
+        // Recover the flat filter combination index for this (e, m), using
+        // the same mapping as the tally extraction above
+        std::array<int, 3> idx = {0, 0, 0};
+        idx[transpose[0]] = particle_idx;
+        idx[transpose[1]] = e;
+        idx[transpose[2]] = static_cast<int>(m);
+        int64_t flat = idx[0] * stride0 + idx[1] * stride1 + idx[2];
+
+        double total = 0.0;
+        for (int a = 0; a < n_angle_; a++) {
+          total += af[flat * n_angle_ + a];
+        }
+
+        double v = new_bounds(e, m);
+        for (int a = 0; a < n_angle_; a++) {
+          double frac = 1.0;
+          if (total > 0.0) {
+            frac = af[flat * n_angle_ + a] * n_angle_ / total;
+          }
+          if (!(frac > 0.0)) {
+            frac = 1.0;
+          }
+          lower_ww_(e, m * n_angle_ + a) = (v > 0.0) ? v / frac : v;
+        }
+      }
+    }
+
+    // Renormalize so the most important angular bin has a lower bound of
+    // 0.5, then set the upper bounds
+    double max_val = 0.0;
+#pragma omp parallel for collapse(2) schedule(static) reduction(max : max_val)
+    for (int e = 0; e < e_bins; e++) {
+      for (int64_t b = 0; b < lower_ww_.shape(1); b++) {
+        if (lower_ww_(e, b) > max_val) {
+          max_val = lower_ww_(e, b);
+        }
+      }
+    }
+    double norm_factor = (max_val > 0.0) ? 1.0 / (2.0 * max_val) : 1.0;
+#pragma omp parallel for collapse(2) schedule(static)
+    for (int e = 0; e < e_bins; e++) {
+      for (int64_t b = 0; b < lower_ww_.shape(1); b++) {
+        if (lower_ww_(e, b) > 0.0) {
+          lower_ww_(e, b) *= norm_factor;
+          upper_ww_(e, b) = ratio * lower_ww_(e, b);
+        } else {
+          lower_ww_(e, b) = -1.0;
+          upper_ww_(e, b) = -1.0;
+        }
+      }
+    }
+  }
 }
 
 void WeightWindows::check_tally_update_compatibility(const Tally* tally)
@@ -743,6 +865,9 @@ void WeightWindows::to_hdf5(hid_t group) const
   write_dataset(ww_group, "mesh", this->mesh()->id());
   write_dataset(ww_group, "particle_type", particle_type_.str());
   write_dataset(ww_group, "energy_bounds", energy_bounds_);
+  if (n_angle_ > 1) {
+    write_dataset(ww_group, "num_angle", n_angle_);
+  }
   write_dataset(ww_group, "lower_ww_bounds", lower_ww_);
   write_dataset(ww_group, "upper_ww_bounds", upper_ww_);
   write_dataset(ww_group, "survival_ratio", survival_ratio_);
@@ -870,6 +995,16 @@ WeightWindowsGenerator::WeightWindowsGenerator(pugi::xml_node node)
         fatal_error("Invalid FW-CADIS-Omega clamp range. Requires "
                     "0 < clamp_min < clamp_max.");
       }
+      if (check_for_node(params_node, "angular_bins")) {
+        int n_ang = std::stoi(get_node_value(params_node, "angular_bins"));
+        if (n_ang != 0 && n_ang != 8) {
+          fatal_error(fmt::format(
+            "Invalid FW-CADIS-Omega angular_bins '{}'. Must be 0 "
+            "(angle-independent windows) or 8 (direction octants).",
+            n_ang));
+        }
+        angular_bins_ = n_ang;
+      }
     }
   }
 
@@ -878,6 +1013,14 @@ WeightWindowsGenerator::WeightWindowsGenerator(pugi::xml_node node)
       SourceRegionContainer::omega_current_enabled_ &&
       FlatSourceDomain::omega_order_ >= 2) {
     SourceRegionContainer::omega_ho_enabled_ = true;
+  }
+
+  // Enable angle-dependent (octant) weight window generation. This requires
+  // the angular moment machinery, so it degrades to ordinary scalar windows
+  // in modes where the moments cannot be formed.
+  if (angular_bins_ == 8 &&
+      SourceRegionContainer::omega_current_enabled_) {
+    FlatSourceDomain::omega_angular_ = true;
   }
 
   // check update parameter values
@@ -902,6 +1045,9 @@ WeightWindowsGenerator::WeightWindowsGenerator(pugi::xml_node node)
     wws->set_energy_bounds(e_bounds);
   wws->set_particle_type(particle_type);
   wws->set_defaults();
+  if (FlatSourceDomain::omega_angular_) {
+    wws->set_num_angle(8);
+  }
 }
 
 void WeightWindowsGenerator::create_tally()
@@ -976,7 +1122,22 @@ void WeightWindowsGenerator::update() const
     return;
   }
 
-  wws->update_weights(tally, tally_value_, threshold_, ratio_, method_);
+  // For angle-dependent windows, the octant flux map only exists once the
+  // adjoint solve is underway; skip earlier update calls (e.g., at the end
+  // of the forward solve) entirely
+  const vector<double>* angular_flux = nullptr;
+  if (wws->num_angle() > 1) {
+    if (FlatSourceDomain::solve_ != RandomRaySolve::ADJOINT) {
+      return;
+    }
+    auto it = FlatSourceDomain::omega_ang_map_.find(tally_idx_);
+    if (it != FlatSourceDomain::omega_ang_map_.end()) {
+      angular_flux = &it->second;
+    }
+  }
+
+  wws->update_weights(
+    tally, tally_value_, threshold_, ratio_, method_, angular_flux);
 
   // if we're not doing on the fly generation, reset the tally results once
   // we're done with the update

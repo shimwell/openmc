@@ -9,6 +9,11 @@
 
 namespace openmc {
 
+// Evaluates the l = 2 and l = 3 orthonormal real spherical harmonics of a
+// unit direction vector (defined in random_ray.cpp)
+void evaluate_ho_spherical_harmonics(
+  const Direction& u, std::array<double, OMEGA_N_HO_MOMENTS>& y);
+
 /*
  * The RandomRay class encompasses data and methods for transporting random rays
  * through the model. It is a small extension of the Particle class.

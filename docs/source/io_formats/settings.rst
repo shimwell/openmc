@@ -1794,6 +1794,15 @@ mesh-based weight windows.
 
         *Default*: 4.0
 
+      :angular_bins:
+        Number of angular bins for angle-dependent weight window generation.
+        Either 0 (ordinary angle-independent windows) or 8 (direction
+        octants). When set to 8, the generated weight windows depend on the
+        particle's direction of flight, with the octant-resolved importance
+        reconstructed from the adjoint angular flux moments.
+
+        *Default*: 0
+
 ---------------------------------------
 ``<weight_window_checkpoints>`` Element
 ---------------------------------------

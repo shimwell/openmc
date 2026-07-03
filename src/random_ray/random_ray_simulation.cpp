@@ -316,6 +316,8 @@ void openmc_finalize_random_ray()
   FlatSourceDomain::omega_order_ = 1;
   FlatSourceDomain::omega_clamp_min_ = OMEGA_FACTOR_MIN;
   FlatSourceDomain::omega_clamp_max_ = OMEGA_FACTOR_MAX;
+  FlatSourceDomain::omega_angular_ = false;
+  FlatSourceDomain::omega_ang_map_.clear();
   SourceRegionContainer::omega_current_enabled_ = false;
   SourceRegionContainer::omega_ho_enabled_ = false;
   RandomRay::ray_source_.reset();
