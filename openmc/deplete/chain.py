@@ -23,6 +23,9 @@ from openmc.checkvalue import check_type, check_length, check_greater_than, Path
 from openmc.data import gnds_name, zam
 from openmc.exceptions import DataError
 from .nuclide import FissionYieldDistribution, Nuclide
+from ._isomeric import (
+    MATCHED, POSITIONAL, GROUND, FOLDED, IsomerMappingReport, assign_levels,
+    compute_scalar_ratios, extract_isomeric_production, group_records)
 from .._xml import get_text
 from .._sparse_compat import csc_array, dok_array
 import openmc.data
@@ -314,14 +317,16 @@ class Chain:
     @classmethod
     def from_endf(cls, decay_files, fpy_files, neutron_files,
         reactions=('(n,2n)', '(n,3n)', '(n,4n)', '(n,gamma)', '(n,p)', '(n,a)'),
-        progress=True
+        progress=True, isomeric_branching=False, branching_files=None,
+        scalar_branching='none', elis_rtol=0.5, isomer_mapping_log=None
     ):
         """Create a depletion chain from ENDF files.
 
-        String arguments in ``decay_files``, ``fpy_files``, and
-        ``neutron_files`` will be treated as file names to be read.
-        Alternatively, :class:`openmc.data.endf.Evaluation` or
-        ``endf.Material`` instances can be included in these arguments.
+        String arguments in ``decay_files``, ``fpy_files``,
+        ``neutron_files``, and ``branching_files`` will be treated as file
+        names to be read. Alternatively,
+        :class:`openmc.data.endf.Evaluation` or ``endf.Material`` instances
+        can be included in these arguments.
 
         Parameters
         ----------
@@ -341,6 +346,43 @@ class Chain:
         progress : bool, optional
             Flag to print status messages during processing. Does not
             effect warning messages
+        isomeric_branching : bool, optional
+            Read energy-dependent isomeric production data (ENDF MF=8/9/10)
+            from the neutron files, add metastable reaction targets, and
+            store the MF=9 yields and MF=10 partial cross sections verbatim
+            on the chain.
+
+            .. versionadded:: 0.15.4
+        branching_files : list of str, openmc.data.endf.Evaluation, or endf.Material, optional
+            Additional ENDF evaluations consulted for MF=8/9/10 data for
+            parent nuclides whose primary neutron file has none, e.g. TENDL
+            files. Consulted in list order; only their MF=8/9/10 sections
+            are read, so they cannot change which reactions exist. Each
+            stored table is tagged with the library it came from.
+
+            .. versionadded:: 0.15.4
+        scalar_branching : {'none', 'thermal'} or tuple, optional
+            How to compute the scalar ``branching_ratio`` attributes for
+            reactions with isomeric targets. ``'none'`` [default] keeps the
+            historical behavior (ground state gets 1.0, metastables 0.0).
+            ``'thermal'`` evaluates the MF=9 yields at 0.0253 eV. A tuple
+            of ``(energies, flux)`` collapses the MF=9 yields with a
+            multigroup flux given on group boundaries ``energies`` in [eV].
+            Reactions whose data cannot support the requested mode fall
+            back to ``'none'`` with a note in the mapping report.
+
+            .. versionadded:: 0.15.4
+        elis_rtol : float, optional
+            Relative tolerance used when matching the excitation energy of
+            a produced level against the excitation energies of metastable
+            states in the decay data.
+
+            .. versionadded:: 0.15.4
+        isomer_mapping_log : str, optional
+            Path to write a report of every level-to-isomer mapping
+            decision.
+
+            .. versionadded:: 0.15.4
 
         Returns
         -------
@@ -359,10 +401,18 @@ class Chain:
         """
         transmutation_reactions = reactions
 
+        if (scalar_branching not in ('none', 'thermal')
+                and not isinstance(scalar_branching, tuple)):
+            raise ValueError(
+                "scalar_branching must be 'none', 'thermal', or a tuple "
+                "of (energies, flux)")
+        report = IsomerMappingReport(elis_rtol) if isomeric_branching else None
+
         # Create dictionary mapping target to filename
         if progress:
             print('Processing neutron sub-library files...')
         reactions = {}
+        iso_records = {}
         for f in neutron_files:
             evaluation = openmc.data.endf.as_evaluation(f)
             name = evaluation.gnds_name
@@ -373,17 +423,48 @@ class Chain:
                     openmc.data.endf.get_head_record(file_obj)
                     q_value = openmc.data.endf.get_cont_record(file_obj)[1]
                     reactions[name][mt] = q_value
+            if isomeric_branching:
+                levels = extract_isomeric_production(evaluation)
+                if levels:
+                    iso_records[name] = levels
+
+        # Read supplementary evaluations, consulted only for parents whose
+        # primary neutron file has no MF=8/9/10 data. The first file in the
+        # list providing a section wins.
+        iso_supplement = {}
+        if isomeric_branching and branching_files:
+            if progress:
+                print('Processing supplementary isomeric branching files...')
+            for f in branching_files:
+                evaluation = openmc.data.endf.as_evaluation(f)
+                levels = extract_isomeric_production(evaluation)
+                if not levels:
+                    continue
+                store = iso_supplement.setdefault(evaluation.gnds_name, {})
+                for mt, records in levels.items():
+                    store.setdefault(mt, records)
 
         # Determine what decay and FPY nuclides are available
         if progress:
             print('Processing decay sub-library files...')
         decay_data = {}
+        isomer_energies = defaultdict(list)
         for f in decay_files:
-            data = openmc.data.Decay(f)
+            ev = openmc.data.endf.as_evaluation(f)
+            data = openmc.data.Decay(ev)
             # Skip decay data for neutron itself
             if data.nuclide['atomic_number'] == 0:
                 continue
             decay_data[data.nuclide['name']] = data
+            # Record metastable excitation energies for level matching.
+            # States reported with a zero excitation energy cannot be
+            # matched and are skipped.
+            liso = data.nuclide['isomeric_state']
+            elis = ev.target['excitation_energy']
+            if liso > 0 and elis > 0.0:
+                key = (data.nuclide['atomic_number'],
+                       data.nuclide['mass_number'])
+                isomer_energies[key].append((liso, elis))
 
         if progress:
             print('Processing fission product yield sub-library files...')
@@ -463,7 +544,24 @@ class Chain:
                         else:
                             q_value = 0.0
 
-                        nuclide.add_reaction(name, daughter, q_value, 1.0)
+                        # Gather energy-dependent isomeric production data,
+                        # with the primary neutron file taking precedence
+                        # over supplementary files
+                        records = []
+                        if isomeric_branching and daughter is not None:
+                            available = iso_records.get(parent, {})
+                            if not (mts & set(available)):
+                                available = iso_supplement.get(parent, {})
+                            for mt in sorted(mts & set(available)):
+                                records.extend(available[mt])
+
+                        if records:
+                            cls._add_isomeric_reactions(
+                                nuclide, name, daughter, q_value, records,
+                                decay_data, isomer_energies, elis_rtol,
+                                scalar_branching, report)
+                        else:
+                            nuclide.add_reaction(name, daughter, q_value, 1.0)
 
                 if any(mt in reactions_available for mt in openmc.data.FISSION_MTS):
                     q_value = reactions[parent][18]
@@ -533,7 +631,75 @@ class Chain:
             for vals in missing_fp:
                 print('  {}, E={} eV (total yield={})'.format(*vals))
 
+        if report is not None:
+            counts = report.counts
+            if progress and counts:
+                print('Isomeric level mapping: ' + ', '.join(
+                    f'{status}={counts.get(status, 0)}'
+                    for status in (MATCHED, POSITIONAL, GROUND, FOLDED)))
+            if isomer_mapping_log is not None:
+                report.write(isomer_mapping_log)
+
         return chain
+
+    @staticmethod
+    def _add_isomeric_reactions(nuclide, name, daughter, q_value, records,
+                                decay_data, isomer_energies, elis_rtol,
+                                scalar_branching, report):
+        """Add ground and metastable entries for one transmutation reaction.
+
+        Level records are assigned to targets by excitation energy
+        matching, grouped into verbatim production data per target, and
+        emitted as one ReactionTuple per target with scalar branching
+        ratios according to ``scalar_branching``.
+        """
+        parent = nuclide.name
+        assignments = assign_levels(
+            records, daughter, isomer_energies, elis_rtol)
+
+        # Resolve assignments to nuclides that exist in the decay data,
+        # folding anything that cannot be resolved onto the ground target
+        resolved = []
+        target_levels = defaultdict(set)
+        for assignment in assignments:
+            target, status = assignment.target, assignment.status
+            if status in (MATCHED, POSITIONAL):
+                if target not in decay_data:
+                    replacement = replace_missing(target, decay_data)
+                    if replacement is None or '_m' not in replacement:
+                        target, status = daughter, FOLDED
+                    else:
+                        target = replacement
+                target_levels[target].add(assignment.record.lfs)
+            else:
+                target = daughter
+            resolved.append((assignment, target, status))
+
+        if report is not None:
+            for assignment, target, status in resolved:
+                note = ''
+                if (status in (MATCHED, POSITIONAL)
+                        and len(target_levels[target]) > 1):
+                    note = 'shares target with another level'
+                report.add(parent, name, assignment, target, status, note)
+
+        grouped = group_records(
+            [(assignment.record, target)
+             for assignment, target, _status in resolved])
+        ratios, note = compute_scalar_ratios(
+            grouped, daughter, scalar_branching)
+        if note and report is not None:
+            report.add_note(parent, name, note)
+
+        nuclide.add_reaction(name, daughter, q_value,
+                             ratios.get(daughter, 1.0))
+        if daughter in grouped:
+            nuclide.isomeric_production[(name, daughter)] = grouped[daughter]
+        for target in sorted(grouped):
+            if target == daughter:
+                continue
+            nuclide.add_reaction(name, target, q_value, ratios[target])
+            nuclide.isomeric_production[(name, target)] = grouped[target]
 
     @classmethod
     def from_xml(cls, filename, fission_q=None):
