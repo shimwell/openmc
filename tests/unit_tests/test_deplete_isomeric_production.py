@@ -258,6 +258,46 @@ def test_no_isomeric_data():
     assert elem.find("reaction").find("isomeric_production") is None
 
 
+def test_duplicate_reaction_pair_roundtrip(tmp_path):
+    # Production data attached to a (type, target) pair that appears on
+    # more than one reaction element must not multiply on round trip
+    nuc = Nuclide("A")
+    nuc.add_reaction("(n,gamma)", "B", 0.0, 0.5)
+    nuc.add_reaction("(n,gamma)", "B", 0.0, 0.5)
+    table = ProductionTable(
+        mf=9, mt=102, source="test", QM=0.0, QI=0.0,
+        data=Tabulated1D([1.0, 2.0], [0.5, 0.5]))
+    nuc.isomeric_production[("(n,gamma)", "B")] = [
+        IsomericProduction(0, 0.0, [table])]
+
+    elem = nuc.to_xml_element()
+    assert len(elem.findall("reaction/isomeric_production")) == 1
+    reread = Nuclide.from_xml(elem)
+    assert len(reread.isomeric_production[("(n,gamma)", "B")]) == 1
+
+
+def test_orphan_entry_not_written():
+    nuc = Nuclide("A")
+    nuc.add_reaction("(n,gamma)", "B", 0.0, 1.0)
+    table = ProductionTable(
+        mf=9, mt=102, source="test", QM=0.0, QI=0.0,
+        data=Tabulated1D([1.0, 2.0], [0.5, 0.5]))
+    nuc.isomeric_production[("(n,gamma)", "B_m1")] = [
+        IsomericProduction(1, 100.0, [table])]
+    elem = nuc.to_xml_element()
+    assert elem.findall("reaction/isomeric_production") == []
+
+
+def test_validate_reaction_sum_message():
+    # A nuclide with no decay modes and inconsistent reaction sums must
+    # report the reaction sum (this previously raised a NameError)
+    nuc = Nuclide("A")
+    nuc.add_reaction("(n,gamma)", "B", 0.0, 0.5)
+    nuc.add_reaction("(n,gamma)", "B_m1", 0.0, 0.25)
+    with pytest.raises(ValueError, match="sum to 0.75"):
+        nuc.validate(strict=True)
+
+
 def test_get_isomeric_production(chain):
     data = chain.get_isomeric_production("Am241", "(n,gamma)")
     assert set(data) == {"Am242", "Am242_m1"}

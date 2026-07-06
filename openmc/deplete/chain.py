@@ -25,7 +25,8 @@ from openmc.exceptions import DataError
 from .nuclide import FissionYieldDistribution, Nuclide
 from ._isomeric import (
     MATCHED, POSITIONAL, GROUND, FOLDED, IsomerMappingReport, assign_levels,
-    compute_scalar_ratios, extract_isomeric_production, group_records)
+    compute_scalar_ratios, extract_isomeric_production, group_records,
+    select_records)
 from .._xml import get_text
 from .._sparse_compat import csc_array, dok_array
 import openmc.data
@@ -358,7 +359,8 @@ class Chain:
             parent nuclides whose primary neutron file has none, e.g. TENDL
             files. Consulted in list order; only their MF=8/9/10 sections
             are read, so they cannot change which reactions exist. Each
-            stored table is tagged with the library it came from.
+            stored table is tagged with the library named in the
+            evaluation header. Requires ``isomeric_branching=True``.
 
             .. versionadded:: 0.15.4
         scalar_branching : {'none', 'thermal'} or tuple, optional
@@ -367,9 +369,12 @@ class Chain:
             historical behavior (ground state gets 1.0, metastables 0.0).
             ``'thermal'`` evaluates the MF=9 yields at 0.0253 eV. A tuple
             of ``(energies, flux)`` collapses the MF=9 yields with a
-            multigroup flux given on group boundaries ``energies`` in [eV].
-            Reactions whose data cannot support the requested mode fall
-            back to ``'none'`` with a note in the mapping report.
+            multigroup flux given on group boundaries ``energies`` in [eV],
+            evaluating each group at its geometric midpoint clamped into
+            the tabulated range. Reactions whose data cannot support the
+            requested mode fall back to ``'none'`` with a note in the
+            mapping report. Modes other than ``'none'`` require
+            ``isomeric_branching=True``.
 
             .. versionadded:: 0.15.4
         elis_rtol : float, optional
@@ -378,9 +383,9 @@ class Chain:
             states in the decay data.
 
             .. versionadded:: 0.15.4
-        isomer_mapping_log : str, optional
+        isomer_mapping_log : str or os.PathLike, optional
             Path to write a report of every level-to-isomer mapping
-            decision.
+            decision. Requires ``isomeric_branching=True``.
 
             .. versionadded:: 0.15.4
 
@@ -401,11 +406,32 @@ class Chain:
         """
         transmutation_reactions = reactions
 
-        if (scalar_branching not in ('none', 'thermal')
-                and not isinstance(scalar_branching, tuple)):
+        if isinstance(scalar_branching, tuple):
+            if len(scalar_branching) != 2:
+                raise ValueError(
+                    "scalar_branching tuple must be (energies, flux)")
+            group_energies = np.asarray(scalar_branching[0], dtype=float)
+            group_flux = np.asarray(scalar_branching[1], dtype=float)
+            if (group_energies.ndim != 1 or group_flux.ndim != 1
+                    or len(group_energies) != len(group_flux) + 1):
+                raise ValueError(
+                    "scalar_branching group boundaries must be a 1-D array "
+                    "one longer than the flux vector")
+            if group_flux.sum() <= 0.0:
+                raise ValueError(
+                    "scalar_branching flux must have a positive sum")
+            scalar_branching = (group_energies, group_flux)
+        elif scalar_branching not in ('none', 'thermal'):
             raise ValueError(
                 "scalar_branching must be 'none', 'thermal', or a tuple "
                 "of (energies, flux)")
+        check_greater_than('elis_rtol', elis_rtol, 0.0)
+        if not isomeric_branching and (
+                branching_files or scalar_branching != 'none'
+                or isomer_mapping_log is not None):
+            raise ValueError(
+                "branching_files, scalar_branching, and isomer_mapping_log "
+                "have no effect unless isomeric_branching=True")
         report = IsomerMappingReport(elis_rtol) if isomeric_branching else None
 
         # Create dictionary mapping target to filename
@@ -549,11 +575,16 @@ class Chain:
                         # over supplementary files
                         records = []
                         if isomeric_branching and daughter is not None:
-                            available = iso_records.get(parent, {})
-                            if not (mts & set(available)):
-                                available = iso_supplement.get(parent, {})
-                            for mt in sorted(mts & set(available)):
-                                records.extend(available[mt])
+                            records, skipped_mts = select_records(
+                                mts, iso_records.get(parent, {}),
+                                iso_supplement.get(parent, {}))
+                            if skipped_mts:
+                                report.add_note(
+                                    parent, name,
+                                    'MF=9/10 data on MT '
+                                    + ', '.join(map(str, skipped_mts))
+                                    + ' not used (only the first MT with '
+                                    'data is read)')
 
                         if records:
                             cls._add_isomeric_reactions(
@@ -1314,6 +1345,17 @@ class Chain:
                  "with a sum outside tolerance of 1 +/- {:5.3e}:\n{}".format(
                      reaction, tolerance, "\n".join(tail)))
 
+        def inferred_ground_target(parent_name, new_ratios):
+            """Ground target auto-added when only metastables are given."""
+            if (not all("_m" in t for t in new_ratios)
+                    or sums[parent_name] == 1.0):
+                return None
+            ground_target = grounds.get(parent_name)
+            if ground_target is None:
+                pz, pa, pm = zam(parent_name)
+                ground_target = gnds_name(pz, pa + 1, 0)
+            return ground_target
+
         # Check up front whether the rewrite would remove targets that carry
         # energy-dependent isomeric production data, before any mutation
 
@@ -1323,11 +1365,8 @@ class Chain:
             new_ratios = branch_ratios[parent_name]
             kept = set(new_ratios)
             # Account for the ground target that will be added automatically
-            if all("_m" in t for t in new_ratios) and sums[parent_name] != 1.0:
-                ground_target = grounds.get(parent_name)
-                if ground_target is None:
-                    pz, pa, pm = zam(parent_name)
-                    ground_target = gnds_name(pz, pa + 1, 0)
+            ground_target = inferred_ground_target(parent_name, new_ratios)
+            if ground_target is not None:
                 kept.add(ground_target)
             for ix in rxn_index:
                 target = parent.reactions[ix].target
@@ -1368,19 +1407,14 @@ class Chain:
                     saved_production[popped.target] = data
 
             # Add new reactions
-            all_meta = True
+            ground_target = inferred_ground_target(parent_name, new_ratios)
             for target, br in new_ratios.items():
-                all_meta = all_meta and ("_m" in target)
                 parent.add_reaction(reaction, target, rxn_Q, br)
 
             # If branching ratios don't add to unity, add reaction to ground
             # with remainder of branching ratio
-            if all_meta and sums[parent_name] != 1.0:
+            if ground_target is not None:
                 ground_br = 1.0 - sums[parent_name]
-                ground_target = grounds.get(parent_name)
-                if ground_target is None:
-                    pz, pa, pm = zam(parent_name)
-                    ground_target = gnds_name(pz, pa + 1, 0)
                 new_ratios[ground_target] = ground_br
                 parent.add_reaction(reaction, ground_target, rxn_Q, ground_br)
 

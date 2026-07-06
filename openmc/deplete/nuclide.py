@@ -96,7 +96,8 @@ class ProductionTable:
     mt : int
         ENDF reaction number of the section that supplied the data.
     source : str
-        Source library identifier, e.g. 'ENDF/B-VIII.1' or 'TENDL-2025'.
+        Source library identifier as recorded in the evaluation header,
+        e.g. 'ENDF/B-8.1' or 'TENDL-2023.1'.
     QM : float
         Mass-difference Q value in [eV], verbatim from the TAB1 header.
     QI : float
@@ -302,7 +303,9 @@ class Nuclide:
         Dictionary mapping ``(reaction type, target)`` tuples to lists of
         :class:`IsomericProduction` instances carrying verbatim
         energy-dependent isomeric production data from the source
-        evaluations.
+        evaluations. Entries whose key does not correspond to a reaction
+        present on this nuclide are flagged by :meth:`validate` and are
+        not written by :meth:`to_xml_element`.
 
         .. versionadded:: 0.15.4
     """
@@ -528,6 +531,7 @@ class Nuclide:
                 elem.append(src_elem)
 
         elem.set('reactions', str(len(self.reactions)))
+        written_production = set()
         for rx, daughter, Q, br in self.reactions:
             rx_elem = ET.SubElement(elem, 'reaction')
             rx_elem.set('type', rx)
@@ -536,8 +540,13 @@ class Nuclide:
                 rx_elem.set('target', daughter)
             if br != 1.0:
                 rx_elem.set('branching_ratio', str(br))
-            for iso in self.isomeric_production.get((rx, daughter), []):
-                rx_elem.append(iso.to_xml_element())
+            # Production data is written once per (type, target) pair even
+            # if the pair appears on several reaction elements
+            key = (rx, daughter)
+            if key not in written_production:
+                written_production.add(key)
+                for iso in self.isomeric_production.get(key, []):
+                    rx_elem.append(iso.to_xml_element())
 
         if self.yield_data:
             fpy_elem = ET.SubElement(elem, 'neutron_fission_yields')

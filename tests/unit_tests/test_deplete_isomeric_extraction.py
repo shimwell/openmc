@@ -10,11 +10,11 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-import openmc.deplete
 from openmc.deplete import Chain
 from openmc.deplete._isomeric import (
-    FOLDED, GROUND, MATCHED, POSITIONAL, assign_levels,
-    compute_scalar_ratios, extract_isomeric_production, group_records)
+    FOLDED, GROUND, MATCHED, POSITIONAL, IsomerMappingReport, assign_levels,
+    compute_scalar_ratios, extract_isomeric_production, group_records,
+    select_records)
 
 AM241_MF8_MT102 = """\
  9.524100+4 2.389860+2          0          0          2          09543 8102    1
@@ -264,9 +264,135 @@ def test_scalar_ratios_none_mode(am241_records):
     assert ratios == {'Am242': 1.0, 'Am242_m1': 0.0}
 
 
+def test_assign_positional_keeps_level_records_together():
+    # One physical level carrying both an MF=9 and an MF=10 record must
+    # land on a single target through the positional fallback, even when
+    # more than one metastable is available
+    records = extract_isomeric_production(StubEvaluation({
+        (8, 102): AM241_MF8_MT102,
+        (9, 102): AM241_MF9_MT102,
+    }), source='test')[102]
+    duplicate = extract_isomeric_production(StubEvaluation({
+        (8, 102): AM241_MF8_MT102,
+        (9, 102): AM241_MF9_MT102,
+    }), source='test')[102][1]
+    duplicate.mf = 10
+    both = [records[1], duplicate]
+
+    isomers = {(95, 242): [(1, 10000.0), (2, 2000000.0)]}
+    assignments = assign_levels(both, 'Am242', isomers, 0.01)
+    assert all(a.status == POSITIONAL for a in assignments)
+    assert {a.target for a in assignments} == {'Am242_m1'}
+
+    # With no metastables both records of the level fold together
+    assignments = assign_levels(both, 'Am242', {}, 0.01)
+    assert all(a.status == FOLDED for a in assignments)
+    assert {a.target for a in assignments} == {'Am242'}
+
+
+def test_select_records():
+    primary = {102: ['p102'], 600: ['p600']}
+    supplement = {102: ['s102']}
+
+    # Primary wins over the supplement, first MT wins within a library,
+    # and additionally populated MTs are reported back
+    records, skipped = select_records({102, 600}, primary, supplement)
+    assert records == ['p102']
+    assert skipped == [600]
+
+    # Supplement is used only when the primary has nothing for the MTs
+    records, skipped = select_records({102}, {}, supplement)
+    assert records == ['s102']
+    assert skipped == []
+
+    records, skipped = select_records({16}, primary, supplement)
+    assert records == []
+    assert skipped == []
+
+
+def test_scalar_ratios_zero_bounded_group_structure(am241_records):
+    # A first group starting at 0 eV has a geometric midpoint of 0, which
+    # must be clamped into the MF=9 grid rather than silently dropping
+    # the whole thermal group from the collapse
+    assignments = assign_levels(
+        am241_records[102], 'Am242', {(95, 242): [(1, 48600.0)]}, 0.5)
+    grouped = group_records(
+        [(a.record, a.target) for a in assignments])
+    mode = ([0.0, 0.625, 2.0e7], [0.9, 0.1])
+    ratios, note = compute_scalar_ratios(grouped, 'Am242', mode)
+    assert note is None
+    assert ratios['Am242_m1'] == pytest.approx(0.104007, rel=1e-3)
+    assert ratios['Am242'] == pytest.approx(1.0 - ratios['Am242_m1'])
+
+
+def test_report_write(tmp_path, am241_records):
+    report = IsomerMappingReport(elis_rtol=0.5)
+    assignments = assign_levels(
+        am241_records[102], 'Am242', {(95, 242): [(1, 48600.0)]}, 0.5)
+    for assignment in assignments:
+        report.add('Am241', '(n,gamma)', assignment,
+                   assignment.target, assignment.status)
+    report.add_note('Am241', '(n,gamma)', 'example note')
+    path = tmp_path / 'mapping.log'
+    report.write(path)
+    text = path.read_text()
+    assert 'Am242_m1' in text
+    assert 'matched: 1' in text
+    assert 'ground: 1' in text
+    assert 'example note' in text
+
+
+def test_fold_when_target_missing_from_decay_data(am241_records):
+    # A matched metastable whose nuclide is absent from the decay data is
+    # folded onto the ground-state target via replace_missing
+    class FakeHalfLife:
+        nominal_value = 1000.0
+
+    class FakeDecay:
+        def __init__(self, stable):
+            self.nuclide = {'stable': stable}
+            self.half_life = FakeHalfLife()
+
+    from openmc.deplete import Nuclide
+    decay_data = {'Am241': FakeDecay(False), 'Am242': FakeDecay(False)}
+    nuclide = Nuclide('Am241')
+    report = IsomerMappingReport(elis_rtol=0.5)
+    Chain._add_isomeric_reactions(
+        nuclide, '(n,gamma)', 'Am242', 5537755.0, am241_records[102],
+        decay_data, {(95, 242): [(1, 48600.0)]}, 0.5, 'none', report)
+
+    targets = [rx.target for rx in nuclide.reactions]
+    assert targets == ['Am242']
+    productions = nuclide.isomeric_production[('(n,gamma)', 'Am242')]
+    assert sorted(p.level for p in productions) == [0, 2]
+    statuses = {row['status'] for row in report.rows}
+    assert FOLDED in statuses
+
+
 def test_from_endf_invalid_scalar_mode():
     with pytest.raises(ValueError, match='scalar_branching'):
         Chain.from_endf([], [], [], scalar_branching='banana')
+
+
+def test_from_endf_scalar_tuple_validation():
+    with pytest.raises(ValueError, match='one longer'):
+        Chain.from_endf([], [], [], isomeric_branching=True,
+                        scalar_branching=([1.0, 2.0], [1.0, 2.0]))
+    with pytest.raises(ValueError, match='positive sum'):
+        Chain.from_endf([], [], [], isomeric_branching=True,
+                        scalar_branching=([1.0, 2.0], [0.0]))
+    with pytest.raises(ValueError, match='energies, flux'):
+        Chain.from_endf([], [], [], isomeric_branching=True,
+                        scalar_branching=(1.0, 2.0, 3.0))
+
+
+def test_from_endf_kwargs_require_flag():
+    with pytest.raises(ValueError, match='isomeric_branching=True'):
+        Chain.from_endf([], [], [], branching_files=['some_file'])
+    with pytest.raises(ValueError, match='isomeric_branching=True'):
+        Chain.from_endf([], [], [], isomer_mapping_log='log.txt')
+    with pytest.raises(ValueError, match='isomeric_branching=True'):
+        Chain.from_endf([], [], [], scalar_branching='thermal')
 
 
 def _find_endf(directory, patterns):
@@ -303,3 +429,28 @@ def test_from_endf_isomeric():
     assert production[0].tables[0].mf == 9
     assert production[0].tables[0].data(0.0253) == pytest.approx(0.1)
     assert chain.validate(strict=True)
+
+
+@pytest.mark.skipif(
+    'OPENMC_ENDF_DATA' not in os.environ,
+    reason='OPENMC_ENDF_DATA environment variable must be set')
+def test_from_endf_isomeric_no_data_identical(tmp_path):
+    # With isomeric_branching=True but no MF=8/9/10 data for the
+    # requested reaction, the chain must be identical to the default one
+    endf_data = Path(os.environ['OPENMC_ENDF_DATA'])
+    neutron = _find_endf(endf_data / 'neutrons', ['*Am*241*'])
+    decay_files = sorted((endf_data / 'decay').glob('*.endf'))
+    fpy = _find_endf(endf_data / 'nfy', ['*U*235*'])
+
+    # Am241 carries MF=9 only for (n,gamma); (n,2n) has no isomeric data
+    common = dict(decay_files=decay_files, fpy_files=[fpy],
+                  neutron_files=[neutron], reactions=['(n,2n)'],
+                  progress=False)
+    chain_default = Chain.from_endf(**common)
+    chain_isomeric = Chain.from_endf(**common, isomeric_branching=True)
+
+    default_xml = tmp_path / 'default.xml'
+    isomeric_xml = tmp_path / 'isomeric.xml'
+    chain_default.export_to_xml(default_xml)
+    chain_isomeric.export_to_xml(isomeric_xml)
+    assert default_xml.read_text() == isomeric_xml.read_text()

@@ -148,7 +148,8 @@ attributes and sub-elements:
     ENDF reaction number of the section that supplied the data
 
   :source:
-    Source library identifier, e.g. 'ENDF/B-VIII.1' or 'TENDL-2025'
+    Source library identifier as recorded in the evaluation header,
+    e.g. 'ENDF/B-8.1' or 'TENDL-2023.1'
 
   :QM:
     Mass-difference Q value in [eV], verbatim from the TAB1 header

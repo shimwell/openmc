@@ -16,7 +16,7 @@ from io import StringIO
 
 import numpy as np
 
-from openmc.data import gnds_name, zam
+from openmc.data import Tabulated1D, gnds_name, zam
 import openmc.data.endf as endf6
 
 from .nuclide import IsomericProduction, ProductionTable
@@ -40,13 +40,13 @@ class LevelRecord:
 
     mf: int
     mt: int
-    zap: int              # ZA of the product; may be 0 when not given
-    lfs: int              # ENDF level number of the final state
-    elfs: float           # MF=8 excitation energy [eV]; None when absent
-    qm: float             # [eV]
-    qi: float             # [eV]
-    data: object          # openmc.data.Tabulated1D
-    source: str           # library label, e.g. 'ENDF/B-8.1'
+    zap: int                  # ZA of the product; may be 0 when not given
+    lfs: int                  # ENDF level number of the final state
+    elfs: float | None        # MF=8 excitation energy [eV]; None when absent
+    qm: float                 # [eV]
+    qi: float                 # [eV]
+    data: Tabulated1D
+    source: str               # library label, e.g. 'ENDF/B-8.1'
 
     @property
     def excitation_energy(self):
@@ -63,8 +63,8 @@ class LevelAssignment:
     record: LevelRecord
     target: str
     status: str
-    liso: int = None
-    decay_elis: float = None
+    liso: int | None = None
+    decay_elis: float | None = None
 
 
 def library_label(evaluation):
@@ -207,22 +207,26 @@ def assign_levels(records, ground_daughter, isomer_energies, elis_rtol):
         else:
             unmatched.append((i, record, z, a, target_elis))
 
-    # Positional fallback per product nuclide
-    by_za = defaultdict(list)
-    for entry in unmatched:
-        by_za[entry[2], entry[3]].append(entry)
-    for (z, a), entries in by_za.items():
+    # Positional fallback per product nuclide. Pairing is done per LEVEL,
+    # not per record, since one level may carry both an MF=9 and an MF=10
+    # record and both must land on the same target.
+    by_za_level = defaultdict(lambda: defaultdict(list))
+    for i, record, z, a, target_elis in unmatched:
+        by_za_level[z, a][record.lfs].append((i, record, target_elis))
+    for (z, a), levels in by_za_level.items():
         available = [
             (liso, elis)
             for liso, elis in sorted(isomer_energies.get((z, a), []))
             if liso not in matched_liso[z, a]]
-        entries.sort(key=lambda entry: entry[4])
-        for (i, record, *_), (liso, elis) in zip(entries, available):
-            assignments[i] = LevelAssignment(
-                record, gnds_name(z, a, liso), POSITIONAL, liso, elis)
-        for i, record, *_ in entries[len(available):]:
-            assignments[i] = LevelAssignment(
-                record, gnds_name(z, a, 0), FOLDED)
+        ordered = sorted(levels.values(), key=lambda entries: entries[0][2])
+        for entries, (liso, elis) in zip(ordered, available):
+            for i, record, _elis in entries:
+                assignments[i] = LevelAssignment(
+                    record, gnds_name(z, a, liso), POSITIONAL, liso, elis)
+        for entries in ordered[len(available):]:
+            for i, record, _elis in entries:
+                assignments[i] = LevelAssignment(
+                    record, gnds_name(z, a, 0), FOLDED)
 
     return assignments
 
@@ -263,8 +267,47 @@ def group_records(records_and_targets):
     return dict(result)
 
 
+def select_records(mts, primary, supplement):
+    """Choose the level records for one transmutation reaction.
+
+    The primary library wins over the supplement. Within a library, only
+    the first MT with data (in ascending order, so a summary section is
+    preferred over any partials) is used so that a summary section and
+    its partials cannot be double counted; any further MTs carrying data
+    are returned so the caller can flag them.
+
+    Parameters
+    ----------
+    mts : set of int
+        Candidate ENDF MT numbers of the reaction
+    primary : dict
+        Mapping ``{mt: [LevelRecord]}`` from the primary evaluation
+    supplement : dict
+        Mapping ``{mt: [LevelRecord]}`` from supplementary evaluations
+
+    Returns
+    -------
+    records : list of LevelRecord
+        Records of the first MT with data, or an empty list
+    skipped_mts : list of int
+        Additional MTs that also carry data but were not used
+
+    """
+    available = primary if (mts & set(primary)) else supplement
+    with_data = sorted(mts & set(available))
+    if not with_data:
+        return [], []
+    return available[with_data[0]], with_data[1:]
+
+
 def _collapse(table, mode):
-    """Collapse an MF=9 yield table to a scalar for the requested mode."""
+    """Collapse an MF=9 yield table to a scalar for the requested mode.
+
+    Returns None when the thermal mode is requested but the table's grid
+    does not cover 0.0253 eV. In multigroup mode the group midpoints are
+    clamped into the tabulated range, so every group contributes using
+    the table's edge values.
+    """
     x = table.data.x
     if mode == 'thermal':
         if x[0] > THERMAL_ENERGY or x[-1] < THERMAL_ENERGY:
@@ -274,14 +317,14 @@ def _collapse(table, mode):
     energies, flux = mode
     energies = np.asarray(energies, dtype=float)
     flux = np.asarray(flux, dtype=float)
-    total = flux.sum()
-    if total <= 0.0:
-        return None
+    # Group representative energies: geometric midpoints of the group
+    # boundaries, clamped into the tabulated range so that groups
+    # straddling or outside the grid (e.g. a first group starting at
+    # 0 eV) use the table's edge values instead of contributing zero
     midpoints = np.sqrt(energies[:-1] * energies[1:])
-    inside = (midpoints >= x[0]) & (midpoints <= x[-1])
-    values = np.zeros_like(midpoints)
-    values[inside] = table.data(midpoints[inside])
-    return float(values @ flux / total)
+    midpoints = np.clip(midpoints, x[0], x[-1])
+    values = table.data(midpoints)
+    return float(values @ flux / flux.sum())
 
 
 def compute_scalar_ratios(productions_by_target, ground_target, mode):
@@ -290,14 +333,14 @@ def compute_scalar_ratios(productions_by_target, ground_target, mode):
     The default mode ``'none'`` reproduces the historical behavior: the
     full reaction rate goes to the ground-state target. The ``'thermal'``
     mode evaluates the MF=9 yields at 0.0253 eV, and an ``(energies,
-    flux)`` tuple collapses them with a multigroup flux (evaluated at the
-    geometric midpoints of the group boundaries). The ground-state share
-    is always taken as one minus the metastable sum, which also covers
-    evaluations where the ground yield is implicit. When the requested
-    mode cannot be supported by the stored data (an MF=10-only state, a
-    grid not covering the spectrum, or metastable yields summing above
-    one), the ratios fall back to the ``'none'`` values and a note is
-    returned.
+    flux)`` tuple collapses them with a multigroup flux, evaluated at the
+    geometric midpoints of the group boundaries clamped into the
+    tabulated range. The ground-state share is always taken as one minus
+    the metastable sum, which also covers evaluations where the ground
+    yield is implicit. When the requested mode cannot be supported by
+    the stored data (an MF=10-only state, a thermal request outside the
+    grid, or metastable yields summing above one), the ratios fall back
+    to the ``'none'`` values and a note is returned.
 
     Parameters
     ----------
@@ -337,8 +380,8 @@ def compute_scalar_ratios(productions_by_target, ground_target, mode):
             collapsed = _collapse(table, mode)
             if collapsed is None:
                 return default, (
-                    f'MF=9 grid for {target} does not cover the requested '
-                    'spectrum; scalar branching ratios left at the default')
+                    f'MF=9 grid for {target} does not cover 0.0253 eV; '
+                    'scalar branching ratios left at the default')
             value += collapsed
         ratios[target] = value
         meta_sum += value
