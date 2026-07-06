@@ -6,6 +6,7 @@ Contains the per-nuclide components of a depletion chain.
 import bisect
 from collections.abc import Mapping
 from collections import namedtuple, defaultdict
+from dataclasses import dataclass, field
 from warnings import warn
 from numbers import Real
 
@@ -13,12 +14,13 @@ import lxml.etree as ET
 import numpy as np
 
 from openmc.checkvalue import check_type
+from openmc.data import Tabulated1D
 from openmc.stats import Univariate
 from .._xml import get_elem_list, get_text
 
 __all__ = [
     "DecayTuple", "ReactionTuple", "Nuclide", "FissionYield",
-    "FissionYieldDistribution"]
+    "FissionYieldDistribution", "ProductionTable", "IsomericProduction"]
 
 
 DecayTuple = namedtuple('DecayTuple', 'type target branching_ratio')
@@ -74,6 +76,194 @@ except AttributeError:
     pass
 
 
+@dataclass
+class ProductionTable:
+    """Energy-dependent isomeric production data from a single ENDF section.
+
+    Stores one MF=9 yield function or MF=10 partial cross section for the
+    production of a single final state, exactly as given in the source
+    evaluation (original energy grid, values, and interpolation regions).
+    The stored data is never collapsed, renormalized, or re-interpolated.
+
+    .. versionadded:: 0.15.4
+
+    Parameters
+    ----------
+    mf : int
+        ENDF file number the data comes from: 9 for energy-dependent yields
+        (dimensionless multiplicities of the reaction cross section) or 10
+        for partial production cross sections in [b].
+    mt : int
+        ENDF reaction number of the section that supplied the data.
+    source : str
+        Source library identifier, e.g. 'ENDF/B-VIII.1' or 'TENDL-2025'.
+    QM : float
+        Mass-difference Q value in [eV], verbatim from the TAB1 header.
+    QI : float
+        Reaction Q value for this particular state in [eV], verbatim from
+        the TAB1 header.
+    data : openmc.data.Tabulated1D
+        Tabulated function of incident neutron energy in [eV].
+
+    """
+
+    mf: int
+    mt: int
+    source: str
+    QM: float
+    QI: float
+    data: Tabulated1D
+
+    def __repr__(self):
+        return (f"<ProductionTable mf={self.mf} mt={self.mt} "
+                f"source={self.source} ({len(self.data.x)} points)>")
+
+    def __eq__(self, other):
+        if not isinstance(other, ProductionTable):
+            return NotImplemented
+        return (
+            self.mf == other.mf
+            and self.mt == other.mt
+            and self.source == other.source
+            and self.QM == other.QM
+            and self.QI == other.QI
+            and np.array_equal(self.data.x, other.data.x)
+            and np.array_equal(self.data.y, other.data.y)
+            and np.array_equal(self.data.breakpoints, other.data.breakpoints)
+            and np.array_equal(self.data.interpolation,
+                               other.data.interpolation)
+        )
+
+    def to_xml_element(self):
+        """Write production table to an XML element.
+
+        Returns
+        -------
+        elem : lxml.etree._Element
+            XML element containing the table data
+
+        """
+        elem = ET.Element('table')
+        elem.set('mf', str(self.mf))
+        elem.set('mt', str(self.mt))
+        elem.set('source', self.source)
+        elem.set('QM', str(self.QM))
+        elem.set('QI', str(self.QI))
+        elem.set('breakpoints',
+                 ' '.join(str(b) for b in self.data.breakpoints))
+        elem.set('interpolation',
+                 ' '.join(str(i) for i in self.data.interpolation))
+        energy_elem = ET.SubElement(elem, 'energies')
+        energy_elem.text = ' '.join(str(x) for x in self.data.x)
+        values_elem = ET.SubElement(elem, 'values')
+        values_elem.text = ' '.join(str(y) for y in self.data.y)
+        return elem
+
+    @classmethod
+    def from_xml_element(cls, element):
+        """Read production table from an XML element.
+
+        Parameters
+        ----------
+        element : lxml.etree._Element
+            XML element to read table data from
+
+        Returns
+        -------
+        ProductionTable
+
+        """
+        x = get_elem_list(element, 'energies', float)
+        y = get_elem_list(element, 'values', float)
+        breakpoints = [int(b) for b in get_text(element, 'breakpoints').split()]
+        interpolation = [
+            int(i) for i in get_text(element, 'interpolation').split()]
+        return cls(
+            mf=int(get_text(element, 'mf')),
+            mt=int(get_text(element, 'mt')),
+            source=get_text(element, 'source'),
+            QM=float(get_text(element, 'QM')),
+            QI=float(get_text(element, 'QI')),
+            data=Tabulated1D(x, y, breakpoints, interpolation),
+        )
+
+
+@dataclass
+class IsomericProduction:
+    """Production data for one evaluation final state routed to one target.
+
+    A single transmutation reaction target may carry more than one instance,
+    e.g. when a level that could not be matched to a known metastable state
+    is folded onto the ground-state target. Consumers should sum the tables
+    of all instances attached to a target; the stored data itself is always
+    verbatim evaluation data.
+
+    .. versionadded:: 0.15.4
+
+    Parameters
+    ----------
+    level : int
+        ENDF LFS level number of the final state, verbatim from the source
+        evaluation. Note that this is a level index, not a metastable-state
+        index; the mapping to a metastable target is made by matching
+        excitation energies against decay data.
+    excitation_energy : float
+        Excitation energy of the final state in [eV], taken from the MF=8
+        ELFS value when present and otherwise from QM minus QI. Zero for
+        the ground state.
+    tables : list of ProductionTable
+        Production data for this level. May hold both an MF=9 and an MF=10
+        table when the evaluation provides both.
+
+    """
+
+    level: int
+    excitation_energy: float
+    tables: list = field(default_factory=list)
+
+    def __repr__(self):
+        return (f"<IsomericProduction level={self.level} "
+                f"excitation_energy={self.excitation_energy} "
+                f"({len(self.tables)} tables)>")
+
+    def to_xml_element(self):
+        """Write isomeric production data to an XML element.
+
+        Returns
+        -------
+        elem : lxml.etree._Element
+            XML element containing the production data
+
+        """
+        elem = ET.Element('isomeric_production')
+        elem.set('level', str(self.level))
+        elem.set('excitation_energy', str(self.excitation_energy))
+        for table in self.tables:
+            elem.append(table.to_xml_element())
+        return elem
+
+    @classmethod
+    def from_xml_element(cls, element):
+        """Read isomeric production data from an XML element.
+
+        Parameters
+        ----------
+        element : lxml.etree._Element
+            XML element to read production data from
+
+        Returns
+        -------
+        IsomericProduction
+
+        """
+        return cls(
+            level=int(get_text(element, 'level')),
+            excitation_energy=float(get_text(element, 'excitation_energy')),
+            tables=[ProductionTable.from_xml_element(e)
+                    for e in element.findall('table')],
+        )
+
+
 class Nuclide:
     """Decay modes, reactions, and fission yields for a single nuclide.
 
@@ -108,6 +298,13 @@ class Nuclide:
         treated as a nested dictionary ``{energy: {product: yield}}``
     yield_energies : tuple of float or None
         Energies at which fission product yields exist
+    isomeric_production : dict
+        Dictionary mapping ``(reaction type, target)`` tuples to lists of
+        :class:`IsomericProduction` instances carrying verbatim
+        energy-dependent isomeric production data from the source
+        evaluations.
+
+        .. versionadded:: 0.15.4
     """
 
     def __init__(self, name=None):
@@ -121,6 +318,10 @@ class Nuclide:
 
         # Reaction paths
         self.reactions = []
+
+        # Energy-dependent isomeric production data, keyed by
+        # (reaction type, target)
+        self.isomeric_production = {}
 
         # Decay sources
         self.sources = {}
@@ -270,6 +471,11 @@ class Nuclide:
             nuc.reactions.append(ReactionTuple(
                 r_type, target, Q, branching_ratio))
 
+            # Check for energy-dependent isomeric production data
+            for iso_elem in reaction_elem.findall('isomeric_production'):
+                nuc.isomeric_production.setdefault((r_type, target), []).append(
+                    IsomericProduction.from_xml_element(iso_elem))
+
         fpy_elem = element.find('neutron_fission_yields')
         if fpy_elem is not None:
             # Check for use of FPY from other nuclide
@@ -330,6 +536,8 @@ class Nuclide:
                 rx_elem.set('target', daughter)
             if br != 1.0:
                 rx_elem.set('branching_ratio', str(br))
+            for iso in self.isomeric_production.get((rx, daughter), []):
+                rx_elem.append(iso.to_xml_element())
 
         if self.yield_data:
             fpy_elem = ET.SubElement(elem, 'neutron_fission_yields')
@@ -353,6 +561,9 @@ class Nuclide:
                does the sum of branching ratios equal about one?
             2) for fission reactions, does the sum of fission yield
                fractions equal about two?
+            3) does every isomeric production entry correspond to a
+               reaction present on this nuclide, with yields and cross
+               sections in physical ranges?
 
         Parameters
         ----------
@@ -414,7 +625,7 @@ class Nuclide:
                 if stat:
                     continue
                 msg = msg_func(
-                    name=self.name, actual=sum_br, expected=1.0, tol=tolerance,
+                    name=self.name, actual=sum_rxn, expected=1.0, tol=tolerance,
                     prop=f"{rxn_type} reaction branch ratios")
                 if strict:
                     raise ValueError(msg)
@@ -422,6 +633,14 @@ class Nuclide:
                     return False
                 warn(msg)
                 valid = False
+
+        for msg in self._check_isomeric_production(tolerance):
+            if strict:
+                raise ValueError(msg)
+            elif quiet:
+                return False
+            warn(msg)
+            valid = False
 
         if self.yield_data:
             for energy, fission_yield in self.yield_data.items():
@@ -441,6 +660,72 @@ class Nuclide:
                 valid = False
 
         return valid
+
+    def _check_isomeric_production(self, tolerance):
+        """Generate messages describing inconsistent isomeric production data
+
+        Parameters
+        ----------
+        tolerance : float
+            Absolute tolerance for comparisons
+
+        Yields
+        ------
+        str
+            Description of each inconsistency found
+
+        """
+        if not self.isomeric_production:
+            return
+
+        rx_pairs = {(rx.type, rx.target) for rx in self.reactions}
+        for (rxn_type, target), productions in self.isomeric_production.items():
+            if (rxn_type, target) not in rx_pairs:
+                yield (f"Nuclide {self.name} has isomeric production data "
+                       f"for {rxn_type} to {target}, which is not a reaction "
+                       "present on this nuclide")
+            for prod in productions:
+                if prod.level < 0 or prod.excitation_energy < 0.0:
+                    yield (f"Nuclide {self.name} has an isomeric production "
+                           f"entry for {rxn_type} to {target} with a negative "
+                           "level or excitation energy")
+                for table in prod.tables:
+                    y = table.data.y
+                    if table.mf == 9 and (
+                            y.min() < 0.0 or y.max() > 1.0 + tolerance):
+                        yield (f"Nuclide {self.name} has MF=9 isomeric "
+                               f"yields for {rxn_type} to {target} outside "
+                               "of [0, 1]")
+                    elif table.mf == 10 and y.min() < 0.0:
+                        yield (f"Nuclide {self.name} has negative MF=10 "
+                               f"isomeric production cross sections for "
+                               f"{rxn_type} to {target}")
+
+        # Pointwise sum of MF=9 yields across all states of a reaction type.
+        # Only checked when every state has MF=9 data and a ground-state
+        # entry exists; otherwise the ground share is implicit and no sum
+        # rule holds. Evaluated on the intersection of the tabulated ranges
+        # so that differing thresholds do not produce clamp artifacts.
+        by_type = defaultdict(list)
+        for (rxn_type, _), productions in self.isomeric_production.items():
+            by_type[rxn_type].extend(productions)
+        for rxn_type, productions in by_type.items():
+            tables = [next((t for t in prod.tables if t.mf == 9), None)
+                      for prod in productions]
+            if None in tables or all(p.level != 0 for p in productions):
+                continue
+            low = max(t.data.x[0] for t in tables)
+            high = min(t.data.x[-1] for t in tables)
+            union = np.unique(np.concatenate([t.data.x for t in tables]))
+            union = union[(union >= low) & (union <= high)]
+            if union.size == 0:
+                continue
+            total = sum(t.data(union) for t in tables)
+            if total.max() > 1.0 + tolerance:
+                yield ("Nuclide {} has MF=9 isomeric yields for {} that "
+                       "sum to {:7.4e} at some energies instead of at most "
+                       "1 +/- {:7.4e}").format(
+                           self.name, rxn_type, total.max(), tolerance)
 
 
 class FissionYieldDistribution(Mapping):
