@@ -56,6 +56,10 @@ REACTIONS = {
     '(n,3np)': ReactionInfo({42}, ('H1',)),
     '(n,n2p)': ReactionInfo({44}, ('H1', 'H1')),
     '(n,npa)': ReactionInfo({45}, ('H1', 'He4')),
+    # Inelastic scattering only changes the isomeric state of the target,
+    # so (n,n') entries are added by Chain.from_endf only when isomeric
+    # production data exists for the parent
+    "(n,n')": ReactionInfo({4}, ()),
     '(n,gamma)': ReactionInfo({102}, ()),
     '(n,p)': ReactionInfo(set(chain([103], range(600, 650))), ('H1',)),
     '(n,d)': ReactionInfo(set(chain([104], range(650, 700))), ('H2',)),
@@ -585,6 +589,11 @@ class Chain:
                                     + ', '.join(map(str, skipped_mts))
                                     + ' not used (only the first MT with '
                                     'data is read)')
+
+                        # Self-loop inelastic entries are only meaningful
+                        # when they split the parent into isomeric states
+                        if name == "(n,n')" and not records:
+                            continue
 
                         if records:
                             cls._add_isomeric_reactions(

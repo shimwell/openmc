@@ -357,6 +357,7 @@ void initialize_maps()
 
   // Alternate names
   REACTION_TYPE_MAP["elastic"] = ELASTIC;
+  REACTION_TYPE_MAP["(n,n')"] = N_LEVEL;
   REACTION_TYPE_MAP["n2n"] = N_2N;
   REACTION_TYPE_MAP["n3n"] = N_3N;
   REACTION_TYPE_MAP["n4n"] = N_4N;
