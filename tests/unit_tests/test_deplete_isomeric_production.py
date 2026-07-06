@@ -256,3 +256,69 @@ def test_no_isomeric_data():
     assert nuc.validate(strict=True)
     elem = nuc.to_xml_element()
     assert elem.find("reaction").find("isomeric_production") is None
+
+
+def test_get_isomeric_production(chain):
+    data = chain.get_isomeric_production("Am241", "(n,gamma)")
+    assert set(data) == {"Am242", "Am242_m1"}
+    assert data["Am242_m1"][0].level == 2
+    assert chain.get_isomeric_production("Am242", "(n,gamma)") == {}
+
+
+def test_reduce_carries_data(chain):
+    reduced = chain.reduce(["Am241"])
+    original = chain["Am241"].isomeric_production
+    carried = reduced["Am241"].isomeric_production
+    assert carried == original
+    # Deep copy, not shared references
+    key = ("(n,gamma)", "Am242_m1")
+    assert carried[key][0] is not original[key][0]
+
+
+def test_reduce_drops_data_with_warning(chain):
+    with pytest.warns(UserWarning, match="dropped"):
+        reduced = chain.reduce(["Nb93"], level=0)
+    nb93 = reduced["Nb93"]
+    assert nb93.isomeric_production == {}
+    # Total destruction rate entries are still present, with no target
+    assert all(rx.target is None for rx in nb93.reactions)
+
+
+def test_set_branch_ratios_preserves_data(chain):
+    before = dict(chain["Am241"].isomeric_production)
+    chain.set_branch_ratios({"Am241": {"Am242": 0.89, "Am242_m1": 0.11}})
+    am241 = chain["Am241"]
+    ratios = {rx.target: rx.branching_ratio for rx in am241.reactions
+              if rx.type == "(n,gamma)"}
+    assert ratios == {"Am242": 0.89, "Am242_m1": 0.11}
+    assert am241.isomeric_production == before
+
+
+def test_set_branch_ratios_infers_ground_and_preserves(chain):
+    before = dict(chain["Am241"].isomeric_production)
+    chain.set_branch_ratios({"Am241": {"Am242_m1": 0.1}})
+    am241 = chain["Am241"]
+    ratios = {rx.target: rx.branching_ratio for rx in am241.reactions
+              if rx.type == "(n,gamma)"}
+    assert ratios == {"Am242": pytest.approx(0.9), "Am242_m1": 0.1}
+    assert am241.isomeric_production == before
+
+
+def test_set_branch_ratios_discard_protection(chain):
+    # Removing a target that carries data raises by default
+    with pytest.raises(ValueError, match="Am241 -> Am242_m1"):
+        chain.set_branch_ratios({"Am241": {"Am242": 1.0}})
+
+    # Nothing was mutated by the failed call
+    assert ("(n,gamma)", "Am242_m1") in chain["Am241"].isomeric_production
+
+    # Opting out drops the data with a warning
+    with pytest.warns(UserWarning, match="Am241 -> Am242_m1"):
+        chain.set_branch_ratios({"Am241": {"Am242": 1.0}},
+                                preserve_isomeric_data=False)
+    am241 = chain["Am241"]
+    assert ("(n,gamma)", "Am242_m1") not in am241.isomeric_production
+    targets = [rx.target for rx in am241.reactions if rx.type == "(n,gamma)"]
+    assert targets == ["Am242"]
+    # The surviving target keeps its data
+    assert ("(n,gamma)", "Am242") in am241.isomeric_production

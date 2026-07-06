@@ -4,6 +4,7 @@ This module contains information about a depletion chain.  A depletion chain is
 loaded from an .xml file and all the nuclides are linked together.
 """
 
+from copy import deepcopy
 from io import StringIO
 from itertools import chain
 import math
@@ -963,8 +964,37 @@ class Chain:
                 capt[nuclide.name] = nuc_capt
         return capt
 
+    def get_isomeric_production(self, nuclide, reaction):
+        """Return energy-dependent isomeric production data for one reaction
+
+        .. versionadded:: 0.15.4
+
+        Parameters
+        ----------
+        nuclide : str
+            Name of the parent nuclide, e.g. ``"Am241"``
+        reaction : str
+            Reaction name, e.g. ``"(n,gamma)"``
+
+        Returns
+        -------
+        dict
+            Mapping of target nuclide names to lists of
+            :class:`~openmc.deplete.IsomericProduction` instances. Empty if
+            the nuclide carries no data for this reaction.
+
+        """
+        parent = self[nuclide]
+        return {
+            target: productions
+            for (rx_type, target), productions
+            in parent.isomeric_production.items()
+            if rx_type == reaction
+        }
+
     def set_branch_ratios(self, branch_ratios, reaction="(n,gamma)",
-                          strict=True, tolerance=1e-5):
+                          strict=True, tolerance=1e-5,
+                          preserve_isomeric_data=True):
         """Set the branching ratios for a given reactions
 
         Parameters
@@ -988,6 +1018,15 @@ class Chain:
 
                 1 - tol < sum_br < 1 + tol
 
+        preserve_isomeric_data : bool, optional
+            Energy-dependent isomeric production data attached to targets
+            that remain present is always kept. If a rewrite would remove a
+            target that carries such data, an error is raised when this
+            evaluates to ``True`` [default]; otherwise a warning is issued
+            and the data is dropped.
+
+            .. versionadded:: 0.15.4
+
         Raises
         ------
         IndexError
@@ -1001,7 +1040,10 @@ class Chain:
             ``branch_ratios`` does not have the requested reaction
         ValueError
             If ``strict`` evalutes to ``False`` and the sum of one parents
-            branch ratios is outside  1 +/- ``tolerance``
+            branch ratios is outside  1 +/- ``tolerance``, or if
+            ``preserve_isomeric_data`` evaluates to ``True`` and a target
+            carrying energy-dependent isomeric production data would be
+            removed
 
         See Also
         --------
@@ -1106,6 +1148,38 @@ class Chain:
                  "with a sum outside tolerance of 1 +/- {:5.3e}:\n{}".format(
                      reaction, tolerance, "\n".join(tail)))
 
+        # Check up front whether the rewrite would remove targets that carry
+        # energy-dependent isomeric production data, before any mutation
+
+        discarded = []
+        for parent_name, rxn_index in rxn_ix_map.items():
+            parent = self[parent_name]
+            new_ratios = branch_ratios[parent_name]
+            kept = set(new_ratios)
+            # Account for the ground target that will be added automatically
+            if all("_m" in t for t in new_ratios) and sums[parent_name] != 1.0:
+                ground_target = grounds.get(parent_name)
+                if ground_target is None:
+                    pz, pa, pm = zam(parent_name)
+                    ground_target = gnds_name(pz, pa + 1, 0)
+                kept.add(ground_target)
+            for ix in rxn_index:
+                target = parent.reactions[ix].target
+                if (target not in kept
+                        and (reaction, target) in parent.isomeric_production):
+                    discarded.append((parent_name, target))
+
+        if discarded:
+            tail = ", ".join(f"{p} -> {t}" for p, t in discarded)
+            msg = (f"Setting {reaction} branch ratios would remove targets "
+                   "that carry energy-dependent isomeric production data: "
+                   f"{tail}")
+            if preserve_isomeric_data:
+                raise ValueError(
+                    msg + ". Pass preserve_isomeric_data=False to drop the "
+                    "data.")
+            warn(msg)
+
         # Insert new ReactionTuples with updated branch ratios
 
         for parent_name, rxn_index in rxn_ix_map.items():
@@ -1117,9 +1191,15 @@ class Chain:
             # Assume Q value is independent of target state
             rxn_Q = parent.reactions[rxn_index[0]].Q
 
-            # Remove existing reactions
+            # Remove existing reactions, saving attached isomeric
+            # production data
+            saved_production = {}
             for ix in reversed(rxn_index):
-                parent.reactions.pop(ix)
+                popped = parent.reactions.pop(ix)
+                data = parent.isomeric_production.pop(
+                    (reaction, popped.target), None)
+                if data is not None:
+                    saved_production[popped.target] = data
 
             # Add new reactions
             all_meta = True
@@ -1137,6 +1217,11 @@ class Chain:
                     ground_target = gnds_name(pz, pa + 1, 0)
                 new_ratios[ground_target] = ground_br
                 parent.add_reaction(reaction, ground_target, rxn_Q, ground_br)
+
+            # Reattach isomeric production data for surviving targets
+            for target, data in saved_production.items():
+                if target in new_ratios:
+                    parent.isomeric_production[(reaction, target)] = data
 
     @property
     def fission_yields(self):
@@ -1262,6 +1347,7 @@ class Chain:
         name_sort = sorted(all_isotopes)
 
         new_chain = type(self)()
+        dropped_production = []
 
         for idx, iso in enumerate(sorted(all_isotopes, key=openmc.data.zam)):
             previous = self[iso]
@@ -1281,6 +1367,10 @@ class Chain:
             for rx in previous.reactions:
                 if rx.target in all_isotopes:
                     new_nuclide.add_reaction(*rx)
+                    key = (rx.type, rx.target)
+                    if key in previous.isomeric_production:
+                        new_nuclide.isomeric_production[key] = deepcopy(
+                            previous.isomeric_production[key])
                 elif rx.type == "fission":
                     new_yields = new_nuclide.yield_data = (
                         previous.yield_data.restrict_products(name_sort))
@@ -1289,8 +1379,17 @@ class Chain:
                 # Maintain total destruction rates but set no target
                 else:
                     new_nuclide.add_reaction(rx.type, None, rx.Q, rx.branching_ratio)
+                    if (rx.type, rx.target) in previous.isomeric_production:
+                        dropped_production.append(
+                            (previous.name, rx.type, rx.target))
 
             new_chain.add_nuclide(new_nuclide)
+
+        if dropped_production:
+            tail = ", ".join(f"{parent} {rx_type} -> {target}"
+                             for parent, rx_type, target in dropped_production)
+            warn("Energy-dependent isomeric production data was dropped "
+                 "because the target is not in the reduced chain: " + tail)
 
         # Doesn't appear that the ordering matters for the reactions,
         # just the contents
