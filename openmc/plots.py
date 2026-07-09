@@ -262,6 +262,16 @@ def add_plot_params(func):
     return func
 
 
+def _check_pixels(pixels):
+    """Check that pixels is a positive int or a pair of positive ints."""
+    if isinstance(pixels, int):
+        cv.check_greater_than('pixels', pixels, 0)
+    else:
+        cv.check_length('pixels', pixels, 2)
+        for p in pixels:
+            cv.check_greater_than('pixels', p, 0)
+
+
 def _get_plot_image(plot, cwd):
     from IPython.display import Image
 
