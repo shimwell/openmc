@@ -52,6 +52,28 @@ The ``<tally>`` element accepts the following sub-elements:
 
     *Default*: total
 
+  :virtual_nuclides:
+    Optional definitions for virtual nuclide bins that represent weighted
+    combinations of isotopes. A virtual nuclide can then be referenced by name
+    in ``<nuclides>`` and OpenMC will score it as the weighted sum of its
+    constituent isotope responses.
+
+    Each ``virtual_nuclide`` child element requires a ``name`` attribute,
+    ``nuclides`` list, and optional ``weights`` list. If ``weights`` is
+    omitted, all weights default to 1.0.
+
+    .. code-block:: xml
+
+        <virtual_nuclides>
+          <virtual_nuclide name="SiO">
+            <nuclides>Si28 O16</nuclides>
+            <weights>1.0 1.0</weights>
+          </virtual_nuclide>
+        </virtual_nuclides>
+
+    In this example, including ``SiO`` in ``<nuclides>`` scores
+    :math:`1.0 \times R_{\mathrm{Si28}} + 1.0 \times R_{\mathrm{O16}}`.
+
   :estimator:
     The estimator element is used to force the use of either ``analog``,
     ``collision``, or ``tracklength`` tally estimation.  ``analog`` is generally

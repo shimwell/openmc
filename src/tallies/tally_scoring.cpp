@@ -2332,12 +2332,25 @@ void score_analog_tally_ce(Particle& p)
       for (auto i = 0; i < tally.nuclides_.size(); ++i) {
         auto i_nuclide = tally.nuclides_[i];
 
-        // Tally this event in the present nuclide bin if that bin represents
-        // the event nuclide or the total material.  Note that the atomic
-        // density argument for score_general is not used for analog tallies.
-        if (i_nuclide == p.event_nuclide() || i_nuclide == -1)
-          score_general_ce_analog(p, i_tally, i * tally.scores_.size(),
-            filter_index, filter_weight, i_nuclide, -1.0, flux);
+        if (tally.is_virtual_nuclide(i_nuclide)) {
+          const auto& virtual_nuc = tally.virtual_nuclide(i_nuclide);
+          for (int j = 0; j < virtual_nuc.nuclides.size(); ++j) {
+            int j_nuclide = virtual_nuc.nuclides[j];
+            if (j_nuclide != p.event_nuclide())
+              continue;
+            score_general_ce_analog(p, i_tally, i * tally.scores_.size(),
+              filter_index, filter_weight * virtual_nuc.weights[j], j_nuclide,
+              -1.0, flux);
+          }
+        } else {
+          // Tally this event in the present nuclide bin if that bin
+          // represents the event nuclide or the total material. Note that the
+          // atomic density argument for score_general is not used for analog
+          // tallies.
+          if (i_nuclide == p.event_nuclide() || i_nuclide == -1)
+            score_general_ce_analog(p, i_tally, i * tally.scores_.size(),
+              filter_index, filter_weight, i_nuclide, -1.0, flux);
+        }
       }
     }
 
@@ -2376,18 +2389,35 @@ void score_analog_tally_mg(Particle& p)
       for (auto i = 0; i < tally.nuclides_.size(); ++i) {
         auto i_nuclide = tally.nuclides_[i];
 
-        double atom_density = 0.;
-        if (i_nuclide >= 0) {
-          auto j =
-            model::materials[p.material()]->mat_nuclide_index_[i_nuclide];
-          if (j == C_NONE)
-            continue;
-          atom_density =
-            model::materials[p.material()]->atom_density(j, p.density_mult());
-        }
+        if (tally.is_virtual_nuclide(i_nuclide)) {
+          const auto& virtual_nuc = tally.virtual_nuclide(i_nuclide);
+          for (int j = 0; j < virtual_nuc.nuclides.size(); ++j) {
+            int j_nuclide = virtual_nuc.nuclides[j];
+            auto i_mat_nuc =
+              model::materials[p.material()]->mat_nuclide_index_[j_nuclide];
+            if (i_mat_nuc == C_NONE)
+              continue;
 
-        score_general_mg(p, i_tally, i * tally.scores_.size(), filter_index,
-          filter_weight, i_nuclide, atom_density, 1.0);
+            double atom_density = model::materials[p.material()]->atom_density(
+              i_mat_nuc, p.density_mult());
+            score_general_mg(p, i_tally, i * tally.scores_.size(), filter_index,
+              filter_weight * virtual_nuc.weights[j], j_nuclide, atom_density,
+              1.0);
+          }
+        } else {
+          double atom_density = 0.;
+          if (i_nuclide >= 0) {
+            auto j =
+              model::materials[p.material()]->mat_nuclide_index_[i_nuclide];
+            if (j == C_NONE)
+              continue;
+            atom_density =
+              model::materials[p.material()]->atom_density(j, p.density_mult());
+          }
+
+          score_general_mg(p, i_tally, i * tally.scores_.size(), filter_index,
+            filter_weight, i_nuclide, atom_density, 1.0);
+        }
       }
     }
 
@@ -2430,37 +2460,76 @@ void score_tracklength_tally_general(
       for (auto i = 0; i < tally.nuclides_.size(); ++i) {
         auto i_nuclide = tally.nuclides_[i];
 
-        double atom_density = 0.;
-        if (i_nuclide >= 0) {
-          if (p.material() != MATERIAL_VOID) {
-            const auto& mat = model::materials[p.material()];
-            auto j = mat->mat_nuclide_index_[i_nuclide];
-            if (j != C_NONE)
-              atom_density = mat->atom_density(j, p.density_mult());
-          }
-          if (atom_density > 0) {
-            if (!tally.multiply_density())
-              atom_density = 1.0;
-          } else if (!tally.multiply_density()) {
-            // Determine log union grid index
-            if (i_log_union == C_NONE) {
-              int neutron = ParticleType::neutron().transport_index();
-              i_log_union = std::log(p.E() / data::energy_min[neutron]) /
-                            simulation::log_spacing;
+        if (tally.is_virtual_nuclide(i_nuclide)) {
+          const auto& virtual_nuc = tally.virtual_nuclide(i_nuclide);
+          for (int j = 0; j < virtual_nuc.nuclides.size(); ++j) {
+            int j_nuclide = virtual_nuc.nuclides[j];
+            double atom_density = 0.;
+            if (p.material() != MATERIAL_VOID) {
+              const auto& mat = model::materials[p.material()];
+              auto k = mat->mat_nuclide_index_[j_nuclide];
+              if (k != C_NONE)
+                atom_density = mat->atom_density(k, p.density_mult());
             }
-            // Update micro xs cache
-            p.update_neutron_xs(i_nuclide, i_log_union);
-            atom_density = 1.0;
-          }
-        }
+            if (atom_density > 0) {
+              if (!tally.multiply_density())
+                atom_density = 1.0;
+            } else if (!tally.multiply_density()) {
+              // Determine log union grid index
+              if (i_log_union == C_NONE) {
+                int neutron = ParticleType::neutron().transport_index();
+                i_log_union = std::log(p.E() / data::energy_min[neutron]) /
+                              simulation::log_spacing;
+              }
+              // Update micro xs cache
+              p.update_neutron_xs(j_nuclide, i_log_union);
+              atom_density = 1.0;
+            }
 
-        // TODO: consider replacing this "if" with pointers or templates
-        if (settings::run_CE) {
-          score_general_ce_nonanalog(p, i_tally, i * tally.scores_.size(),
-            filter_index, filter_weight, i_nuclide, atom_density, flux);
+            // TODO: consider replacing this "if" with pointers or templates
+            if (settings::run_CE) {
+              score_general_ce_nonanalog(p, i_tally, i * tally.scores_.size(),
+                filter_index, filter_weight * virtual_nuc.weights[j],
+                j_nuclide, atom_density, flux);
+            } else {
+              score_general_mg(p, i_tally, i * tally.scores_.size(),
+                filter_index, filter_weight * virtual_nuc.weights[j],
+                j_nuclide, atom_density, flux);
+            }
+          }
         } else {
-          score_general_mg(p, i_tally, i * tally.scores_.size(), filter_index,
-            filter_weight, i_nuclide, atom_density, flux);
+          double atom_density = 0.;
+          if (i_nuclide >= 0) {
+            if (p.material() != MATERIAL_VOID) {
+              const auto& mat = model::materials[p.material()];
+              auto j = mat->mat_nuclide_index_[i_nuclide];
+              if (j != C_NONE)
+                atom_density = mat->atom_density(j, p.density_mult());
+            }
+            if (atom_density > 0) {
+              if (!tally.multiply_density())
+                atom_density = 1.0;
+            } else if (!tally.multiply_density()) {
+              // Determine log union grid index
+              if (i_log_union == C_NONE) {
+                int neutron = ParticleType::neutron().transport_index();
+                i_log_union = std::log(p.E() / data::energy_min[neutron]) /
+                              simulation::log_spacing;
+              }
+              // Update micro xs cache
+              p.update_neutron_xs(i_nuclide, i_log_union);
+              atom_density = 1.0;
+            }
+          }
+
+          // TODO: consider replacing this "if" with pointers or templates
+          if (settings::run_CE) {
+            score_general_ce_nonanalog(p, i_tally, i * tally.scores_.size(),
+              filter_index, filter_weight, i_nuclide, atom_density, flux);
+          } else {
+            score_general_mg(p, i_tally, i * tally.scores_.size(), filter_index,
+              filter_weight, i_nuclide, atom_density, flux);
+          }
         }
       }
     }
@@ -2560,37 +2629,76 @@ void score_collision_tally(Particle& p)
       for (auto i = 0; i < tally.nuclides_.size(); ++i) {
         auto i_nuclide = tally.nuclides_[i];
 
-        double atom_density = 0.;
-        if (i_nuclide >= 0) {
-          if (p.material() != MATERIAL_VOID) {
-            const auto& mat = model::materials[p.material()];
-            auto j = mat->mat_nuclide_index_[i_nuclide];
-            if (j != C_NONE)
-              atom_density = mat->atom_density(j, p.density_mult());
-          }
-          if (atom_density > 0) {
-            if (!tally.multiply_density())
-              atom_density = 1.0;
-          } else if (!tally.multiply_density()) {
-            // Determine log union grid index
-            if (i_log_union == C_NONE) {
-              int neutron = ParticleType::neutron().transport_index();
-              i_log_union = std::log(p.E() / data::energy_min[neutron]) /
-                            simulation::log_spacing;
+        if (tally.is_virtual_nuclide(i_nuclide)) {
+          const auto& virtual_nuc = tally.virtual_nuclide(i_nuclide);
+          for (int j = 0; j < virtual_nuc.nuclides.size(); ++j) {
+            int j_nuclide = virtual_nuc.nuclides[j];
+            double atom_density = 0.;
+            if (p.material() != MATERIAL_VOID) {
+              const auto& mat = model::materials[p.material()];
+              auto k = mat->mat_nuclide_index_[j_nuclide];
+              if (k != C_NONE)
+                atom_density = mat->atom_density(k, p.density_mult());
             }
-            // Update micro xs cache
-            p.update_neutron_xs(i_nuclide, i_log_union);
-            atom_density = 1.0;
-          }
-        }
+            if (atom_density > 0) {
+              if (!tally.multiply_density())
+                atom_density = 1.0;
+            } else if (!tally.multiply_density()) {
+              // Determine log union grid index
+              if (i_log_union == C_NONE) {
+                int neutron = ParticleType::neutron().transport_index();
+                i_log_union = std::log(p.E() / data::energy_min[neutron]) /
+                              simulation::log_spacing;
+              }
+              // Update micro xs cache
+              p.update_neutron_xs(j_nuclide, i_log_union);
+              atom_density = 1.0;
+            }
 
-        // TODO: consider replacing this "if" with pointers or templates
-        if (settings::run_CE) {
-          score_general_ce_nonanalog(p, i_tally, i * tally.scores_.size(),
-            filter_index, filter_weight, i_nuclide, atom_density, flux);
+            // TODO: consider replacing this "if" with pointers or templates
+            if (settings::run_CE) {
+              score_general_ce_nonanalog(p, i_tally, i * tally.scores_.size(),
+                filter_index, filter_weight * virtual_nuc.weights[j],
+                j_nuclide, atom_density, flux);
+            } else {
+              score_general_mg(p, i_tally, i * tally.scores_.size(),
+                filter_index, filter_weight * virtual_nuc.weights[j],
+                j_nuclide, atom_density, flux);
+            }
+          }
         } else {
-          score_general_mg(p, i_tally, i * tally.scores_.size(), filter_index,
-            filter_weight, i_nuclide, atom_density, flux);
+          double atom_density = 0.;
+          if (i_nuclide >= 0) {
+            if (p.material() != MATERIAL_VOID) {
+              const auto& mat = model::materials[p.material()];
+              auto j = mat->mat_nuclide_index_[i_nuclide];
+              if (j != C_NONE)
+                atom_density = mat->atom_density(j, p.density_mult());
+            }
+            if (atom_density > 0) {
+              if (!tally.multiply_density())
+                atom_density = 1.0;
+            } else if (!tally.multiply_density()) {
+              // Determine log union grid index
+              if (i_log_union == C_NONE) {
+                int neutron = ParticleType::neutron().transport_index();
+                i_log_union = std::log(p.E() / data::energy_min[neutron]) /
+                              simulation::log_spacing;
+              }
+              // Update micro xs cache
+              p.update_neutron_xs(i_nuclide, i_log_union);
+              atom_density = 1.0;
+            }
+          }
+
+          // TODO: consider replacing this "if" with pointers or templates
+          if (settings::run_CE) {
+            score_general_ce_nonanalog(p, i_tally, i * tally.scores_.size(),
+              filter_index, filter_weight, i_nuclide, atom_density, flux);
+          } else {
+            score_general_mg(p, i_tally, i * tally.scores_.size(), filter_index,
+              filter_weight, i_nuclide, atom_density, flux);
+          }
         }
       }
     }

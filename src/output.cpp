@@ -708,10 +708,15 @@ void write_tallies()
 
       // Loop over all nuclide and score combinations.
       int score_index = 0;
-      for (auto i_nuclide : tally.nuclides_) {
+      for (int nuclide_idx = 0; nuclide_idx < tally.nuclides_.size();
+           ++nuclide_idx) {
+        auto i_nuclide = tally.nuclides_[nuclide_idx];
         // Write label for this nuclide bin.
         if (i_nuclide == -1) {
           fmt::print(tallies_out, "{0:{1}}Total Material\n", "", indent + 1);
+        } else if (tally.is_virtual_nuclide(i_nuclide)) {
+          fmt::print(tallies_out, "{0:{1}}{}\n", "", indent + 1,
+            tally.nuclide_name(nuclide_idx));
         } else {
           if (settings::run_CE) {
             fmt::print(tallies_out, "{0:{1}}{2}\n", "", indent + 1,

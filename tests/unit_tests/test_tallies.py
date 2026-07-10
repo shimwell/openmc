@@ -15,7 +15,10 @@ def test_xml_roundtrip(run_in_tmpdir):
     meshborn_filter = openmc.MeshBornFilter(mesh)
     tally = openmc.Tally()
     tally.filters = [mesh_filter, meshborn_filter]
-    tally.nuclides = ['U235', 'I135', 'Li6']
+    tally.virtual_nuclides = {
+        'SiO': {'Si28': 1.0, 'O16': 1.0}
+    }
+    tally.nuclides = ['U235', 'SiO', 'Li6']
     tally.scores = ['total', 'fission', 'heating']
     tally.derivative = openmc.TallyDerivative(
         variable='nuclide_density', material=1, nuclide='Li6'
@@ -36,6 +39,7 @@ def test_xml_roundtrip(run_in_tmpdir):
     assert isinstance(new_tally.filters[1], openmc.MeshBornFilter)
     assert np.allclose(new_tally.filters[1].mesh.lower_left, mesh.lower_left)
     assert new_tally.nuclides == tally.nuclides
+    assert new_tally.virtual_nuclides == tally.virtual_nuclides
     assert new_tally.scores == tally.scores
     assert new_tally.derivative.variable == tally.derivative.variable
     assert new_tally.derivative.material == tally.derivative.material
@@ -87,6 +91,11 @@ def test_tally_equivalence():
     tally_a.multiply_density = False
     assert tally_a != tally_b
     tally_b.multiply_density = False
+    assert tally_a == tally_b
+
+    tally_a.virtual_nuclides = {'SiO': {'Si28': 1.0, 'O16': 1.0}}
+    assert tally_a != tally_b
+    tally_b.virtual_nuclides = {'SiO': {'Si28': 1.0, 'O16': 1.0}}
     assert tally_a == tally_b
 
     trigger_a = openmc.Trigger('rel_err', 0.025)

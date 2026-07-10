@@ -44,6 +44,7 @@
 #include <cstddef>  // for size_t
 #include <iterator> // for back_inserter
 #include <string>
+#include <unordered_set>
 
 namespace openmc {
 
@@ -328,6 +329,12 @@ Tally::Tally(pugi::xml_node node)
     if (deriv.variable == DerivativeVariable::NUCLIDE_DENSITY ||
         deriv.variable == DerivativeVariable::TEMPERATURE) {
       for (int i_nuc : nuclides_) {
+        if (is_virtual_nuclide(i_nuc)) {
+          fatal_error(fmt::format(
+            "Error on tally {}: nuclide density and temperature derivatives "
+            "are not supported for virtual nuclides.",
+            id_));
+        }
         if (has_energyout && i_nuc == -1) {
           fatal_error(fmt::format(
             "Error on tally {}: Cannot use a "
@@ -730,7 +737,101 @@ void Tally::set_scores(const vector<std::string>& scores)
 
 void Tally::set_nuclides(pugi::xml_node node)
 {
+  virtual_nuclides_.clear();
   nuclides_.clear();
+
+  std::unordered_set<std::string> virtual_names;
+  if (check_for_node(node, "virtual_nuclides")) {
+    auto virtuals_node = node.child("virtual_nuclides");
+    for (auto virtual_node : virtuals_node.children("virtual_nuclide")) {
+      auto name_attr = virtual_node.attribute("name");
+      if (!name_attr) {
+        fatal_error(fmt::format("Missing name on virtual nuclide for tally {}",
+          id_));
+      }
+
+      std::string name = name_attr.value();
+      if (name.empty()) {
+        fatal_error(fmt::format("Empty name on virtual nuclide for tally {}",
+          id_));
+      }
+      if (name == "total") {
+        fatal_error(fmt::format(
+          "Virtual nuclide name 'total' is reserved on tally {}", id_));
+      }
+      if (virtual_names.count(name) > 0) {
+        fatal_error(fmt::format(
+          "Duplicate virtual nuclide '{}' on tally {}", name, id_));
+      }
+      virtual_names.insert(name);
+
+      if (!check_for_node(virtual_node, "nuclides")) {
+        fatal_error(fmt::format(
+          "Virtual nuclide '{}' on tally {} is missing nuclides", name, id_));
+      }
+
+      auto isotope_names =
+        get_node_array<std::string>(virtual_node, "nuclides");
+      if (isotope_names.empty()) {
+        fatal_error(fmt::format(
+          "Virtual nuclide '{}' on tally {} must include at least one "
+          "nuclide",
+          name, id_));
+      }
+
+      vector<double> weights(isotope_names.size(), 1.0);
+      if (check_for_node(virtual_node, "weights")) {
+        weights = get_node_array<double>(virtual_node, "weights");
+        if (weights.size() != isotope_names.size()) {
+          fatal_error(fmt::format(
+            "Virtual nuclide '{}' on tally {} has {} weights but {} "
+            "nuclides",
+            name, id_, weights.size(), isotope_names.size()));
+        }
+      }
+
+      VirtualNuclide virtual_nuc;
+      virtual_nuc.name = name;
+      virtual_nuc.nuclides.reserve(isotope_names.size());
+      virtual_nuc.weights.reserve(isotope_names.size());
+
+      std::unordered_set<int> isotope_indices;
+      for (int i = 0; i < isotope_names.size(); ++i) {
+        const auto& isotope_name = isotope_names[i];
+        if (isotope_name == "total") {
+          fatal_error(fmt::format(
+            "Virtual nuclide '{}' on tally {} cannot include 'total'",
+            name, id_));
+        }
+
+        auto search = data::nuclide_map.find(isotope_name);
+        if (search == data::nuclide_map.end()) {
+          int err = openmc_load_nuclide(isotope_name.c_str(), nullptr, 0);
+          if (err < 0)
+            throw std::runtime_error {openmc_err_msg};
+        }
+
+        int i_nuclide = data::nuclide_map.at(isotope_name);
+        if (isotope_indices.count(i_nuclide) > 0) {
+          fatal_error(fmt::format(
+            "Virtual nuclide '{}' on tally {} includes duplicate isotope '{}'",
+            name, id_, isotope_name));
+        }
+        isotope_indices.insert(i_nuclide);
+
+        if (weights[i] <= 0.0) {
+          fatal_error(fmt::format(
+            "Virtual nuclide '{}' on tally {} has non-positive weight {}",
+            name, id_, weights[i]));
+        }
+
+        virtual_nuc.nuclides.push_back(i_nuclide);
+        virtual_nuc.weights.push_back(weights[i]);
+      }
+
+      virtual_nuclides_.push_back(std::move(virtual_nuc));
+    }
+  }
 
   // By default, we tally just the total material rates.
   if (!check_for_node(node, "nuclides")) {
@@ -751,16 +852,44 @@ void Tally::set_nuclides(const vector<std::string>& nuclides)
   for (const auto& nuc : nuclides) {
     if (nuc == "total") {
       nuclides_.push_back(-1);
-    } else {
-      auto search = data::nuclide_map.find(nuc);
-      if (search == data::nuclide_map.end()) {
-        int err = openmc_load_nuclide(nuc.c_str(), nullptr, 0);
-        if (err < 0)
-          throw std::runtime_error {openmc_err_msg};
-      }
-      nuclides_.push_back(data::nuclide_map.at(nuc));
+      continue;
     }
+
+    bool matched_virtual = false;
+    for (int i = 0; i < virtual_nuclides_.size(); ++i) {
+      if (virtual_nuclides_[i].name == nuc) {
+        nuclides_.push_back(Tally::virtual_nuclide_bin(i));
+        matched_virtual = true;
+        break;
+      }
+    }
+    if (matched_virtual)
+      continue;
+
+    auto search = data::nuclide_map.find(nuc);
+    if (search == data::nuclide_map.end()) {
+      int err = openmc_load_nuclide(nuc.c_str(), nullptr, 0);
+      if (err < 0)
+        throw std::runtime_error {openmc_err_msg};
+    }
+    nuclides_.push_back(data::nuclide_map.at(nuc));
   }
+}
+
+bool Tally::is_virtual_nuclide(int nuclide) const
+{
+  int index = virtual_nuclide_index(nuclide);
+  return index >= 0 && index < virtual_nuclides_.size();
+}
+
+const Tally::VirtualNuclide& Tally::virtual_nuclide(int nuclide) const
+{
+  auto index = virtual_nuclide_index(nuclide);
+  if (index < 0 || index >= virtual_nuclides_.size()) {
+    fatal_error(
+      fmt::format("Invalid virtual nuclide id {} on tally {}", nuclide, id_));
+  }
+  return virtual_nuclides_[index];
 }
 
 void Tally::init_triggers(pugi::xml_node node)
@@ -965,8 +1094,13 @@ std::string Tally::nuclide_name(int nuclide_idx) const
   int nuclide = nuclides_.at(nuclide_idx);
   if (nuclide == -1) {
     return "total";
+  } else if (is_virtual_nuclide(nuclide)) {
+    return virtual_nuclide(nuclide).name;
+  } else if (settings::run_CE) {
+    return data::nuclides.at(nuclide)->name_;
+  } else {
+    return data::mg.nuclides_.at(nuclide).name;
   }
-  return data::nuclides.at(nuclide)->name_;
 }
 
 //==============================================================================
@@ -1519,6 +1653,7 @@ extern "C" int openmc_tally_set_nuclides(
   }
 
   model::tallies[index]->nuclides_ = nucs;
+  model::tallies[index]->virtual_nuclides_.clear();
 
   return 0;
 }

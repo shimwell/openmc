@@ -237,16 +237,8 @@ extern "C" int openmc_statepoint_write(const char* filename, bool* write_source)
 
         // Write the nuclides this tally scores
         vector<std::string> nuclides;
-        for (auto i_nuclide : tally->nuclides_) {
-          if (i_nuclide == -1) {
-            nuclides.push_back("total");
-          } else {
-            if (settings::run_CE) {
-              nuclides.push_back(data::nuclides[i_nuclide]->name_);
-            } else {
-              nuclides.push_back(data::mg.nuclides_[i_nuclide].name);
-            }
-          }
+        for (int i = 0; i < tally->nuclides_.size(); ++i) {
+          nuclides.push_back(tally->nuclide_name(i));
         }
         write_dataset(tally_group, "nuclides", nuclides);
 

@@ -1,5 +1,5 @@
 from __future__ import annotations
-from collections.abc import Iterable, MutableSequence
+from collections.abc import Iterable, Mapping, MutableSequence
 import copy
 from functools import partial, reduce, wraps
 from itertools import product
@@ -79,6 +79,8 @@ class Tally(IDManagerMixin):
         List of tally triggers
     derivative : openmc.TallyDerivative, optional
         A material perturbation derivative to apply to all scores in the tally
+    virtual_nuclides : dict, optional
+        Mapping from virtual nuclide names to isotope:weight mappings
 
     Attributes
     ----------
@@ -147,6 +149,8 @@ class Tally(IDManagerMixin):
         compressed data storage
     derivative : openmc.TallyDerivative
         A material perturbation derivative to apply to all scores in the tally.
+    virtual_nuclides : dict
+        Mapping from virtual nuclide names to isotope:weight mappings.
 
     """
 
@@ -155,7 +159,7 @@ class Tally(IDManagerMixin):
 
     def __init__(self, tally_id=None, name='', scores=None, filters=None,
                  nuclides=None, estimator=None, triggers=None,
-                 derivative=None):
+                 derivative=None, virtual_nuclides=None):
         # Initialize Tally class attributes
         self.id = tally_id
         self.name = name
@@ -166,6 +170,7 @@ class Tally(IDManagerMixin):
         self._triggers = cv.CheckedList(openmc.Trigger, 'tally triggers')
         self._derivative = None
         self._multiply_density = True
+        self._virtual_nuclides = {}
 
         self._num_realizations = 0
         self._with_summary = False
@@ -198,6 +203,8 @@ class Tally(IDManagerMixin):
             self.triggers = triggers
         if derivative is not None:
             self.derivative = derivative
+        if virtual_nuclides is not None:
+            self.virtual_nuclides = virtual_nuclides
 
     def __eq__(self, other):
         if other.id != self.id:
@@ -224,7 +231,8 @@ class Tally(IDManagerMixin):
             self_nuclides.remove('total')
         if other_nuclides != self_nuclides:
             return False
-        for attr in {'scores', 'triggers', 'derivative', 'multiply_density'}:
+        for attr in {'scores', 'triggers', 'derivative', 'multiply_density',
+                     'virtual_nuclides'}:
             if getattr(other, attr) != getattr(self, attr):
                 return False
         return True
@@ -242,6 +250,8 @@ class Tally(IDManagerMixin):
         parts.append('{: <15}=\t{}'.format('Scores', self.scores))
         parts.append('{: <15}=\t{}'.format('Estimator', self.estimator))
         parts.append('{: <15}=\t{}'.format('Multiply dens.', self.multiply_density))
+        if self.virtual_nuclides:
+            parts.append('{: <15}=\t{}'.format('Virtual nuclides', self.virtual_nuclides))
         return '\n\t'.join(parts)
 
     @staticmethod
@@ -280,6 +290,73 @@ class Tally(IDManagerMixin):
     def multiply_density(self, value):
         cv.check_type('multiply density', value, bool)
         self._multiply_density = value
+
+    @property
+    def virtual_nuclides(self):
+        return self._virtual_nuclides
+
+    @virtual_nuclides.setter
+    def virtual_nuclides(self, virtual_nuclides):
+        cv.check_type('virtual nuclides', virtual_nuclides, Mapping)
+
+        normalized = {}
+        for virtual_name, constituents in virtual_nuclides.items():
+            cv.check_type('virtual nuclide name', virtual_name, str)
+            if virtual_name == 'total':
+                raise ValueError('Virtual nuclide name "total" is reserved')
+
+            if isinstance(constituents, Mapping):
+                items = list(constituents.items())
+            else:
+                cv.check_type(
+                    f'virtual nuclide "{virtual_name}" constituents',
+                    constituents, MutableSequence
+                )
+                items = list(constituents)
+
+            if len(items) == 0:
+                raise ValueError(
+                    f'Virtual nuclide "{virtual_name}" must include at least one isotope'
+                )
+
+            parsed = {}
+            for item in items:
+                if isinstance(item, str):
+                    isotope, weight = item, 1.0
+                else:
+                    cv.check_type(
+                        f'virtual nuclide "{virtual_name}" constituent',
+                        item, Iterable
+                    )
+                    item = tuple(item)
+                    if len(item) != 2:
+                        raise ValueError(
+                            f'Virtual nuclide "{virtual_name}" constituents must be '
+                            'isotope/weight pairs'
+                        )
+                    isotope, weight = item
+
+                cv.check_type('virtual nuclide isotope', isotope, str)
+                cv.check_type('virtual nuclide weight', weight, Real)
+                if isotope == 'total':
+                    raise ValueError(
+                        f'Virtual nuclide "{virtual_name}" cannot include "total"'
+                    )
+                if weight <= 0.0:
+                    raise ValueError(
+                        f'Virtual nuclide "{virtual_name}" has non-positive weight '
+                        f'for isotope "{isotope}"'
+                    )
+                if isotope in parsed:
+                    raise ValueError(
+                        f'Virtual nuclide "{virtual_name}" includes duplicate isotope '
+                        f'"{isotope}"'
+                    )
+                parsed[isotope] = float(weight)
+
+            normalized[virtual_name] = parsed
+
+        self._virtual_nuclides = normalized
 
     @property
     def higher_moments(self) -> bool:
@@ -1449,6 +1526,19 @@ class Tally(IDManagerMixin):
             subelement = ET.SubElement(element, "nuclides")
             subelement.text = ' '.join(str(n) for n in self.nuclides)
 
+        # Optional virtual nuclide definitions
+        if self.virtual_nuclides:
+            virtuals_element = ET.SubElement(element, "virtual_nuclides")
+            for name, constituents in self.virtual_nuclides.items():
+                virtual_element = ET.SubElement(virtuals_element, "virtual_nuclide")
+                virtual_element.set('name', name)
+
+                isotopes_element = ET.SubElement(virtual_element, 'nuclides')
+                isotopes_element.text = ' '.join(constituents.keys())
+
+                weights_element = ET.SubElement(virtual_element, 'weights')
+                weights_element.text = ' '.join(str(weight) for weight in constituents.values())
+
         # Scores
         if len(self.scores) == 0:
             msg = f'Unable to get XML for Tally ID="{self.id}" since it does ' \
@@ -1544,6 +1634,36 @@ class Tally(IDManagerMixin):
 
         # Read nuclides
         nuclides = get_elem_list(elem, "nuclides", str)
+
+        # Read virtual nuclides
+        virtual_nuclides = {}
+        virtuals_elem = elem.find('virtual_nuclides')
+        if virtuals_elem is not None:
+            for virtual_elem in virtuals_elem.findall('virtual_nuclide'):
+                name = virtual_elem.get('name')
+                if not name:
+                    raise ValueError('Missing name on virtual nuclide in tally XML')
+
+                isotope_names = get_elem_list(virtual_elem, 'nuclides', str)
+                if isotope_names is None or len(isotope_names) == 0:
+                    raise ValueError(
+                        f'Virtual nuclide "{name}" in tally XML must include nuclides'
+                    )
+
+                weights = get_elem_list(virtual_elem, 'weights', float)
+                if weights is None:
+                    weights = [1.0] * len(isotope_names)
+                if len(weights) != len(isotope_names):
+                    raise ValueError(
+                        f'Virtual nuclide "{name}" in tally XML has mismatched '
+                        'nuclides and weights'
+                    )
+
+                virtual_nuclides[name] = dict(zip(isotope_names, weights))
+
+        if virtual_nuclides:
+            tally.virtual_nuclides = virtual_nuclides
+
         if nuclides is not None:
             tally.nuclides = nuclides
 

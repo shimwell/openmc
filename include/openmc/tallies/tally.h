@@ -22,6 +22,12 @@ namespace openmc {
 
 class Tally {
 public:
+  struct VirtualNuclide {
+    std::string name;
+    vector<int> nuclides;
+    vector<double> weights;
+  };
+
   //----------------------------------------------------------------------------
   // Constructors, destructors, factory functions
   explicit Tally(int32_t id);
@@ -132,6 +138,18 @@ public:
   //! A string representing the i-th nuclide on this tally
   std::string nuclide_name(int nuclide_idx) const;
 
+  //! Whether a nuclide bin id corresponds to a virtual nuclide
+  bool is_virtual_nuclide(int nuclide) const;
+
+  //! Return virtual nuclide entry by encoded nuclide bin id
+  const VirtualNuclide& virtual_nuclide(int nuclide) const;
+
+  //! Return encoded nuclide bin id for virtual nuclide index
+  static int virtual_nuclide_bin(int index) { return -2 - index; }
+
+  //! Return virtual nuclide index for encoded nuclide bin id
+  static int virtual_nuclide_index(int nuclide) { return -2 - nuclide; }
+
   //----------------------------------------------------------------------------
   // Major public data members.
 
@@ -154,6 +172,9 @@ public:
 
   //! Index of each nuclide to be tallied.  -1 indicates total material.
   vector<int> nuclides_ {-1};
+
+  //! Virtual nuclides represented as weighted combinations of isotopes.
+  vector<VirtualNuclide> virtual_nuclides_;
 
   //! Results for each bin -- the first dimension of the array is for the
   //! combination of filters (e.g. specific cell, specific energy group, etc.)
