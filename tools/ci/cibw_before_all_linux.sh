@@ -22,6 +22,22 @@ yum install -y \
 pipx uninstall cmake 2>/dev/null || true
 pipx install cmake==3.31.6
 
+# ---------------------------------------------------------------------------
+# patchelf
+# ---------------------------------------------------------------------------
+# manylinux_2_28 ships patchelf 0.17.2, which miscomputes the new PT_LOAD when
+# rewriting the small non-PIE bin/openmc executable: it emits a segment whose
+# filesz stops just short of the relocated .dynamic section. The dynamic loader
+# then reads .dynamic from unmapped memory and the binary segfaults in dl_main
+# before main() runs, so "openmc --version" dies with SIGSEGV. Shared libraries
+# such as libopenmc.so are unaffected, which is why "import openmc.lib" still
+# works. 0.16.1 rewrites the same executable correctly, so pin to it and
+# overwrite the copy auditwheel resolves from PATH.
+PATCHELF_PYBIN=$(ls -d /opt/python/cp312-*/bin 2>/dev/null | head -1)
+"${PATCHELF_PYBIN}/pip" install "patchelf==0.16.1.0"
+install -m 0755 "${PATCHELF_PYBIN}/patchelf" /usr/local/bin/patchelf
+patchelf --version
+
 export CC=gcc
 export CXX=g++
 export FC=gfortran
