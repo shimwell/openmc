@@ -8,10 +8,15 @@ set -ex
 # ---------------------------------------------------------------------------
 yum install -y epel-release
 yum config-manager --enable epel
+# Note: fmt-devel is deliberately not installed. EPEL 8 only ships fmt 6.2.1,
+# which lacks fmt::runtime (added in fmt 8.0) and so fails to compile
+# include/openmc/error.h. Leaving it out makes CMake fall back to the bundled
+# vendor/fmt submodule (11.0.2), which also links statically and keeps the
+# wheel free of a libfmt.so runtime dependency.
 yum install -y \
     wget git gcc gcc-c++ gcc-gfortran make \
     zlib-devel curl-devel eigen3-devel lapack-devel \
-    libpng-devel pugixml-devel fmt-devel
+    libpng-devel pugixml-devel
 
 # Ensure a recent cmake
 pipx uninstall cmake 2>/dev/null || true
