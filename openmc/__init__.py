@@ -87,7 +87,13 @@ def get_include_path():
 
 def get_core_libraries():
     """Return libraries and library paths for OpenMC."""
-    lib = [lib_file for lib in ["lib", "lib64"] for lib_file in get_paths(lib, "libopenmc*", recursive=True)]
+    # "bin" is searched because Windows treats a DLL as a RUNTIME artifact and
+    # installs it to CMAKE_INSTALL_BINDIR, whereas .so/.dylib are LIBRARY
+    # artifacts installed to CMAKE_INSTALL_LIBDIR. On Linux and macOS nothing in
+    # "bin" matches "libopenmc*", so this is a no-op there. The Windows import
+    # library (.lib) is an ARCHIVE artifact and still lands in lib, so lib_path
+    # does not need "bin".
+    lib = [lib_file for lib in ["lib", "lib64", "bin"] for lib_file in get_paths(lib, "libopenmc*", recursive=True)]
     lib_path = [lib_file for lib in ["lib", "lib64"] for lib_file in get_paths(lib, "", recursive=False)]
     return lib, lib_path
 

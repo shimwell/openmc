@@ -1,0 +1,135 @@
+# Scratch job to establish a Windows feedback loop. It is not a wheel build and
+# is not required to pass: the job sets continue-on-error so it can never block
+# a merge. Its purpose is to answer the two open questions in the Windows
+# support issue:
+#
+#   1. Does the vanilla (no DAGMC) source compile with MSVC, and which OpenMP
+#      setting is needed? Plain /openmp is frozen at OpenMP 2.0 and is expected
+#      to reject the collapse, atomic capture and atomic seq_cst constructs used
+#      in src/, so the matrix tries /openmp:llvm and a serial build instead.
+#   2. Does WINDOWS_EXPORT_ALL_SYMBOLS export the five globals that openmc.lib
+#      reads through ctypes in_dll? Function exports are routine, data exports
+#      are the documented weak spot, so they are checked explicitly.
+#
+# Delete this workflow once Windows wheels are building for real.
+
+name: Probe Windows Build
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/probe-windows-build.yml'
+      - 'CMakeLists.txt'
+      - 'cmake/**'
+      - 'src/**'
+      - 'include/**'
+
+jobs:
+  probe:
+    runs-on: windows-latest
+    continue-on-error: true
+    timeout-minutes: 120
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Preferred outcome: LLVM's OpenMP runtime supports the constructs
+          # used in src/, so shared-memory parallelism is retained.
+          - name: openmp-llvm
+            openmp: 'ON'
+            extra_args: '-DOpenMP_RUNTIME_MSVC=llvm'
+          # Fallback: proves the port works even if OpenMP cannot be resolved,
+          # which would still allow shipping a serial first wheel.
+          - name: openmp-off
+            openmp: 'OFF'
+            extra_args: ''
+
+    name: probe (${{ matrix.name }})
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # needed for versioning from git tags
+          submodules: recursive  # vendored pugixml and fmt
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install HDF5 via vcpkg
+        shell: pwsh
+        run: |
+          & "$env:VCPKG_INSTALLATION_ROOT\vcpkg.exe" install hdf5[core,hl]:x64-windows
+          "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" >> $env:GITHUB_ENV
+
+      # extra_args comes first so that an empty value cannot leave a dangling
+      # backtick line continuation, which PowerShell rejects.
+      - name: Configure
+        shell: pwsh
+        run: |
+          cmake -S . -B build ${{ matrix.extra_args }} `
+            -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake" `
+            -DVCPKG_TARGET_TRIPLET=x64-windows `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DOPENMC_USE_OPENMP=${{ matrix.openmp }} `
+            -DOPENMC_USE_DAGMC=OFF `
+            -DOPENMC_USE_LIBMESH=OFF `
+            -DOPENMC_USE_MPI=OFF `
+            -DOPENMC_USE_UWUW=OFF `
+            -DOPENMC_BUILD_TESTS=OFF
+
+      - name: Build
+        shell: pwsh
+        run: cmake --build build --config Release -j 4
+
+      - name: Show build outputs
+        if: always()
+        shell: pwsh
+        run: |
+          Get-ChildItem -Recurse build -Include libopenmc.dll,libopenmc.lib,openmc.exe |
+            Select-Object FullName,Length
+
+      # The real test of WINDOWS_EXPORT_ALL_SYMBOLS. Function exports are the
+      # easy part; these five are data symbols, which is where the export table
+      # is most likely to fall short and need a hand-written .def file.
+      # Uses bash because PowerShell has no heredoc.
+      - name: Check ctypes data-symbol exports
+        if: always()
+        shell: bash
+        run: |
+          DLL=$(find build -name libopenmc.dll | head -1)
+          if [ -z "$DLL" ]; then
+            echo "libopenmc.dll not produced, nothing to check"
+            exit 0
+          fi
+          export OPENMC_DLL="$DLL"
+          python - <<'PY'
+          import ctypes, os
+          vcpkg = os.environ.get("VCPKG_ROOT", "")
+          hdf5_bin = os.path.join(vcpkg, "installed", "x64-windows", "bin")
+          if os.path.isdir(hdf5_bin):
+              os.add_dll_directory(hdf5_bin)
+          path = os.path.abspath(os.environ["OPENMC_DLL"])
+          dll = ctypes.CDLL(path)
+          print("loaded:", path)
+          failures = 0
+          for name, typ in [
+              ("DAGMC_ENABLED", ctypes.c_bool),
+              ("UWUW_ENABLED", ctypes.c_bool),
+              ("LIBMESH_ENABLED", ctypes.c_bool),
+              ("STRICT_FP_ENABLED", ctypes.c_bool),
+              ("n_coord_levels", ctypes.c_int),
+          ]:
+              try:
+                  print(f"  OK   {name} = {typ.in_dll(dll, name).value}")
+              except Exception as exc:
+                  failures += 1
+                  print(f"  FAIL {name}: {exc}")
+          print(f"\n{failures} of 5 data symbols missing from the export table")
+          if failures:
+              print("A hand-written .def file is likely needed.")
+          PY

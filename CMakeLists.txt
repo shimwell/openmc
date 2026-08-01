@@ -527,8 +527,14 @@ list(APPEND libopenmc_SOURCES
 
 # For Visual Studio compilers
 if(MSVC)
-  # Use static library (otherwise explicit symbol portings are needed)
-  add_library(libopenmc STATIC ${libopenmc_SOURCES})
+  # A shared library is required because openmc.lib loads it with ctypes.CDLL,
+  # which cannot load a static library. WINDOWS_EXPORT_ALL_SYMBOLS generates the
+  # export table automatically, so the C API does not need __declspec(dllexport)
+  # annotations. The symbols read via ctypes in_dll (DAGMC_ENABLED, UWUW_ENABLED,
+  # LIBMESH_ENABLED, STRICT_FP_ENABLED, n_coord_levels) are all declared
+  # extern "C", so they are exported unmangled.
+  add_library(libopenmc SHARED ${libopenmc_SOURCES})
+  set_target_properties(libopenmc PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
 
   # To use the shared HDF5 libraries on Windows, the H5_BUILT_AS_DYNAMIC_LIB
   # compile definition must be specified.
