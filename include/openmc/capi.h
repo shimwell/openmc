@@ -5,6 +5,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "openmc/export.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -366,7 +368,7 @@ extern int OPENMC_E_PHYSICS;
 extern int OPENMC_E_WARNING;
 
 // Global variables
-extern char openmc_err_msg[256];
+extern OPENMC_API char openmc_err_msg[256];
 
 #ifdef __cplusplus
 }

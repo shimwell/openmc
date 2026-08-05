@@ -12,6 +12,7 @@
 
 #include "openmc/array.h"
 #include "openmc/constants.h"
+#include "openmc/export.h"
 #include "openmc/vector.h"
 
 namespace openmc {
@@ -126,7 +127,7 @@ extern "C" const char* path_statepoint_c; //!< C pointer to statepoint file name
 
 extern "C" int32_t n_inactive;         //!< number of inactive batches
 extern "C" int32_t max_lost_particles; //!< maximum number of lost particles
-extern double
+extern "C" double
   rel_max_lost_particles; //!< maximum number of lost particles, relative to the
                           //!< total number of particles
 extern "C" int32_t
@@ -159,9 +160,10 @@ extern ResScatMethod res_scat_method; //!< resonance upscattering method
 extern double res_scat_energy_min; //!< Min energy in [eV] for res. upscattering
 extern double res_scat_energy_max; //!< Max energy in [eV] for res. upscattering
 extern vector<std::string>
-  res_scat_nuclides;           //!< Nuclides using res. upscattering treatment
-extern RunMode run_mode;       //!< Run mode (eigenvalue, fixed src, etc.)
-extern SolverType solver_type; //!< Solver Type (Monte Carlo or Random Ray)
+  res_scat_nuclides; //!< Nuclides using res. upscattering treatment
+extern "C" OPENMC_API RunMode run_mode; //!< Run mode (eigenvalue, fixed src)
+extern OPENMC_API SolverType
+  solver_type; //!< Solver Type (Monte Carlo or Random Ray)
 extern std::unordered_set<int>
   sourcepoint_batch; //!< Batches when source should be written
 extern std::unordered_set<int>
