@@ -1,15 +1,17 @@
 # Scratch job to establish a Windows feedback loop. It is not a wheel build and
 # is not required to pass: the job sets continue-on-error so it can never block
-# a merge. Its purpose is to answer the two open questions in the Windows
-# support issue:
+# a merge. It exists to answer the open questions in the Windows support issue.
 #
 #   1. Does the vanilla (no DAGMC) source compile with MSVC, and which OpenMP
-#      setting is needed? Plain /openmp is frozen at OpenMP 2.0 and is expected
-#      to reject the collapse, atomic capture and atomic seq_cst constructs used
-#      in src/, so the matrix tries /openmp:llvm and a serial build instead.
-#   2. Does WINDOWS_EXPORT_ALL_SYMBOLS export the five globals that openmc.lib
-#      reads through ctypes in_dll? Function exports are routine, data exports
-#      are the documented weak spot, so they are checked explicitly.
+#      setting is needed? Partly answered. The serial leg compiles the whole
+#      library and links openmc.exe, so OpenMP was never the blocker it was
+#      assumed to be. /openmp:llvm handles collapse and atomic capture but
+#      still rejects four constructs in src/, so that leg stays experimental
+#      until they are dealt with separately.
+#   2. Does WINDOWS_EXPORT_ALL_SYMBOLS export the globals that openmc.lib reads
+#      through ctypes in_dll? Answered: no. It emits functions and mutable data
+#      but not read-only data, so the const flags were silently absent. They
+#      now carry OPENMC_API from include/openmc/export.h.
 #
 # Delete this workflow once Windows wheels are building for real.
 
@@ -35,16 +37,23 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Preferred outcome: LLVM's OpenMP runtime supports the constructs
-          # used in src/, so shared-memory parallelism is retained.
+          # Still exploratory. /openmp:llvm gets much further than plain
+          # /openmp, but four constructs in src/ remain unacceptable to it:
+          # 'seq_cst' on atomic in shared_array.h, a non-conforming collapse
+          # bound in plot.cpp, and a reduction on a non-static member in
+          # flat_source_domain.cpp and random_ray_simulation.cpp. Marked
+          # experimental so this known failure does not show up as a red check
+          # while that is worked on separately.
           - name: openmp-llvm
             openmp: 'ON'
             extra_args: '-DOpenMP_RUNTIME_MSVC=llvm'
-          # Fallback: proves the port works even if OpenMP cannot be resolved,
-          # which would still allow shipping a serial first wheel.
+            experimental: true
+          # Expected to pass. This is the configuration a first vanilla wheel
+          # would ship, so a failure here is a real regression.
           - name: openmp-off
             openmp: 'OFF'
             extra_args: ''
+            experimental: false
 
     name: probe (${{ matrix.name }})
 
@@ -82,8 +91,13 @@ jobs:
             -DOPENMC_USE_UWUW=OFF `
             -DOPENMC_BUILD_TESTS=OFF
 
+      # Job-level continue-on-error keeps the workflow run green, but the job
+      # itself is still reported as failed to the checks API, which puts a red
+      # check on the PR. Tolerating the failure at step level instead lets the
+      # experimental leg report its findings in the log without doing that.
       - name: Build
         shell: pwsh
+        continue-on-error: ${{ matrix.experimental }}
         run: cmake --build build --config Release -j 4
 
       - name: Show build outputs
@@ -102,11 +116,12 @@ jobs:
       # originally assumed. Only presence is tested, since in_dll resolves a
       # symbol regardless of the ctypes type used to view it.
       #
-      # run_mode and rel_max_lost_particles are expected to be absent. They are
-      # declared in namespace openmc::settings without extern "C", so they are
-      # name-mangled, while openmc/lib looks them up unmangled. That is a
-      # pre-existing bug on every platform, not a Windows export problem, so
-      # they are reported separately and do not fail this step.
+      # run_mode and rel_max_lost_particles were absent until they were given
+      # C linkage: they are declared in namespace openmc::settings, so without
+      # extern "C" they are name-mangled while openmc/lib looks them up
+      # unmangled. That was a pre-existing bug on every platform rather than a
+      # Windows export problem, so it is fixed separately, but both are
+      # required here now.
       #
       # Uses bash because PowerShell has no heredoc.
       - name: Check ctypes data-symbol exports
@@ -129,9 +144,6 @@ jobs:
           dll = ctypes.CDLL(path)
           print("loaded:", path)
 
-          # Mangled on every platform, so not expected here. See comment above.
-          KNOWN_MANGLED = {"run_mode", "rel_max_lost_particles"}
-
           EXPECTED = [
               # const bool flags, the four that WINDOWS_EXPORT_ALL_SYMBOLS drops
               "DAGMC_ENABLED", "UWUW_ENABLED", "LIBMESH_ENABLED",
@@ -144,6 +156,8 @@ jobs:
               "max_lost_particles", "n_inactive", "n_particles",
               "need_depletion_rx", "output_summary", "restart_run", "run_CE",
               "verbosity", "weight_windows_on",
+              # given C linkage so openmc/lib can find them at all
+              "run_mode", "rel_max_lost_particles",
           ]
 
           def present(name):
@@ -160,10 +174,6 @@ jobs:
               else:
                   missing.append(name)
                   print(f"  MISSING {name}")
-
-          for name in sorted(KNOWN_MANGLED):
-              state = "unexpectedly present" if present(name) else "absent as expected"
-              print(f"  known   {name}: {state}")
 
           print(f"\n{len(missing)} of {len(EXPECTED)} required data symbols missing")
           if missing:
