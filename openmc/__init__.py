@@ -1,6 +1,7 @@
 import os
 import glob
 import importlib.metadata
+import sys
 from openmc.arithmetic import *
 from openmc.bounding_box import *
 from openmc.cell import *
@@ -90,10 +91,17 @@ def get_core_libraries():
     # "bin" is searched because Windows treats a DLL as a RUNTIME artifact and
     # installs it to CMAKE_INSTALL_BINDIR, whereas .so/.dylib are LIBRARY
     # artifacts installed to CMAKE_INSTALL_LIBDIR. On Linux and macOS nothing in
-    # "bin" matches "libopenmc*", so this is a no-op there. The Windows import
-    # library (.lib) is an ARCHIVE artifact and still lands in lib, so lib_path
-    # does not need "bin".
-    lib = [lib_file for lib in ["lib", "lib64", "bin"] for lib_file in get_paths(lib, "libopenmc*", recursive=True)]
+    # "bin" matches, so this is a no-op there. The Windows import library (.lib)
+    # is an ARCHIVE artifact and still lands in lib, so lib_path does not need
+    # "bin".
+    #
+    # The pattern is extension-specific on Windows because that import library
+    # is named libopenmc.lib and so also matches "libopenmc*". Since "lib" is
+    # searched before "bin" it was returned first, and openmc.lib takes element
+    # zero of this list and hands it to CDLL, which fails on an import library
+    # with "OSError: [WinError 193] %1 is not a valid Win32 application".
+    pattern = "libopenmc*.dll" if sys.platform == "win32" else "libopenmc*"
+    lib = [lib_file for lib in ["lib", "lib64", "bin"] for lib_file in get_paths(lib, pattern, recursive=True)]
     lib_path = [lib_file for lib in ["lib", "lib64"] for lib_file in get_paths(lib, "", recursive=False)]
     return lib, lib_path
 
