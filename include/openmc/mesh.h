@@ -13,6 +13,7 @@
 
 #include "openmc/bounding_box.h"
 #include "openmc/error.h"
+#include "openmc/export.h"
 #include "openmc/memory.h" // for unique_ptr
 #include "openmc/particle.h"
 #include "openmc/position.h"
@@ -51,7 +52,7 @@ enum class ElementType { UNSUPPORTED = -1, LINEAR_TET, LINEAR_HEX };
 // Global variables
 //==============================================================================
 
-extern "C" const bool LIBMESH_ENABLED;
+extern "C" OPENMC_API const bool LIBMESH_ENABLED;
 
 class Mesh;
 

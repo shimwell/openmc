@@ -529,12 +529,24 @@ list(APPEND libopenmc_SOURCES
 if(MSVC)
   # A shared library is required because openmc.lib loads it with ctypes.CDLL,
   # which cannot load a static library. WINDOWS_EXPORT_ALL_SYMBOLS generates the
-  # export table automatically, so the C API does not need __declspec(dllexport)
-  # annotations. The symbols read via ctypes in_dll (DAGMC_ENABLED, UWUW_ENABLED,
-  # LIBMESH_ENABLED, STRICT_FP_ENABLED, n_coord_levels) are all declared
-  # extern "C", so they are exported unmangled.
+  # export table for functions automatically, so the C API does not need
+  # __declspec(dllexport) annotations.
+  #
+  # It does not emit global data, however. A Windows build probe showed the four
+  # extern "C" const bool flags (DAGMC_ENABLED, UWUW_ENABLED, LIBMESH_ENABLED
+  # and STRICT_FP_ENABLED) missing from the export table while the non-const
+  # n_coord_levels was present, and main.cpp failing to link against
+  # settings::run_mode, settings::solver_type, mpi::master and openmc_err_msg.
+  # Those declarations now carry OPENMC_API from include/openmc/export.h.
   add_library(libopenmc SHARED ${libopenmc_SOURCES})
   set_target_properties(libopenmc PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
+
+  # OPENMC_DLL is PUBLIC so anything linking libopenmc (the openmc executable,
+  # the C++ unit tests) resolves OPENMC_API to dllimport, while
+  # OPENMC_BUILDING_LIBOPENMC is PRIVATE so only the library itself exports.
+  target_compile_definitions(libopenmc
+    PUBLIC OPENMC_DLL
+    PRIVATE OPENMC_BUILDING_LIBOPENMC)
 
   # To use the shared HDF5 libraries on Windows, the H5_BUILT_AS_DYNAMIC_LIB
   # compile definition must be specified.

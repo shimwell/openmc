@@ -94,8 +94,20 @@ jobs:
             Select-Object FullName,Length
 
       # The real test of WINDOWS_EXPORT_ALL_SYMBOLS. Function exports are the
-      # easy part; these five are data symbols, which is where the export table
-      # is most likely to fall short and need a hand-written .def file.
+      # easy part; data exports are where the export table falls short.
+      #
+      # This checks every global that openmc.lib reads through ctypes in_dll,
+      # both the direct in_dll calls and the ones behind the _DLLGlobal
+      # descriptor in openmc/lib/core.py. That is 24 symbols, not the five
+      # originally assumed. Only presence is tested, since in_dll resolves a
+      # symbol regardless of the ctypes type used to view it.
+      #
+      # run_mode and rel_max_lost_particles are expected to be absent. They are
+      # declared in namespace openmc::settings without extern "C", so they are
+      # name-mangled, while openmc/lib looks them up unmangled. That is a
+      # pre-existing bug on every platform, not a Windows export problem, so
+      # they are reported separately and do not fail this step.
+      #
       # Uses bash because PowerShell has no heredoc.
       - name: Check ctypes data-symbol exports
         if: always()
@@ -108,7 +120,7 @@ jobs:
           fi
           export OPENMC_DLL="$DLL"
           python - <<'PY'
-          import ctypes, os
+          import ctypes, os, sys
           vcpkg = os.environ.get("VCPKG_ROOT", "")
           hdf5_bin = os.path.join(vcpkg, "installed", "x64-windows", "bin")
           if os.path.isdir(hdf5_bin):
@@ -116,20 +128,47 @@ jobs:
           path = os.path.abspath(os.environ["OPENMC_DLL"])
           dll = ctypes.CDLL(path)
           print("loaded:", path)
-          failures = 0
-          for name, typ in [
-              ("DAGMC_ENABLED", ctypes.c_bool),
-              ("UWUW_ENABLED", ctypes.c_bool),
-              ("LIBMESH_ENABLED", ctypes.c_bool),
-              ("STRICT_FP_ENABLED", ctypes.c_bool),
-              ("n_coord_levels", ctypes.c_int),
-          ]:
+
+          # Mangled on every platform, so not expected here. See comment above.
+          KNOWN_MANGLED = {"run_mode", "rel_max_lost_particles"}
+
+          EXPECTED = [
+              # const bool flags, the four that WINDOWS_EXPORT_ALL_SYMBOLS drops
+              "DAGMC_ENABLED", "UWUW_ENABLED", "LIBMESH_ENABLED",
+              "STRICT_FP_ENABLED",
+              # direct in_dll calls in openmc/lib
+              "current_batch", "n_coord_levels", "n_realizations",
+              "openmc_err_msg", "path_statepoint_c",
+              # behind _DLLGlobal in openmc/lib/core.py
+              "cmfd_run", "entropy_on", "event_based", "gen_per_batch",
+              "max_lost_particles", "n_inactive", "n_particles",
+              "need_depletion_rx", "output_summary", "restart_run", "run_CE",
+              "verbosity", "weight_windows_on",
+          ]
+
+          def present(name):
               try:
-                  print(f"  OK   {name} = {typ.in_dll(dll, name).value}")
-              except Exception as exc:
-                  failures += 1
-                  print(f"  FAIL {name}: {exc}")
-          print(f"\n{failures} of 5 data symbols missing from the export table")
-          if failures:
-              print("A hand-written .def file is likely needed.")
+                  ctypes.c_char.in_dll(dll, name)
+                  return True
+              except Exception:
+                  return False
+
+          missing = []
+          for name in EXPECTED:
+              if present(name):
+                  print(f"  OK      {name}")
+              else:
+                  missing.append(name)
+                  print(f"  MISSING {name}")
+
+          for name in sorted(KNOWN_MANGLED):
+              state = "unexpectedly present" if present(name) else "absent as expected"
+              print(f"  known   {name}: {state}")
+
+          print(f"\n{len(missing)} of {len(EXPECTED)} required data symbols missing")
+          if missing:
+              print("Missing: " + ", ".join(missing))
+              print("These need OPENMC_API in their declaration, see include/openmc/export.h")
+              sys.exit(1)
+          print("All required data symbols are exported.")
           PY
