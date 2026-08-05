@@ -26,6 +26,8 @@ on:
       - 'cmake/**'
       - 'src/**'
       - 'include/**'
+      - 'pyproject.toml'
+      - 'openmc/**'
 
 jobs:
   probe:
@@ -182,3 +184,126 @@ jobs:
               sys.exit(1)
           print("All required data symbols are exported.")
           PY
+
+  # The probe job above builds with CMake directly, which never touches pip or
+  # scikit-build-core. This job covers the packaging path instead, because two
+  # things have never been exercised on Windows at all:
+  #
+  #   * scikit-build-core, which pip drives via pyproject.toml
+  #   * the "bin" entry in the core library search in openmc/__init__.py, added
+  #     because Windows installs a DLL as a RUNTIME artifact to bindir rather
+  #     than as a LIBRARY artifact to libdir
+  #
+  # Every check below is tolerant and runs with if: always(), so one run reports
+  # all of the failures rather than stopping at the first. The whole job is
+  # exploratory, so it never turns a PR red.
+  #
+  # Two known limitations, both expected to fail here rather than being bugs:
+  #
+  #   * a plain "pip install ." does not bundle the HDF5 DLLs, which is what
+  #     delvewheel does for a real wheel, so the import is tried both with and
+  #     without the vcpkg bin directory made visible
+  #   * cmake/GenerateScript.cmake writes a POSIX-only console script, so
+  #     "openmc --version" is expected to fail until that is fixed
+  pip-install:
+    runs-on: windows-latest
+    continue-on-error: true
+    timeout-minutes: 120
+    name: probe (pip install)
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # needed for versioning from git tags
+          submodules: recursive  # vendored pugixml and fmt
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install HDF5 via vcpkg
+        shell: pwsh
+        run: |
+          & "$env:VCPKG_INSTALLATION_ROOT\vcpkg.exe" install hdf5[core,hl]:x64-windows
+          "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" >> $env:GITHUB_ENV
+
+      # Forward slashes in the toolchain path because SKBUILD_CMAKE_ARGS is a
+      # semicolon-separated list and backslashes invite quoting trouble.
+      - name: pip install
+        id: install
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $toolchain = "$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake".Replace('\', '/')
+          $env:SKBUILD_CMAKE_ARGS = @(
+            "-DCMAKE_TOOLCHAIN_FILE=$toolchain",
+            "-DVCPKG_TARGET_TRIPLET=x64-windows",
+            "-DOPENMC_USE_DAGMC=OFF",
+            "-DOPENMC_USE_LIBMESH=OFF",
+            "-DOPENMC_USE_MPI=OFF",
+            "-DOPENMC_USE_UWUW=OFF",
+            "-DOPENMC_USE_OPENMP=OFF",
+            "-DOPENMC_BUILD_TESTS=OFF"
+          ) -join ';'
+          python -m pip install --upgrade pip
+          python -m pip install . -v
+
+      # Where did the DLL and the console script actually land?
+      - name: Show installed layout
+        if: always()
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $site = python -c "import sysconfig; print(sysconfig.get_path('platlib'))"
+          Write-Host "platlib: $site"
+          Get-ChildItem -Recurse "$site/openmc" -Include libopenmc.dll,*.lib |
+            Select-Object FullName,Length
+          $scripts = python -c "import sysconfig; print(sysconfig.get_path('scripts'))"
+          Write-Host "scripts: $scripts"
+          Get-ChildItem "$scripts" -Filter 'openmc*' | Select-Object Name,Length
+
+      # Does openmc/__init__.py find the DLL in bin? This imports the pure
+      # Python package only, so it does not need the HDF5 DLLs yet.
+      - name: import openmc
+        if: always()
+        continue-on-error: true
+        shell: pwsh
+        run: python -c "import openmc; print('openmc', openmc.__version__); print('lib:', openmc.lib_path if hasattr(openmc, 'lib_path') else 'n/a')"
+
+      # Expected to fail: nothing has bundled the HDF5 DLLs at this point.
+      - name: import openmc.lib without HDF5 on the DLL path
+        if: always()
+        continue-on-error: true
+        shell: pwsh
+        run: python -c "import openmc.lib; print('imported openmc.lib')"
+
+      # The same import with the vcpkg bin directory made visible. If this
+      # passes while the one above fails, the only remaining gap is bundling,
+      # which is delvewheel's job.
+      - name: import openmc.lib with HDF5 on the DLL path
+        if: always()
+        continue-on-error: true
+        shell: bash
+        run: |
+          python - <<'PY'
+          import os
+          hdf5_bin = os.path.join(os.environ["VCPKG_ROOT"], "installed", "x64-windows", "bin")
+          print("adding", hdf5_bin, "isdir:", os.path.isdir(hdf5_bin))
+          if os.path.isdir(hdf5_bin):
+              os.add_dll_directory(hdf5_bin)
+          import openmc.lib
+          print("imported openmc.lib")
+          print("DAGMC_ENABLED:", openmc.lib.DAGMC_ENABLED)
+          print("run_mode:", openmc.lib.settings.run_mode)
+          print("rel_max_lost_particles:", openmc.lib.settings.rel_max_lost_particles)
+          PY
+
+      # Expected to fail until cmake/GenerateScript.cmake is fixed: the script
+      # it installs has a shebang, no .exe suffix and dispatches with os.execv.
+      - name: openmc --version
+        if: always()
+        continue-on-error: true
+        shell: pwsh
+        run: openmc --version
