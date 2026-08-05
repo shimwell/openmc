@@ -58,3 +58,17 @@ jobs:
           echo "Some files failed the formatting check."
           echo "See job summary and file annotations for details."
           exit 1
+
+  # clang-format does not rewrite C++ alternative operator tokens, so this is
+  # the only thing standing between an 'and' and a broken MSVC build.
+  alternative-tokens:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check for C++ alternative operator tokens
+        run: python tools/ci/check_alternative_tokens.py
