@@ -1,0 +1,109 @@
+# Builds vanilla Windows wheels and uploads them as artifacts. Vanilla means no
+# DAGMC, libMesh, MPI or UWUW, and serial for now, which keeps the only external
+# dependency down to HDF5.
+#
+# The Windows cibuildwheel settings live in [tool.cibuildwheel.windows] in
+# pyproject.toml, including the delvewheel repair command that bundles the HDF5
+# DLLs into the wheel.
+
+name: Build Windows Wheels
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 180
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # needed for setuptools_scm
+          submodules: recursive  # vendored pugixml and fmt
+
+      # Installed here rather than in cibuildwheel's before-all so the same
+      # path can be handed to delvewheel for bundling. The repair command in
+      # pyproject.toml expects C:/vcpkg, which is VCPKG_INSTALLATION_ROOT on
+      # the GitHub runners.
+      - name: Install HDF5 via vcpkg
+        shell: pwsh
+        run: |
+          & "$env:VCPKG_INSTALLATION_ROOT\vcpkg.exe" install hdf5[core,hl]:x64-windows
+          Write-Host "vcpkg root: $env:VCPKG_INSTALLATION_ROOT"
+          if ("$env:VCPKG_INSTALLATION_ROOT" -ne "C:\vcpkg") {
+            Write-Warning "vcpkg is not at C:\vcpkg, so the hardcoded paths in [tool.cibuildwheel.windows] need updating"
+          }
+
+      - name: Build wheels with cibuildwheel
+        uses: pypa/cibuildwheel@v3.4.1
+        env:
+          CIBW_PLATFORM: windows
+
+      - name: List wheels
+        if: always()
+        shell: pwsh
+        run: Get-ChildItem wheelhouse | Select-Object Name,Length
+
+      - name: Upload wheels
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-wheels
+          path: wheelhouse/*.whl
+          if-no-files-found: error
+
+  # cibuildwheel already runs test-command inside the build job. This installs
+  # the repaired wheel into a clean interpreter with no vcpkg and no source
+  # tree present, which is the part that actually proves delvewheel bundled the
+  # HDF5 DLLs rather than the machine happening to have them.
+  test:
+    needs: build
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13", "3.14"]
+
+    steps:
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Download wheels
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-wheels
+          path: wheelhouse
+
+      # No checkout, so there is no source tree to shadow the installed
+      # package. That matters because importing openmc from the source
+      # directory warns and can resolve differently.
+      - name: Install the wheel
+        shell: pwsh
+        run: |
+          $tag = "cp" + "${{ matrix.python-version }}".Replace(".", "")
+          $whl = Get-ChildItem wheelhouse/*.whl | Where-Object { $_.Name -like "*$tag*" } | Select-Object -First 1
+          if (-not $whl) { throw "no wheel found for $tag" }
+          Write-Host "installing $($whl.Name)"
+          python -m pip install --upgrade pip
+          python -m pip install "$($whl.FullName)"
+
+      - name: Import openmc and openmc.lib
+        shell: pwsh
+        run: |
+          python -c "import openmc; print('openmc', openmc.__version__)"
+          python -c "import openmc.lib; print('loaded', openmc.lib._filename)"
+
+      # Reads a const flag and a namespaced global back out of the DLL. These
+      # are the two export cases that were broken before #129 and #130, so they
+      # are worth asserting on rather than just importing.
+      - name: Check data symbols resolve through ctypes
+        shell: pwsh
+        run: |
+          python -c "import openmc.lib; assert openmc.lib.DAGMC_ENABLED is False; print('DAGMC_ENABLED', openmc.lib.DAGMC_ENABLED)"
+          python -c "import openmc.lib; print('run_mode', openmc.lib.settings.run_mode)"
+          python -c "import openmc.lib; print('rel_max_lost_particles', openmc.lib.settings.rel_max_lost_particles)"
