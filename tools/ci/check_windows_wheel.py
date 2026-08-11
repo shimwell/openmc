@@ -75,6 +75,20 @@ def imported_dlls(binary: Path):
     return names
 
 
+# The return types have to be declared. A handle is 64 bit and the ctypes
+# default of c_int truncates it, which gives a non-zero but invalid handle and
+# makes GetModuleFileNameW return an empty path for everything.
+_kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)
+_kernel32.LoadLibraryExW.restype = ctypes.c_void_p
+_kernel32.LoadLibraryExW.argtypes = [ctypes.c_wchar_p, ctypes.c_void_p,
+                                     ctypes.c_uint32]
+_kernel32.GetModuleFileNameW.restype = ctypes.c_uint32
+_kernel32.GetModuleFileNameW.argtypes = [ctypes.c_void_p, ctypes.c_wchar_p,
+                                         ctypes.c_uint32]
+
+DONT_RESOLVE_DLL_REFERENCES = 0x1
+
+
 def find_dll(name: str, extra_dirs):
     """Returns where a DLL would be loaded from, or None if it is not found"""
 
@@ -83,12 +97,16 @@ def find_dll(name: str, extra_dirs):
         if candidate.is_file():
             return candidate
 
-    handle = ctypes.windll.kernel32.LoadLibraryExW(name, None, 0)
-    if handle:
-        buffer = ctypes.create_unicode_buffer(1024)
-        ctypes.windll.kernel32.GetModuleFileNameW(handle, buffer, 1024)
-        return Path(buffer.value)
-    return None
+    # DONT_RESOLVE_DLL_REFERENCES so that this reports whether the DLL itself
+    # can be found rather than whether its own dependencies can be
+    handle = _kernel32.LoadLibraryExW(name, None, DONT_RESOLVE_DLL_REFERENCES)
+    if not handle:
+        return None
+
+    buffer = ctypes.create_unicode_buffer(32768)
+    if _kernel32.GetModuleFileNameW(handle, buffer, len(buffer)) == 0:
+        return Path(name)
+    return Path(buffer.value)
 
 
 def main():
@@ -111,6 +129,20 @@ def main():
     # anything vendored by delvewheel lives in a .libs folder next to the
     # package and is only on the search path of the Python process
     vendored = [p for p in site_packages.glob('openmc*.libs') if p.is_dir()]
+    if vendored:
+        for folder in vendored:
+            print(f'vendored DLLs in {folder.name}')
+            for entry in sorted(folder.iterdir()):
+                print(f'  {entry.name}')
+    else:
+        print('no openmc*.libs folder, so no DLLs were vendored into the wheel')
+
+    # h5py bundles its own HDF5 and puts it on the DLL search path of the
+    # process, which is enough to make libopenmc.dll import even when the wheel
+    # is missing HDF5. Reported so that is not mistaken for a working wheel.
+    for h5py_dll in sorted(site_packages.glob('h5py*/**/hdf5.dll')):
+        print(f'h5py ships an HDF5 at {h5py_dll}')
+
     extra_dirs = [bin_dir, *vendored]
 
     missing = []

@@ -120,7 +120,16 @@ environment = { SKBUILD_CMAKE_ARGS = "-DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/bu
 # delvewheel is the Windows equivalent of auditwheel. It bundles the HDF5 DLLs
 # into openmc.libs and injects the os.add_dll_directory calls needed to find
 # them, which a plain build does not do.
-repair-wheel-command = "delvewheel repair -w {dest_dir} {wheel} --add-path C:/vcpkg/installed/x64-windows/bin"
+#
+# --analyze-existing is required, not optional. By default delvewheel only
+# looks at the extension modules in the wheel, and openmc has none, it is
+# pure Python talking to libopenmc.dll through ctypes. Without the flag
+# delvewheel finds nothing to analyse and vendors nothing, which leaves
+# libopenmc.dll importing an hdf5.dll that is not in the wheel. That still
+# imports in Python, because h5py bundles its own copy of HDF5 and puts it on
+# the DLL search path of the process, but the openmc executable runs as a
+# separate process and fails with 0xC0000135 STATUS_DLL_NOT_FOUND.
+repair-wheel-command = "delvewheel repair --analyze-existing -w {dest_dir} {wheel} --add-path C:/vcpkg/installed/x64-windows/bin"
 # Runs the diagnostics as well as the checks, so that a wheel that builds
 # but can not run OpenMC says why in the build log. See the script for what
 # makes the executable and the ctypes import resolve DLLs differently.
