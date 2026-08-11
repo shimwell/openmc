@@ -21,11 +21,13 @@ COPY wheelhouse/openmc-${openmc_version}-cp${python_version_no_dot}-cp${python_v
 RUN python${python_version} -m pip install openmc-${openmc_version}-cp${python_version_no_dot}-cp${python_version_no_dot}-manylinux_2_28_x86_64.whl
 RUN python${python_version} -c "import openmc.lib"
 COPY minimal_test.py .
+COPY minimal_test_csg.py .
 COPY small_dagmc_file.h5m .
 COPY cross_sections.xml .
 COPY Li.h5 .
 COPY Li7.h5 .
 COPY small_um.vtk .
 RUN apt install libxrender1 -y
-RUN openmc --version || echo "openmc --version exit code: $?"
+RUN openmc --version
+RUN python${python_version} minimal_test_csg.py
 RUN python${python_version} minimal_test.py
