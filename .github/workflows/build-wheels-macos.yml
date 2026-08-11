@@ -117,8 +117,13 @@ jobs:
       - name: Import openmc
         run: python -c "import openmc; import openmc.lib; print(openmc.__version__)"
 
+      # The output is checked rather than just the exit status, so that a
+      # launcher that exits zero without running OpenMC can not pass.
       - name: Check the openmc command line interface runs
-        run: openmc --version
+        run: |
+          version=$(openmc --version)
+          echo "$version"
+          echo "$version" | grep -i "openmc version"
 
       # Only the files needed by the tests are checked out, and into a
       # subfolder, so that the openmc source directory is not present to shadow
