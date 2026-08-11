@@ -121,4 +121,7 @@ environment = { SKBUILD_CMAKE_ARGS = "-DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/bu
 # into openmc.libs and injects the os.add_dll_directory calls needed to find
 # them, which a plain build does not do.
 repair-wheel-command = "delvewheel repair -w {dest_dir} {wheel} --add-path C:/vcpkg/installed/x64-windows/bin"
-test-command = "openmc --version && python -c \"import openmc; import openmc.lib; print(openmc.__version__)\""
+# Runs the diagnostics as well as the checks, so that a wheel that builds
+# but can not run OpenMC says why in the build log. See the script for what
+# makes the executable and the ctypes import resolve DLLs differently.
+test-command = "python {project}/tools/ci/check_windows_wheel.py"

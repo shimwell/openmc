@@ -22,6 +22,28 @@ def _executable_path() -> Path:
     return Path(__file__).resolve().parent / 'core' / 'bin' / name
 
 
+def _windows_environment() -> dict:
+    """Returns an environment that lets the executable find its own DLLs.
+
+    DLLs bundled into the wheel by the repair tool are placed in a folder
+    beside the package, and are only added to the DLL search path of the
+    Python process, by the code injected into the package for that purpose.
+    The executable runs as a separate process which does not inherit any of
+    that, so those folders are put on its PATH instead. Without this the
+    executable exits without writing anything at all, as a Windows process
+    that can not resolve a DLL never gets as far as running.
+    """
+
+    package_dir = Path(__file__).resolve().parent
+    directories = [package_dir / 'core' / 'bin']
+    directories += sorted(package_dir.parent.glob('openmc*.libs'))
+
+    environment = os.environ.copy()
+    on_path = [str(d) for d in directories if d.is_dir()]
+    environment['PATH'] = os.pathsep.join([*on_path, environment.get('PATH', '')])
+    return environment
+
+
 def main():
     executable = _executable_path()
 
@@ -33,7 +55,9 @@ def main():
         # as soon as the child has been started. That would make callers such
         # as openmc.run() think the simulation had finished immediately, so the
         # child is waited on instead.
-        sys.exit(subprocess.call([str(executable), *sys.argv[1:]]))
+        sys.exit(subprocess.call(
+            [str(executable), *sys.argv[1:]], env=_windows_environment()
+        ))
 
     os.execv(executable, [str(executable), *sys.argv[1:]])
 
