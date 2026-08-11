@@ -90,6 +90,7 @@ jobs:
     needs: build
     runs-on: macos-14
     strategy:
+      fail-fast: false
       matrix:
         python-version: ["3.12", "3.13", "3.14"]
 
@@ -105,10 +106,52 @@ jobs:
           name: macos-arm-wheel-${{ matrix.python-version }}
           path: wheelhouse
 
-      - name: Test wheel
+      # The venv is added to the PATH rather than activated, as activating it
+      # only lasts for the step that runs the activation.
+      - name: Install the wheel
         run: |
           python -m venv test_env
-          source test_env/bin/activate
-          pip install wheelhouse/openmc-*.whl
-          python -c "import openmc.lib; print('openmc.lib imported successfully')"
-          openmc --version
+          echo "$PWD/test_env/bin" >> $GITHUB_PATH
+          test_env/bin/pip install wheelhouse/openmc-*.whl
+
+      - name: Import openmc
+        run: python -c "import openmc; import openmc.lib; print(openmc.__version__)"
+
+      # The output is checked rather than just the exit status, so that a
+      # launcher that exits zero without running OpenMC can not pass.
+      - name: Check the openmc command line interface runs
+        run: |
+          version=$(openmc --version)
+          echo "$version"
+          echo "$version" | grep -i "openmc version"
+
+      # Only the files needed by the tests are checked out, and into a
+      # subfolder, so that the openmc source directory is not present to shadow
+      # the installed package.
+      - name: Checkout the test files
+        uses: actions/checkout@v4
+        with:
+          path: test_files
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            minimal_test.py
+            minimal_test_csg.py
+            cross_sections.xml
+            Li.h5
+            Li7.h5
+            small_dagmc_file.h5m
+            small_um.vtk
+
+      # The wheel is no use if it can only be imported, so a simulation is run
+      # as well. This goes through model.run() so the openmc executable and the
+      # console script that launches it are both exercised.
+      - name: Run a CSG simulation
+        working-directory: test_files
+        run: python minimal_test_csg.py
+
+      # The Mac OS wheel is built with DAGMC so the DAGMC universe, the moab
+      # unstructured mesh and the vtk writing are covered too, in the same way
+      # as the Linux wheel test.
+      - name: Run a DAGMC simulation
+        working-directory: test_files
+        run: python minimal_test.py
