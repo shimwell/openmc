@@ -8,7 +8,6 @@
 #include <mpi.h>
 #endif
 
-#include "openmc/export.h"
 #include "openmc/vector.h"
 
 namespace openmc {
@@ -16,7 +15,7 @@ namespace mpi {
 
 extern int rank;
 extern int n_procs;
-extern OPENMC_API bool master;
+extern bool master;
 
 #ifdef OPENMC_MPI
 extern MPI_Datatype source_site;

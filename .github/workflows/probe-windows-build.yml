@@ -10,8 +10,9 @@
 #      until they are dealt with separately.
 #   2. Does WINDOWS_EXPORT_ALL_SYMBOLS export the globals that openmc.lib reads
 #      through ctypes in_dll? Answered: no. It emits functions and mutable data
-#      but not read-only data, so the const flags were silently absent. They
-#      now carry OPENMC_API from include/openmc/export.h.
+#      but not read-only data, so the const flags were silently absent. Moot
+#      now that openmc.lib reads every global through a C API accessor
+#      function instead, which is the part the export table does cover.
 #
 # Delete this workflow once Windows wheels are building for real.
 
@@ -107,24 +108,22 @@ jobs:
           Get-ChildItem -Recurse build -Include libopenmc.dll,libopenmc.lib,openmc.exe |
             Select-Object FullName,Length
 
-      # The real test of WINDOWS_EXPORT_ALL_SYMBOLS. Function exports are the
-      # easy part; data exports are where the export table falls short.
+      # The real test of WINDOWS_EXPORT_ALL_SYMBOLS. It emits functions and
+      # mutable data but not read-only data, so an earlier revision of this
+      # probe checked the 24 globals that openmc.lib used to read through
+      # ctypes in_dll and found the const flags silently absent.
       #
-      # This checks every global that openmc.lib reads through ctypes in_dll,
-      # both the direct in_dll calls and the ones behind the _DLLGlobal
-      # descriptor in openmc/lib/core.py. That is 24 symbols, not the five
-      # originally assumed. Only presence is tested, since in_dll resolves a
-      # symbol regardless of the ctypes type used to view it.
+      # openmc.lib no longer reads any global directly. Every setting, flag and
+      # counter now goes through a C API accessor function, so the contract this
+      # step has to hold is that those functions are in the export table.
+      # Functions are the part WINDOWS_EXPORT_ALL_SYMBOLS handles, which is why
+      # no __declspec annotation is needed anywhere in the tree.
       #
-      # run_mode and rel_max_lost_particles were absent until they were given
-      # C linkage: they are declared in namespace openmc::settings, so without
-      # extern "C" they are name-mangled while openmc/lib looks them up
-      # unmangled. That was a pre-existing bug on every platform rather than a
-      # Windows export problem, so it is fixed separately, but both are
-      # required here now.
+      # Only presence is tested, since getattr resolves a symbol without saying
+      # anything about its signature.
       #
       # Uses bash because PowerShell has no heredoc.
-      - name: Check ctypes data-symbol exports
+      - name: Check C API function exports
         if: always()
         shell: bash
         run: |
@@ -145,26 +144,30 @@ jobs:
           print("loaded:", path)
 
           EXPECTED = [
-              # const bool flags, the four that WINDOWS_EXPORT_ALL_SYMBOLS drops
-              "DAGMC_ENABLED", "UWUW_ENABLED", "LIBMESH_ENABLED",
-              "STRICT_FP_ENABLED",
-              # direct in_dll calls in openmc/lib
-              "current_batch", "n_coord_levels", "n_realizations",
-              "openmc_err_msg", "path_statepoint_c",
-              # behind _DLLGlobal in openmc/lib/core.py
-              "cmfd_run", "entropy_on", "event_based", "gen_per_batch",
-              "max_lost_particles", "n_inactive", "n_particles",
-              "need_depletion_rx", "output_summary", "restart_run", "run_CE",
-              "verbosity", "weight_windows_on",
-              # given C linkage so openmc/lib can find them at all
-              "run_mode", "rel_max_lost_particles",
+              # lifecycle, called by openmc.lib.core
+              "openmc_init", "openmc_run", "openmc_finalize",
+              # error reporting, replaces the openmc_err_msg buffer
+              "openmc_get_err_msg",
+              # optional build features, replace the four const bool flags
+              "openmc_get_feature_enabled",
+              # simulation state, replaces current_batch, n_coord_levels,
+              # n_realizations and mpi::master
+              "openmc_get_current_batch", "openmc_get_n_coord_levels",
+              "openmc_get_n_realizations", "openmc_master",
+              # settings, replace everything openmc/lib/settings.py used to
+              # reach through the _DLLGlobal descriptor
+              "openmc_setting_get_bool", "openmc_setting_set_bool",
+              "openmc_setting_get_double", "openmc_setting_set_double",
+              "openmc_setting_get_int32", "openmc_setting_set_int32",
+              "openmc_setting_get_int64", "openmc_setting_set_int64",
+              "openmc_setting_get_string",
           ]
 
           def present(name):
               try:
-                  ctypes.c_char.in_dll(dll, name)
+                  getattr(dll, name)
                   return True
-              except Exception:
+              except AttributeError:
                   return False
 
           missing = []
@@ -175,10 +178,11 @@ jobs:
                   missing.append(name)
                   print(f"  MISSING {name}")
 
-          print(f"\n{len(missing)} of {len(EXPECTED)} required data symbols missing")
+          print(f"\n{len(missing)} of {len(EXPECTED)} required C API functions missing")
           if missing:
               print("Missing: " + ", ".join(missing))
-              print("These need OPENMC_API in their declaration, see include/openmc/export.h")
+              print("WINDOWS_EXPORT_ALL_SYMBOLS should cover these, so a miss means")
+              print("the def file did not pick up the libopenmc_objects objects.")
               sys.exit(1)
-          print("All required data symbols are exported.")
+          print("All required C API functions are exported.")
           PY

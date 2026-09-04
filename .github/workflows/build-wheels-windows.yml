@@ -120,26 +120,22 @@ jobs:
           loaded = str(openmc.lib._filename).lower()
           assert loaded.endswith(".dll"), openmc.lib._filename
 
-          # const bool flags. These are the export case that
+          # Optional build features. These used to be const bool globals read
+          # with ctypes in_dll, which is the export case that
           # WINDOWS_EXPORT_ALL_SYMBOLS silently drops, since bindexplib emits
-          # mutable data but not read-only data, so reading them at all
-          # exercises the OPENMC_API annotation. All false in a vanilla build.
-          # Underscore-prefixed, but this is how openmc's own test suite reads
-          # them, see tests/conftest.py.
-          for name, fn in [
-              ("DAGMC_ENABLED", openmc.lib._dagmc_enabled),
-              ("LIBMESH_ENABLED", openmc.lib._libmesh_enabled),
-              ("UWUW_ENABLED", openmc.lib._uwuw_enabled),
-          ]:
-              value = fn()
+          # mutable data but not read-only data. They are now behind
+          # openmc_get_feature_enabled, so the query is an ordinary function
+          # call across the boundary. All false in a vanilla build.
+          for name in ("dagmc", "libmesh", "uwuw"):
+              value = openmc.lib.feature_enabled(name)
               print(f"  {name} = {value}")
               assert value is False, (name, value)
 
-          # Namespaced globals, which needed extern "C" as well as exporting.
-          # run_mode reads back as None rather than a string because the library
-          # is uninitialised, so RunMode::UNSET is not in openmc.lib's mapping.
-          # Resolving without raising is the point. Before the extern "C" fix
-          # this was a ValueError about an undefined symbol.
+          # Namespaced C++ globals, reached through the settings accessors in
+          # the C API rather than by reading the symbol directly. run_mode reads
+          # back as None rather than a string because the library is
+          # uninitialised, so RunMode::UNSET is not in openmc.lib's mapping.
+          # Resolving without raising is the point.
           print("  run_mode =", openmc.lib.settings.run_mode)
 
           rel = openmc.lib.settings.rel_max_lost_particles
@@ -149,7 +145,7 @@ jobs:
           # default in src/settings.cpp.
           assert abs(rel - 1.0e-6) < 1.0e-12, rel
 
-          print("all data symbols resolved")
+          print("all settings resolved")
           PY
 
       # Diagnostics rather than a check, so this never fails the job. The

@@ -106,14 +106,15 @@ test-command = "openmc --version && python -c \"import openmc; import openmc.lib
 # the path can be reused by delvewheel below. VCPKG_ROOT is C:/vcpkg on the
 # GitHub runners; override both paths together if that ever changes.
 #
-# OPENMC_BUILD_TESTS=OFF is required, not just a saving. It defaults to ON, and
-# the Catch2 unit tests reference openmc::model globals (meshes, surfaces,
-# filter_map, root_universe, n_coord_levels and friends) directly. Those are
-# data symbols, and importing data across a DLL boundary needs dllimport, which
-# WINDOWS_EXPORT_ALL_SYMBOLS cannot provide, so the test executables fail to
-# link with 21 LNK2019 errors and take the wheel build down with them. Building
-# the C++ tests on Windows needs those globals annotated with OPENMC_API, which
-# is separate work and not needed for a wheel.
+# OPENMC_BUILD_TESTS=OFF keeps the Catch2 unit tests out of the wheel build. It
+# used to be required rather than a saving: the tests reference openmc::model
+# globals (meshes, surfaces, filter_map, root_universe, n_coord_levels and
+# friends) directly, those are data symbols, and importing data across a DLL
+# boundary needs dllimport, which WINDOWS_EXPORT_ALL_SYMBOLS cannot provide, so
+# the test executables failed to link with 21 LNK2019 errors and took the wheel
+# build down with them. Upstream #4062 removed the boundary by linking the tests
+# against libopenmc_test, a static library over the same objects, so this is now
+# just a build time saving. A wheel has no use for the C++ tests either way.
 [tool.cibuildwheel.windows]
 before-build = "pip install delvewheel"
 environment = { SKBUILD_CMAKE_ARGS = "-DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake;-DVCPKG_TARGET_TRIPLET=x64-windows;-DOPENMC_USE_DAGMC=OFF;-DOPENMC_USE_OPENMP=OFF;-DOPENMC_USE_MPI=OFF;-DOPENMC_USE_UWUW=OFF;-DOPENMC_USE_LIBMESH=OFF;-DOPENMC_BUILD_TESTS=OFF" }
