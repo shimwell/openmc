@@ -434,6 +434,7 @@ list(APPEND libopenmc_SOURCES
   src/ncrystal_interface.cpp
   src/ncrystal_load.cpp
   src/nuclide.cpp
+  src/openmc.cpp
   src/output.cpp
   src/particle.cpp
   src/particle_data.cpp
@@ -522,34 +523,34 @@ list(APPEND libopenmc_SOURCES
   src/external/quartic_solver.cpp
   src/external/Faddeeva.cc)
 
+# Compile the OpenMC sources once so that they can be used by both the
+# production library and the static library used by the C++ unit tests.
+add_library(libopenmc_objects OBJECT ${libopenmc_SOURCES})
+set_target_properties(libopenmc_objects PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
+# libopenmc is built shared everywhere, including MSVC, because openmc.lib
+# loads it with ctypes.CDLL, which cannot load a static library.
+add_library(libopenmc SHARED)
+
 # For Visual Studio compilers
 if(MSVC)
-  # A shared library is required because openmc.lib loads it with ctypes.CDLL,
-  # which cannot load a static library. WINDOWS_EXPORT_ALL_SYMBOLS generates the
-  # export table for functions automatically, so the C API does not need
-  # __declspec(dllexport) annotations.
-  #
-  # It does not emit global data, however. A Windows build probe showed the four
-  # extern "C" const bool flags (DAGMC_ENABLED, UWUW_ENABLED, LIBMESH_ENABLED
-  # and STRICT_FP_ENABLED) missing from the export table while the non-const
-  # n_coord_levels was present, and main.cpp failing to link against
-  # settings::run_mode, settings::solver_type, mpi::master and openmc_err_msg.
-  # Those declarations now carry OPENMC_API from include/openmc/export.h.
-  add_library(libopenmc SHARED ${libopenmc_SOURCES})
+  # WINDOWS_EXPORT_ALL_SYMBOLS writes a module definition file from the object
+  # files that are linked into the target, which includes the ones coming from
+  # libopenmc_objects, so the C API needs no __declspec(dllexport) annotations.
+  # It covers functions and not global data, which is enough because openmc.lib
+  # reads every setting and flag through a C API accessor function.
   set_target_properties(libopenmc PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
-
-  # OPENMC_DLL is PUBLIC so anything linking libopenmc (the openmc executable,
-  # the C++ unit tests) resolves OPENMC_API to dllimport, while
-  # OPENMC_BUILDING_LIBOPENMC is PRIVATE so only the library itself exports.
-  target_compile_definitions(libopenmc
-    PUBLIC OPENMC_DLL
-    PRIVATE OPENMC_BUILDING_LIBOPENMC)
 
   # To use the shared HDF5 libraries on Windows, the H5_BUILT_AS_DYNAMIC_LIB
   # compile definition must be specified.
-  target_compile_definitions(libopenmc PRIVATE -DH5_BUILT_AS_DYNAMIC_LIB)
-else()
-  add_library(libopenmc SHARED ${libopenmc_SOURCES})
+  target_compile_definitions(libopenmc_objects PRIVATE -DH5_BUILT_AS_DYNAMIC_LIB)
+endif()
+target_link_libraries(libopenmc PUBLIC libopenmc_objects)
+
+if(OPENMC_BUILD_TESTS)
+  add_library(libopenmc_test STATIC)
+  set_target_properties(libopenmc_test PROPERTIES OUTPUT_NAME openmc_test)
+  target_link_libraries(libopenmc_test PUBLIC libopenmc_objects)
 endif()
 
 add_library(OpenMC::libopenmc ALIAS libopenmc)
@@ -559,16 +560,15 @@ if(NOT MSVC)
   set_target_properties(libopenmc PROPERTIES OUTPUT_NAME openmc)
 endif()
 
-target_include_directories(libopenmc
+target_include_directories(libopenmc_objects
   PUBLIC
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     ${HDF5_INCLUDE_DIRS}
 )
 
-# Set compile flags
-target_compile_options(libopenmc PRIVATE ${cxxflags})
-
+# The install RPATH belongs on libopenmc because that is the target that
+# produces the installed shared library. libopenmc_objects produces no binary.
 if(OPENMC_LIBRARY_RPATH)
   set_target_properties(
     libopenmc
@@ -578,37 +578,44 @@ if(OPENMC_LIBRARY_RPATH)
 endif()
 
 # Add include directory for configured version file
-target_include_directories(libopenmc
+target_include_directories(libopenmc_objects
   PUBLIC $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/include>)
 
+# Ensure C++17 standard is used and turn off GNU extensions
+target_compile_features(libopenmc_objects PUBLIC cxx_std_17)
+set_target_properties(libopenmc_objects PROPERTIES CXX_EXTENSIONS OFF)
+
+# Set compile flags
+target_compile_options(libopenmc_objects PRIVATE ${cxxflags})
+
 if (HDF5_IS_PARALLEL)
-  target_compile_definitions(libopenmc PRIVATE -DPHDF5)
+  target_compile_definitions(libopenmc_objects PRIVATE -DPHDF5)
 endif()
 if (OPENMC_USE_MPI)
-  target_compile_definitions(libopenmc PUBLIC -DOPENMC_MPI)
+  target_compile_definitions(libopenmc_objects PUBLIC -DOPENMC_MPI)
   if (OPENMC_HAVE_MPI_REDUCE_C)
-    target_compile_definitions(libopenmc PRIVATE -DOPENMC_HAVE_MPI_REDUCE_C)
+    target_compile_definitions(libopenmc_objects PRIVATE -DOPENMC_HAVE_MPI_REDUCE_C)
   endif()
 endif()
 
 # target_link_libraries treats any arguments starting with - but not -l as
 # linker flags. Thus, we can pass both linker flags and libraries together.
-target_link_libraries(libopenmc ${ldflags} ${HDF5_LIBRARIES} ${HDF5_HL_LIBRARIES}
-                      fmt::fmt ${CMAKE_DL_LIBS})
+target_link_libraries(libopenmc_objects PUBLIC ${ldflags} ${HDF5_LIBRARIES}
+                      ${HDF5_HL_LIBRARIES} fmt::fmt ${CMAKE_DL_LIBS})
 
 if(TARGET pugixml::pugixml)
-  target_link_libraries(libopenmc pugixml::pugixml)
+  target_link_libraries(libopenmc_objects PUBLIC pugixml::pugixml)
 else()
-  target_link_libraries(libopenmc pugixml)
+  target_link_libraries(libopenmc_objects PUBLIC pugixml)
 endif()
 
 if(OPENMC_USE_DAGMC)
-  target_compile_definitions(libopenmc PUBLIC OPENMC_DAGMC_ENABLED)
-  target_link_libraries(libopenmc dagmc-shared)
+  target_compile_definitions(libopenmc_objects PUBLIC OPENMC_DAGMC_ENABLED)
+  target_link_libraries(libopenmc_objects PUBLIC dagmc-shared)
 
   if(OPENMC_USE_UWUW)
-    target_compile_definitions(libopenmc PRIVATE OPENMC_UWUW_ENABLED)
-    target_link_libraries(libopenmc uwuw-shared)
+    target_compile_definitions(libopenmc_objects PRIVATE OPENMC_UWUW_ENABLED)
+    target_link_libraries(libopenmc_objects PUBLIC uwuw-shared)
   endif()
 elseif(OPENMC_USE_UWUW)
   set(OPENMC_USE_UWUW OFF)
@@ -616,43 +623,43 @@ elseif(OPENMC_USE_UWUW)
 endif()
 
 if(OPENMC_USE_LIBMESH)
-  target_compile_definitions(libopenmc PRIVATE OPENMC_LIBMESH_ENABLED)
-  target_link_libraries(libopenmc PkgConfig::LIBMESH)
+  target_compile_definitions(libopenmc_objects PRIVATE OPENMC_LIBMESH_ENABLED)
+  target_link_libraries(libopenmc_objects PUBLIC PkgConfig::LIBMESH)
 endif()
 
 if (PNG_FOUND)
-  target_compile_definitions(libopenmc PRIVATE USE_LIBPNG)
-  target_link_libraries(libopenmc PNG::PNG)
+  target_compile_definitions(libopenmc_objects PRIVATE USE_LIBPNG)
+  target_link_libraries(libopenmc_objects PUBLIC PNG::PNG)
 endif()
 
 if (OPENMC_USE_OPENMP)
-  target_link_libraries(libopenmc OpenMP::OpenMP_CXX)
+  target_link_libraries(libopenmc_objects PUBLIC OpenMP::OpenMP_CXX)
 endif()
 
 if (OPENMC_USE_MPI)
-  target_link_libraries(libopenmc MPI::MPI_CXX)
-endif()
-
-if (OPENMC_BUILD_TESTS)
-  # Add cpp tests directory
-  include(CTest)
-  add_subdirectory(tests/cpp_unit_tests)
+  target_link_libraries(libopenmc_objects PUBLIC MPI::MPI_CXX)
 endif()
 
 #===============================================================================
 # Log build info that this executable can report later
 #===============================================================================
-target_compile_definitions(libopenmc PRIVATE BUILD_TYPE=${CMAKE_BUILD_TYPE})
-target_compile_definitions(libopenmc PRIVATE COMPILER_ID=${CMAKE_CXX_COMPILER_ID})
-target_compile_definitions(libopenmc PRIVATE COMPILER_VERSION=${CMAKE_CXX_COMPILER_VERSION})
+target_compile_definitions(libopenmc_objects PRIVATE BUILD_TYPE=${CMAKE_BUILD_TYPE})
+target_compile_definitions(libopenmc_objects PRIVATE COMPILER_ID=${CMAKE_CXX_COMPILER_ID})
+target_compile_definitions(libopenmc_objects PRIVATE COMPILER_VERSION=${CMAKE_CXX_COMPILER_VERSION})
 if (OPENMC_ENABLE_PROFILE)
-  target_compile_definitions(libopenmc PRIVATE PROFILINGBUILD)
+  target_compile_definitions(libopenmc_objects PRIVATE PROFILINGBUILD)
 endif()
 if (OPENMC_ENABLE_COVERAGE)
-  target_compile_definitions(libopenmc PRIVATE COVERAGEBUILD)
+  target_compile_definitions(libopenmc_objects PRIVATE COVERAGEBUILD)
 endif()
 if (OPENMC_ENABLE_STRICT_FP)
-  target_compile_definitions(libopenmc PRIVATE OPENMC_ENABLE_STRICT_FP)
+  target_compile_definitions(libopenmc_objects PRIVATE OPENMC_ENABLE_STRICT_FP)
+endif()
+
+if(OPENMC_BUILD_TESTS)
+  # Add cpp tests directory
+  include(CTest)
+  add_subdirectory(tests/cpp_unit_tests)
 endif()
 
 #===============================================================================
@@ -664,10 +671,8 @@ target_compile_options(openmc PRIVATE ${cxxflags})
 target_include_directories(openmc PRIVATE ${CMAKE_BINARY_DIR}/include)
 target_link_libraries(openmc libopenmc)
 
-# Ensure C++17 standard is used and turn off GNU extensions
 target_compile_features(openmc PUBLIC cxx_std_17)
-target_compile_features(libopenmc PUBLIC cxx_std_17)
-set_target_properties(openmc libopenmc PROPERTIES CXX_EXTENSIONS OFF)
+set_target_properties(openmc PROPERTIES CXX_EXTENSIONS OFF)
 
 # The console script that launches this executable from the wheel is the
 # openmc entry point declared in pyproject.toml, see openmc/_cli.py
@@ -692,7 +697,10 @@ else()
   set(INSTALL_CONFIGDIR ${CMAKE_INSTALL_LIBDIR}/cmake/OpenMC)
 endif()
 
-install(TARGETS openmc libopenmc
+# libopenmc_objects has to be in the export set because it is a PUBLIC link
+# dependency of libopenmc. It installs no files, it is exported as an
+# INTERFACE imported target.
+install(TARGETS openmc libopenmc libopenmc_objects
   EXPORT openmc-targets
   RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
   LIBRARY DESTINATION ${SKBUILD_SUBDIR}${CMAKE_INSTALL_LIBDIR}

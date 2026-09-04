@@ -6,12 +6,9 @@
 
 #include <string>
 
-#include "openmc/export.h"
 #include "openmc/particle.h"
 
 namespace openmc {
-
-extern "C" OPENMC_API const bool STRICT_FP_ENABLED;
 
 //! \brief Display the main title banner as well as information about the
 //! program developers, version, and date/time which the problem was run.

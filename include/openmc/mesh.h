@@ -13,7 +13,6 @@
 
 #include "openmc/bounding_box.h"
 #include "openmc/error.h"
-#include "openmc/export.h"
 #include "openmc/memory.h" // for unique_ptr
 #include "openmc/particle.h"
 #include "openmc/position.h"
@@ -51,8 +50,6 @@ enum class ElementType { UNSUPPORTED = -1, LINEAR_TET, LINEAR_HEX };
 //==============================================================================
 // Global variables
 //==============================================================================
-
-extern "C" OPENMC_API const bool LIBMESH_ENABLED;
 
 class Mesh;
 
@@ -255,6 +252,9 @@ public:
   virtual std::string get_mesh_type() const = 0;
 
   //! Determine volume of materials within each mesh element
+  //!
+  //! Portions of mesh elements outside the model geometry are treated as void.
+  //! Universe fills within the model must still define all enclosed space.
   //
   //! \param[in] nx Number of samples in x direction
   //! \param[in] ny Number of samples in y direction
@@ -267,6 +267,9 @@ public:
     int32_t* materials, double* volumes) const;
 
   //! Determine volume and bounding boxes of materials within each mesh element
+  //!
+  //! Portions of mesh elements outside the model geometry are treated as void.
+  //! Universe fills within the model must still define all enclosed space.
   //
   //! \param[in] nx Number of samples in x direction
   //! \param[in] ny Number of samples in y direction
