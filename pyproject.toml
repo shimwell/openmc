@@ -1,6 +1,6 @@
 [build-system]
-requires = ["setuptools>=80", "setuptools-scm>=8"]
-build-backend = "setuptools.build_meta"
+requires = ["scikit-build-core", "setuptools_scm"]
+build-backend = "scikit_build_core.build"
 
 [project]
 name = "openmc"
@@ -8,7 +8,7 @@ authors = [
     {name = "The OpenMC Development Team", email = "openmc@anl.gov"},
 ]
 description = "OpenMC"
-dynamic = ["version"]
+version = "0.16.1.dev0"
 requires-python = ">=3.12"
 license = "MIT"
 license-files = ["LICENSE"]
@@ -36,6 +36,11 @@ dependencies = [
     "uncertainties",
     "endf",
 ]
+
+[project.scripts]
+# A console script rather than a plain script file, so that the packaging tools
+# generate an openmc.exe launcher on Windows. See openmc/_cli.py.
+openmc = "openmc._cli:main"
 
 [project.optional-dependencies]
 depletion-mpi = ["mpi4py"]
@@ -65,13 +70,68 @@ Documentation = "https://docs.openmc.org"
 Repository = "https://github.com/openmc-dev/openmc"
 Issues = "https://github.com/openmc-dev/openmc/issues"
 
-[tool.setuptools.packages.find]
-include = ['openmc*']
-exclude = ['tests*']
-
-[tool.setuptools.package-data]
-"openmc.data.dose" = ["**/*.txt", "*.h5"]
-"openmc.data" = ["*.txt", "*.DAT", "*.json", "*.h5"]
-"openmc.lib" = ["libopenmc.dylib", "libopenmc.so"]
+# Scikit-Build Configuration
+[tool.scikit-build]
+build.verbose = true
+logging.level = "INFO"
+wheel.install-dir = "openmc"
+wheel.packages = ["openmc"]
 
 [tool.setuptools_scm]
+fallback_version = "0.15.2"
+
+# ---------------------------------------------------------------------------
+# cibuildwheel
+# ---------------------------------------------------------------------------
+[tool.cibuildwheel]
+# This is an allowlist, so a platform absent from it is not built at all.
+build = [
+    "cp312-manylinux_x86_64", "cp313-manylinux_x86_64", "cp314-manylinux_x86_64",
+    "cp312-win_amd64", "cp313-win_amd64", "cp314-win_amd64",
+]
+skip = ["*-musllinux*"]
+
+[tool.cibuildwheel.linux]
+manylinux-x86_64-image = "manylinux_2_28"
+before-all = "bash {project}/tools/ci/cibw_before_all_linux.sh"
+environment = { SKBUILD_CMAKE_ARGS="-DOPENMC_USE_DAGMC=ON;-DOPENMC_USE_OPENMP=ON;-DOPENMC_USE_MPI=OFF;-DOPENMC_USE_UWUW=OFF;-DOPENMC_USE_LIBMESH=OFF" }
+repair-wheel-command = "auditwheel repair -w {dest_dir} {wheel}"
+test-command = "openmc --version && python -c \"import openmc; import openmc.lib\""
+
+# Vanilla only: no DAGMC, libMesh, MPI or UWUW, and serial for now. OpenMP is
+# off because /openmp:llvm still rejects four constructs in src/, so a threaded
+# Windows build is a separate piece of work.
+#
+# HDF5 comes from vcpkg, installed by the workflow rather than by before-all so
+# the path can be reused by delvewheel below. VCPKG_ROOT is C:/vcpkg on the
+# GitHub runners; override both paths together if that ever changes.
+#
+# OPENMC_BUILD_TESTS=OFF keeps the Catch2 unit tests out of the wheel build. It
+# used to be required rather than a saving: the tests reference openmc::model
+# globals (meshes, surfaces, filter_map, root_universe, n_coord_levels and
+# friends) directly, those are data symbols, and importing data across a DLL
+# boundary needs dllimport, which WINDOWS_EXPORT_ALL_SYMBOLS cannot provide, so
+# the test executables failed to link with 21 LNK2019 errors and took the wheel
+# build down with them. Upstream #4062 removed the boundary by linking the tests
+# against libopenmc_test, a static library over the same objects, so this is now
+# just a build time saving. A wheel has no use for the C++ tests either way.
+[tool.cibuildwheel.windows]
+before-build = "pip install delvewheel"
+environment = { SKBUILD_CMAKE_ARGS = "-DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake;-DVCPKG_TARGET_TRIPLET=x64-windows;-DOPENMC_USE_DAGMC=OFF;-DOPENMC_USE_OPENMP=OFF;-DOPENMC_USE_MPI=OFF;-DOPENMC_USE_UWUW=OFF;-DOPENMC_USE_LIBMESH=OFF;-DOPENMC_BUILD_TESTS=OFF" }
+# delvewheel is the Windows equivalent of auditwheel. It bundles the HDF5 DLLs
+# into openmc.libs and injects the os.add_dll_directory calls needed to find
+# them, which a plain build does not do.
+#
+# --analyze-existing is required, not optional. By default delvewheel only
+# looks at the extension modules in the wheel, and openmc has none, it is
+# pure Python talking to libopenmc.dll through ctypes. Without the flag
+# delvewheel finds nothing to analyse and vendors nothing, which leaves
+# libopenmc.dll importing an hdf5.dll that is not in the wheel. That still
+# imports in Python, because h5py bundles its own copy of HDF5 and puts it on
+# the DLL search path of the process, but the openmc executable runs as a
+# separate process and fails with 0xC0000135 STATUS_DLL_NOT_FOUND.
+repair-wheel-command = "delvewheel repair --analyze-existing -w {dest_dir} {wheel} --add-path C:/vcpkg/installed/x64-windows/bin"
+# Runs the diagnostics as well as the checks, so that a wheel that builds
+# but can not run OpenMC says why in the build log. See the script for what
+# makes the executable and the ctypes import resolve DLLs differently.
+test-command = "python {project}/tools/ci/check_windows_wheel.py"

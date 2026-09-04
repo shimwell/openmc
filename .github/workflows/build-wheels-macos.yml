@@ -1,0 +1,157 @@
+name: Build macOS ARM Wheels
+
+on:
+  push:
+  workflow_dispatch:
+
+env:
+  MOAB_TAG: "5.6.0"
+  DAGMC_TAG: "v3.2.4"
+  DEP_PREFIX: /usr/local/openmc_deps
+
+jobs:
+  build:
+    runs-on: macos-14
+    strategy:
+      matrix:
+        python-version: ["3.12", "3.13", "3.14"]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          brew install hdf5 netcdf eigen zlib
+          pip install cmake
+
+      - name: Build MOAB
+        run: |
+          sudo mkdir -p ${{ env.DEP_PREFIX }}
+          git clone --depth 1 -b ${{ env.MOAB_TAG }} https://bitbucket.org/fathomteam/moab.git
+          cd moab
+          mkdir build && cd build
+          cmake .. \
+            -DCMAKE_INSTALL_PREFIX=${{ env.DEP_PREFIX }} \
+            -DENABLE_MPI=OFF \
+            -DENABLE_FORTRAN=OFF \
+            -DENABLE_HDF5=ON \
+            -DHDF5_ROOT=$(brew --prefix hdf5) \
+            -DENABLE_NETCDF=OFF \
+            -DBUILD_SHARED_LIBS=ON \
+            -DENABLE_BLASLAPACK=OFF \
+            -DENABLE_PYMOAB=OFF
+          make -j$(sysctl -n hw.ncpu)
+          sudo make install
+
+      - name: Build DAGMC
+        run: |
+          git clone --depth 1 -b ${{ env.DAGMC_TAG }} https://github.com/svalinn/DAGMC.git
+          cd DAGMC
+          mkdir build && cd build
+          cmake .. \
+            -DCMAKE_INSTALL_PREFIX=${{ env.DEP_PREFIX }} \
+            -DMOAB_DIR=${{ env.DEP_PREFIX }} \
+            -DDOUBLE_DOWN=OFF \
+            -DBUILD_TALLY=OFF \
+            -DBUILD_UWUW=OFF \
+            -DBUILD_STATIC_LIBS=OFF \
+            -DBUILD_RPATH=OFF \
+            -DCMAKE_PREFIX_PATH=$(brew --prefix zlib)
+          make -j$(sysctl -n hw.ncpu)
+          sudo make install
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install Python build tools
+        run: |
+          pip install build delocate
+
+      - name: Build wheel
+        run: |
+          export SKBUILD_CMAKE_ARGS="-DOPENMC_USE_DAGMC=ON;-DOPENMC_USE_LIBMESH=OFF;-DOPENMC_USE_MPI=OFF;-DOPENMC_USE_OPENMP=OFF;-DHDF5_ROOT=$(brew --prefix hdf5);-DCMAKE_PREFIX_PATH=${{ env.DEP_PREFIX }}"
+          python -m build . -w
+
+      - name: Repair wheel
+        run: |
+          delocate-wheel -w wheelhouse dist/openmc-*.whl
+          ls -la wheelhouse/
+
+      - name: Upload wheel
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-arm-wheel-${{ matrix.python-version }}
+          path: wheelhouse/*.whl
+
+  test:
+    needs: build
+    runs-on: macos-14
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13", "3.14"]
+
+    steps:
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Download wheel
+        uses: actions/download-artifact@v4
+        with:
+          name: macos-arm-wheel-${{ matrix.python-version }}
+          path: wheelhouse
+
+      # The venv is added to the PATH rather than activated, as activating it
+      # only lasts for the step that runs the activation.
+      - name: Install the wheel
+        run: |
+          python -m venv test_env
+          echo "$PWD/test_env/bin" >> $GITHUB_PATH
+          test_env/bin/pip install wheelhouse/openmc-*.whl
+
+      - name: Import openmc
+        run: python -c "import openmc; import openmc.lib; print(openmc.__version__)"
+
+      # The output is checked rather than just the exit status, so that a
+      # launcher that exits zero without running OpenMC can not pass.
+      - name: Check the openmc command line interface runs
+        run: |
+          version=$(openmc --version)
+          echo "$version"
+          echo "$version" | grep -i "openmc version"
+
+      # Only the files needed by the tests are checked out, and into a
+      # subfolder, so that the openmc source directory is not present to shadow
+      # the installed package.
+      - name: Checkout the test files
+        uses: actions/checkout@v4
+        with:
+          path: test_files
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            minimal_test.py
+            minimal_test_csg.py
+            cross_sections.xml
+            Li.h5
+            Li7.h5
+            small_dagmc_file.h5m
+            small_um.vtk
+
+      # The wheel is no use if it can only be imported, so a simulation is run
+      # as well. This goes through model.run() so the openmc executable and the
+      # console script that launches it are both exercised.
+      - name: Run a CSG simulation
+        working-directory: test_files
+        run: python minimal_test_csg.py
+
+      # The Mac OS wheel is built with DAGMC so the DAGMC universe, the moab
+      # unstructured mesh and the vtk writing are covered too, in the same way
+      # as the Linux wheel test.
+      - name: Run a DAGMC simulation
+        working-directory: test_files
+        run: python minimal_test.py

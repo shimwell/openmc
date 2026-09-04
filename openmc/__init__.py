@@ -1,4 +1,7 @@
+import os
+import glob
 import importlib.metadata
+import sys
 from openmc.arithmetic import *
 from openmc.bounding_box import *
 from openmc.cell import *
@@ -43,3 +46,74 @@ from . import examples
 
 
 __version__ = importlib.metadata.version("openmc")
+
+try:
+    OPENMC_CORE_BASE_PATH = os.path.join(__path__[0], "core")
+except NameError:
+    OPENMC_CORE_BASE_PATH = None
+
+if not OPENMC_CORE_BASE_PATH or not os.path.exists(OPENMC_CORE_BASE_PATH):
+    import sysconfig
+    OPENMC_CORE_BASE_PATH = os.path.join(sysconfig.get_path("platlib"), "openmc", "core")
+    if not os.path.exists(OPENMC_CORE_BASE_PATH):
+        raise ImportError("OpenMC is not installed. Please run 'pip install openmc'.")
+    warnings.warn(
+        "It seems OpenMC is being run from its source directory. "
+        "This setup is not recommended as it may lead to unexpected behavior, "
+        "such as conflicts between source and installed versions. "
+        "Please run your script from outside the OpenMC source tree.",
+        RuntimeWarning
+    )
+
+def get_paths(subdir, pattern="*", recursive=False):
+    """
+    Helper function to return paths that match a given pattern within a subdirectory.
+
+    Args:
+        subdir (str): The subdirectory within the 'core' directory.
+        pattern (str): The pattern to match files or directories.
+        recursive (bool): Whether to search recursively in subdirectories.
+
+    Returns:
+        list: A list of matched paths.
+    """
+    search_pattern = os.path.join(OPENMC_CORE_BASE_PATH, subdir, "**", pattern) if recursive else os.path.join(OPENMC_CORE_BASE_PATH, subdir, pattern)
+    return glob.glob(search_pattern, recursive=recursive)
+
+def get_include_path():
+    """Return includes and include path for OpenMC headers."""
+    include = get_paths("include", "*", recursive=True)
+    include_path = get_paths("include", "", recursive=False)
+    return include, include_path
+
+def get_core_libraries():
+    """Return libraries and library paths for OpenMC."""
+    # "bin" is searched because Windows treats a DLL as a RUNTIME artifact and
+    # installs it to CMAKE_INSTALL_BINDIR, whereas .so/.dylib are LIBRARY
+    # artifacts installed to CMAKE_INSTALL_LIBDIR. On Linux and macOS nothing in
+    # "bin" matches, so this is a no-op there. The Windows import library (.lib)
+    # is an ARCHIVE artifact and still lands in lib, so lib_path does not need
+    # "bin".
+    #
+    # The pattern is extension-specific on Windows because that import library
+    # is named libopenmc.lib and so also matches "libopenmc*". Since "lib" is
+    # searched before "bin" it was returned first, and openmc.lib takes element
+    # zero of this list and hands it to CDLL, which fails on an import library
+    # with "OSError: [WinError 193] %1 is not a valid Win32 application".
+    pattern = "libopenmc*.dll" if sys.platform == "win32" else "libopenmc*"
+    lib = [lib_file for lib in ["lib", "lib64", "bin"] for lib_file in get_paths(lib, pattern, recursive=True)]
+    lib_path = [lib_file for lib in ["lib", "lib64"] for lib_file in get_paths(lib, "", recursive=False)]
+    return lib, lib_path
+
+def get_extra_libraries():
+    """Return the extra libraries installed by auditwheel or delocate."""
+    libs_path = os.path.join(__path__[0], ".dylibs") if sys.platform == "darwin" else os.path.normpath(os.path.join(__path__[0], "..", "openmc.libs"))
+    return (glob.glob(os.path.join(libs_path, "*")), libs_path) if os.path.exists(libs_path) else ([], [])
+
+# Setup variables
+include, include_path = get_include_path()
+lib, lib_path = get_core_libraries()
+extra_lib, extra_lib_path = get_extra_libraries()
+
+# Export variables for easy access
+__all__ = ["include", "include_path", "lib", "lib_path", "extra_lib", "extra_lib_path"]
