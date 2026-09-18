@@ -124,6 +124,8 @@ for a depletion chain:
    ReactionTuple
    FissionYieldDistribution
    FissionYield
+   ProductionTable
+   IsomericProduction
 
 The :class:`Chain` class uses information from the following module variable:
 
