@@ -1,0 +1,188 @@
+# Scratch job to establish a Windows feedback loop. It is not a wheel build and
+# is not required to pass: the job sets continue-on-error so it can never block
+# a merge. It exists to answer the open questions in the Windows support issue.
+#
+#   1. Does the vanilla (no DAGMC) source compile with MSVC, and which OpenMP
+#      setting is needed? Partly answered. The serial leg compiles the whole
+#      library and links openmc.exe, so OpenMP was never the blocker it was
+#      assumed to be. /openmp:llvm handles collapse and atomic capture but
+#      still rejects four constructs in src/, so that leg stays experimental
+#      until they are dealt with separately.
+#   2. Does WINDOWS_EXPORT_ALL_SYMBOLS export the globals that openmc.lib reads
+#      through ctypes in_dll? Answered: no. It emits functions and mutable data
+#      but not read-only data, so the const flags were silently absent. Moot
+#      now that openmc.lib reads every global through a C API accessor
+#      function instead, which is the part the export table does cover.
+#
+# Delete this workflow once Windows wheels are building for real.
+
+name: Probe Windows Build
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/probe-windows-build.yml'
+      - 'CMakeLists.txt'
+      - 'cmake/**'
+      - 'src/**'
+      - 'include/**'
+
+jobs:
+  probe:
+    runs-on: windows-latest
+    continue-on-error: true
+    timeout-minutes: 120
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Still exploratory. /openmp:llvm gets much further than plain
+          # /openmp, but four constructs in src/ remain unacceptable to it:
+          # 'seq_cst' on atomic in shared_array.h, a non-conforming collapse
+          # bound in plot.cpp, and a reduction on a non-static member in
+          # flat_source_domain.cpp and random_ray_simulation.cpp. Marked
+          # experimental so this known failure does not show up as a red check
+          # while that is worked on separately.
+          - name: openmp-llvm
+            openmp: 'ON'
+            extra_args: '-DOpenMP_RUNTIME_MSVC=llvm'
+            experimental: true
+          # Expected to pass. This is the configuration a first vanilla wheel
+          # would ship, so a failure here is a real regression.
+          - name: openmp-off
+            openmp: 'OFF'
+            extra_args: ''
+            experimental: false
+
+    name: probe (${{ matrix.name }})
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # needed for versioning from git tags
+          submodules: recursive  # vendored pugixml and fmt
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install HDF5 via vcpkg
+        shell: pwsh
+        run: |
+          & "$env:VCPKG_INSTALLATION_ROOT\vcpkg.exe" install hdf5[core,hl]:x64-windows
+          "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" >> $env:GITHUB_ENV
+
+      # extra_args comes first so that an empty value cannot leave a dangling
+      # backtick line continuation, which PowerShell rejects.
+      - name: Configure
+        shell: pwsh
+        run: |
+          cmake -S . -B build ${{ matrix.extra_args }} `
+            -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake" `
+            -DVCPKG_TARGET_TRIPLET=x64-windows `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DOPENMC_USE_OPENMP=${{ matrix.openmp }} `
+            -DOPENMC_USE_DAGMC=OFF `
+            -DOPENMC_USE_LIBMESH=OFF `
+            -DOPENMC_USE_MPI=OFF `
+            -DOPENMC_USE_UWUW=OFF `
+            -DOPENMC_BUILD_TESTS=OFF
+
+      # Job-level continue-on-error keeps the workflow run green, but the job
+      # itself is still reported as failed to the checks API, which puts a red
+      # check on the PR. Tolerating the failure at step level instead lets the
+      # experimental leg report its findings in the log without doing that.
+      - name: Build
+        shell: pwsh
+        continue-on-error: ${{ matrix.experimental }}
+        run: cmake --build build --config Release -j 4
+
+      - name: Show build outputs
+        if: always()
+        shell: pwsh
+        run: |
+          Get-ChildItem -Recurse build -Include libopenmc.dll,libopenmc.lib,openmc.exe |
+            Select-Object FullName,Length
+
+      # The real test of WINDOWS_EXPORT_ALL_SYMBOLS. It emits functions and
+      # mutable data but not read-only data, so an earlier revision of this
+      # probe checked the 24 globals that openmc.lib used to read through
+      # ctypes in_dll and found the const flags silently absent.
+      #
+      # openmc.lib no longer reads any global directly. Every setting, flag and
+      # counter now goes through a C API accessor function, so the contract this
+      # step has to hold is that those functions are in the export table.
+      # Functions are the part WINDOWS_EXPORT_ALL_SYMBOLS handles, which is why
+      # no __declspec annotation is needed anywhere in the tree.
+      #
+      # Only presence is tested, since getattr resolves a symbol without saying
+      # anything about its signature.
+      #
+      # Uses bash because PowerShell has no heredoc.
+      - name: Check C API function exports
+        if: always()
+        shell: bash
+        run: |
+          DLL=$(find build -name libopenmc.dll | head -1)
+          if [ -z "$DLL" ]; then
+            echo "libopenmc.dll not produced, nothing to check"
+            exit 0
+          fi
+          export OPENMC_DLL="$DLL"
+          python - <<'PY'
+          import ctypes, os, sys
+          vcpkg = os.environ.get("VCPKG_ROOT", "")
+          hdf5_bin = os.path.join(vcpkg, "installed", "x64-windows", "bin")
+          if os.path.isdir(hdf5_bin):
+              os.add_dll_directory(hdf5_bin)
+          path = os.path.abspath(os.environ["OPENMC_DLL"])
+          dll = ctypes.CDLL(path)
+          print("loaded:", path)
+
+          EXPECTED = [
+              # lifecycle, called by openmc.lib.core
+              "openmc_init", "openmc_run", "openmc_finalize",
+              # error reporting, replaces the openmc_err_msg buffer
+              "openmc_get_err_msg",
+              # optional build features, replace the four const bool flags
+              "openmc_get_feature_enabled",
+              # simulation state, replaces current_batch, n_coord_levels,
+              # n_realizations and mpi::master
+              "openmc_get_current_batch", "openmc_get_n_coord_levels",
+              "openmc_get_n_realizations", "openmc_master",
+              # settings, replace everything openmc/lib/settings.py used to
+              # reach through the _DLLGlobal descriptor
+              "openmc_setting_get_bool", "openmc_setting_set_bool",
+              "openmc_setting_get_double", "openmc_setting_set_double",
+              "openmc_setting_get_int32", "openmc_setting_set_int32",
+              "openmc_setting_get_int64", "openmc_setting_set_int64",
+              "openmc_setting_get_string",
+          ]
+
+          def present(name):
+              try:
+                  getattr(dll, name)
+                  return True
+              except AttributeError:
+                  return False
+
+          missing = []
+          for name in EXPECTED:
+              if present(name):
+                  print(f"  OK      {name}")
+              else:
+                  missing.append(name)
+                  print(f"  MISSING {name}")
+
+          print(f"\n{len(missing)} of {len(EXPECTED)} required C API functions missing")
+          if missing:
+              print("Missing: " + ", ".join(missing))
+              print("WINDOWS_EXPORT_ALL_SYMBOLS should cover these, so a miss means")
+              print("the def file did not pick up the libopenmc_objects objects.")
+              sys.exit(1)
+          print("All required C API functions are exported.")
+          PY

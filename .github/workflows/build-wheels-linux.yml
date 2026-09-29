@@ -1,0 +1,54 @@
+name: Build Linux Wheels
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # needed for setuptools_scm
+
+      - name: Build wheels with cibuildwheel
+        uses: pypa/cibuildwheel@v3.4.1
+        env:
+          CIBW_PLATFORM: linux
+
+      - name: Upload wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-wheels
+          path: wheelhouse/*.whl
+
+  test:
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.12", "3.13", "3.14"]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download wheels
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-wheels
+          path: wheelhouse
+
+      - name: List wheels
+        run: ls -la wheelhouse/
+
+      - name: Test wheel in Docker
+        run: |
+          docker build \
+            -f wheeltest.Dockerfile \
+            --build-arg python_version=${{ matrix.python-version }} \
+            .

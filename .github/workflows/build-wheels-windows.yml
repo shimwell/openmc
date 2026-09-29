@@ -1,0 +1,226 @@
+# Builds vanilla Windows wheels and uploads them as artifacts. Vanilla means no
+# DAGMC, libMesh, MPI or UWUW, and serial for now, which keeps the only external
+# dependency down to HDF5.
+#
+# The Windows cibuildwheel settings live in [tool.cibuildwheel.windows] in
+# pyproject.toml, including the delvewheel repair command that bundles the HDF5
+# DLLs into the wheel.
+
+name: Build Windows Wheels
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 180
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # needed for setuptools_scm
+          submodules: recursive  # vendored pugixml and fmt
+
+      # Installed here rather than in cibuildwheel's before-all so the same
+      # path can be handed to delvewheel for bundling. The repair command in
+      # pyproject.toml expects C:/vcpkg, which is VCPKG_INSTALLATION_ROOT on
+      # the GitHub runners.
+      - name: Install HDF5 via vcpkg
+        shell: pwsh
+        run: |
+          & "$env:VCPKG_INSTALLATION_ROOT\vcpkg.exe" install hdf5[core,hl]:x64-windows
+          Write-Host "vcpkg root: $env:VCPKG_INSTALLATION_ROOT"
+          if ("$env:VCPKG_INSTALLATION_ROOT" -ne "C:\vcpkg") {
+            Write-Warning "vcpkg is not at C:\vcpkg, so the hardcoded paths in [tool.cibuildwheel.windows] need updating"
+          }
+
+      - name: Build wheels with cibuildwheel
+        uses: pypa/cibuildwheel@v3.4.1
+        env:
+          CIBW_PLATFORM: windows
+
+      - name: List wheels
+        if: always()
+        shell: pwsh
+        run: Get-ChildItem wheelhouse | Select-Object Name,Length
+
+      - name: Upload wheels
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-wheels
+          path: wheelhouse/*.whl
+          if-no-files-found: error
+
+  # cibuildwheel already runs test-command inside the build job. This installs
+  # the repaired wheel into a clean interpreter with no vcpkg and no source
+  # tree present, which is the part that actually proves delvewheel bundled the
+  # HDF5 DLLs rather than the machine happening to have them.
+  test:
+    needs: build
+    # Runs even when the build job failed its own test-command, because the
+    # wheels are uploaded regardless and the diagnostics below are the most
+    # useful thing available when the command line interface is broken.
+    if: ${{ !cancelled() }}
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13", "3.14"]
+
+    steps:
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Download wheels
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-wheels
+          path: wheelhouse
+
+      # No checkout, so there is no source tree to shadow the installed
+      # package. That matters because importing openmc from the source
+      # directory warns and can resolve differently.
+      - name: Install the wheel
+        shell: pwsh
+        run: |
+          $tag = "cp" + "${{ matrix.python-version }}".Replace(".", "")
+          $whl = Get-ChildItem wheelhouse/*.whl | Where-Object { $_.Name -like "*$tag*" } | Select-Object -First 1
+          if (-not $whl) { throw "no wheel found for $tag" }
+          Write-Host "installing $($whl.Name)"
+          python -m pip install --upgrade pip
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m pip install "$($whl.FullName)"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      # One python process, run under bash, which GitHub invokes with -e. An
+      # earlier version ran several "python -c" calls under pwsh, where only the
+      # last native command's exit code is inspected, so a failing assertion in
+      # an earlier call was discarded and the step reported success while it was
+      # in fact raising AttributeError. Anything that fails in here now fails
+      # the step.
+      - name: Import openmc and check the library it loaded
+        shell: bash
+        run: |
+          python - <<'PY'
+          import openmc
+          import openmc.lib
+
+          print("openmc", openmc.__version__)
+          print("loaded", openmc.lib._filename)
+
+          # The DLL has to be what was loaded, not the import library. While the
+          # search pattern was plain "libopenmc*", lib/libopenmc.lib matched
+          # ahead of bin/libopenmc.dll and CDLL failed with WinError 193.
+          loaded = str(openmc.lib._filename).lower()
+          assert loaded.endswith(".dll"), openmc.lib._filename
+
+          # Optional build features. These used to be const bool globals read
+          # with ctypes in_dll, which is the export case that
+          # WINDOWS_EXPORT_ALL_SYMBOLS silently drops, since bindexplib emits
+          # mutable data but not read-only data. They are now behind
+          # openmc_get_feature_enabled, so the query is an ordinary function
+          # call across the boundary. All false in a vanilla build.
+          for name in ("dagmc", "libmesh", "uwuw"):
+              value = openmc.lib.feature_enabled(name)
+              print(f"  {name} = {value}")
+              assert value is False, (name, value)
+
+          # Namespaced C++ globals, reached through the settings accessors in
+          # the C API rather than by reading the symbol directly. run_mode reads
+          # back as None rather than a string because the library is
+          # uninitialised, so RunMode::UNSET is not in openmc.lib's mapping.
+          # Resolving without raising is the point.
+          print("  run_mode =", openmc.lib.settings.run_mode)
+
+          rel = openmc.lib.settings.rel_max_lost_particles
+          print("  rel_max_lost_particles =", rel)
+          # Checked by value, not just for absence of an exception, so that a
+          # symbol resolving to the wrong storage would be caught. 1.0e-6 is the
+          # default in src/settings.cpp.
+          assert abs(rel - 1.0e-6) < 1.0e-12, rel
+
+          print("all settings resolved")
+          PY
+
+      # Diagnostics rather than a check, so this never fails the job. The
+      # console script is generated by cmake/GenerateScript.cmake and pip puts
+      # it in the scripts directory, which is where a Windows launcher would
+      # have to appear for "openmc" to be runnable.
+      - name: Show the installed console script and run the executable directly
+        shell: bash
+        run: |
+          scripts_dir=$(python -c "import sysconfig; print(sysconfig.get_path('scripts'))")
+          echo "scripts directory $scripts_dir"
+          ls -l "$scripts_dir" | grep -i openmc || echo "nothing matching openmc in the scripts directory"
+          command -v openmc || echo "openmc is not on the PATH"
+          bin_dir=$(python -c "import openmc, pathlib; print(pathlib.Path(openmc.__file__).parent / 'core' / 'bin')")
+          echo "package bin directory $bin_dir"
+          ls -l "$bin_dir"
+          # Run the executable itself rather than the console script. These are
+          # separate failures, the console script not being launchable at all
+          # and the executable not running once it is found, and the workshop CI
+          # hit both. The exit code is printed because a Windows DLL load
+          # failure produces no output at all, just a non-zero status.
+          echo "running the executable directly"
+          "$bin_dir/openmc.exe" --version && echo "openmc.exe ran" || echo "openmc.exe exited with $?"
+
+      # A missing DLL makes a Windows process exit without writing anything at
+      # all, so the exit status and the dependency list are what identify it.
+      # Run under pwsh because bash reports any failure to start as 127 and
+      # hides the real status, where pwsh gives the NTSTATUS, for example
+      # -1073741515 for 0xC0000135 STATUS_DLL_NOT_FOUND.
+      - name: Show why the executable does or does not start
+        if: always()
+        shell: pwsh
+        run: |
+          $bin = python -c "import openmc, pathlib; print(pathlib.Path(openmc.__file__).parent / 'core' / 'bin')"
+          & "$bin\openmc.exe" --version
+          Write-Host "exit code $LASTEXITCODE"
+          $dumpbin = Get-ChildItem -Path "C:\Program Files*\Microsoft Visual Studio" -Filter dumpbin.exe -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($dumpbin) {
+            foreach ($binary in @("$bin\openmc.exe", "$bin\libopenmc.dll")) {
+              Write-Host "=== dependents of $binary ==="
+              & $dumpbin.FullName /dependents $binary
+            }
+          } else {
+            Write-Warning "dumpbin was not found so the dependencies can not be listed"
+          }
+
+      # The wheel is no use if it can only be imported, so the command line
+      # interface and a simulation are both checked. Importing openmc and
+      # reading openmc.lib symbols passes even when the openmc executable can
+      # not be launched at all.
+      #
+      # The output is checked rather than just the exit status. An earlier
+      # version ran plain "openmc --version" under bash, which exited zero
+      # while printing nothing, so the check passed without OpenMC ever running.
+      - name: Check the openmc command line interface runs
+        shell: bash
+        run: |
+          version=$(openmc --version)
+          echo "$version"
+          echo "$version" | grep -i "openmc version"
+
+      # Only the files needed by the test are checked out, into a subfolder, so
+      # that the openmc source directory is not present to shadow the installed
+      # package. That is why this job has no ordinary checkout.
+      - name: Checkout the test files
+        uses: actions/checkout@v4
+        with:
+          path: test_files
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            minimal_test_csg.py
+            cross_sections.xml
+            Li.h5
+            Li7.h5
+
+      - name: Run a simulation
+        shell: bash
+        run: python test_files/minimal_test_csg.py
