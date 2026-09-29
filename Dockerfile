@@ -184,20 +184,25 @@ ENV LIBMESH_INSTALL_DIR=$HOME/LIBMESH
 # clone and install openmc
 RUN mkdir -p ${HOME}/OpenMC && cd ${HOME}/OpenMC \
     && git clone --shallow-submodules --recurse-submodules --single-branch -b ${openmc_branch} ${OPENMC_REPO} \
-    && cd openmc ; \
-    export SKBUILD_CMAKE_ARGS="-DCMAKE_CXX_COMPILER=mpicxx; \
-                               -DOPENMC_USE_MPI=on; \
-                               -DHDF5_PREFER_PARALLEL=on" \
+    && cd openmc && \
+    SKBUILD_CMAKE_ARGS="-DCMAKE_CXX_COMPILER=mpicxx;-DOPENMC_USE_MPI=on;-DHDF5_PREFER_PARALLEL=on"; \
+    CMAKE_PREFIX_PATH=""; \
     if [ ${build_dagmc} = "on" ]; then \
-        SKBUILD_CMAKE_ARGS="${SKBUILD_CMAKE_ARGS}; \
-                            -DOPENMC_USE_DAGMC=on; \
-                            -DCMAKE_PREFIX_PATH=${DAGMC_INSTALL_DIR}" ; \
-    fi ; \
+        SKBUILD_CMAKE_ARGS="${SKBUILD_CMAKE_ARGS};-DOPENMC_USE_DAGMC=on"; \
+        CMAKE_PREFIX_PATH="${DAGMC_INSTALL_DIR}"; \
+    fi; \
     if [ ${build_libmesh} = "on" ]; then \
-        SKBUILD_CMAKE_ARGS="${SKBUILD_CMAKE_ARGS}; \
-                            -DOPENMC_USE_LIBMESH=on; \
-                            -DCMAKE_PREFIX_PATH=${LIBMESH_INSTALL_DIR}" ; \
-    fi ; \
+        SKBUILD_CMAKE_ARGS="${SKBUILD_CMAKE_ARGS};-DOPENMC_USE_LIBMESH=on"; \
+        if [ -n "${CMAKE_PREFIX_PATH}" ]; then \
+            CMAKE_PREFIX_PATH="${CMAKE_PREFIX_PATH};${LIBMESH_INSTALL_DIR}"; \
+        else \
+            CMAKE_PREFIX_PATH="${LIBMESH_INSTALL_DIR}"; \
+        fi; \
+    fi; \
+    if [ -n "${CMAKE_PREFIX_PATH}" ]; then \
+        SKBUILD_CMAKE_ARGS="${SKBUILD_CMAKE_ARGS};-DCMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}"; \
+    fi; \
+    export SKBUILD_CMAKE_ARGS; \
     pip -v install .[test,depletion-mpi] \
     && python -c "import openmc"
 

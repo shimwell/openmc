@@ -150,7 +150,7 @@ the following steps. You will need `git <https://git-scm.com>`_, a modern C++ co
 
 .. code-block:: bash
 
-    git clone --recurse-submodules https://github.com/openmc-dev/openmc.git
+    git clone https://github.com/openmc-dev/openmc.git
     cd openmc
     python -m pip install .
 
