@@ -114,6 +114,7 @@ bool Particle::create_secondary(
   bank.wgt_born = wgt_born();
   bank.wgt_ww_born = wgt_ww_born();
   bank.n_split = n_split();
+  bank.parent_nuclide = parent_nuclide();
 
   local_secondary_bank().emplace_back(bank);
   return true;
@@ -141,6 +142,7 @@ void Particle::split(double wgt)
   bank.wgt_ww_born = wgt_ww_born();
   bank.n_split = n_split();
   bank.n_collision = n_collision();
+  bank.parent_nuclide = parent_nuclide();
   bank.parent_id = current_work();
   if (settings::use_shared_secondary_bank) {
     bank.progeny_id = n_progeny()++;
