@@ -203,6 +203,52 @@ where :math:`\gamma_i` is the atomic fraction of the :math:`i`-th element.
 Therefore, the energy deposited by charged particles should be attributed to
 a given element according to its fractional charge density.
 
+.. _methods_photon_heating_xs:
+
+Photon Heating Cross Sections
++++++++++++++++++++++++++++++
+
+The energy balance method scores photon heating at collisions, against the
+element that was struck, so it cannot give a per-atom result or one for an
+element that is not present. When a tally scores photon heating in nuclide bins
+with :attr:`openmc.Tally.multiply_density` set to ``False``, OpenMC instead
+scores the flux times a photon heating cross section, as it does for neutrons
+with KERMA coefficients. This allows the response of a virtual material to be
+found with :meth:`openmc.Tally.apply_virtual_material`.
+
+The heating cross section of an element is the expectation of Equation
+:eq:`energy-balance-photon` summed over reactions,
+
+.. math::
+
+    k(E) = \sum_r \left(E + Q_r - \bar{E}_{r,\text{out}}(E)\right)
+    \sigma_r(E),
+
+where :math:`\bar{E}_{r,\text{out}}` is the mean energy of the photons that
+leave the collision site. It is computed when a simulation starts, for each
+element that such a tally needs, from the photon interaction data and the same
+physics settings used in transport, so that it agrees with the energy balance
+estimate on average:
+
+- Coherent scattering deposits no energy.
+- For incoherent scattering the scattered photon energy is averaged over the
+  Klein-Nishina distribution with the incoherent scattering function, and over
+  the Compton profile of each shell as sampled for Doppler broadening (see
+  :ref:`incoherent-sampling`).
+- For the photoelectric effect and incoherent scattering, the expected energy
+  of fluorescent photons from atomic relaxation of the vacancy is removed.
+- For pair production the rest mass energy carried away by the annihilation
+  photons is removed through :math:`Q_r = -2m_ec^2`.
+- The expected energy radiated by electrons and positrons as thick-target
+  bremsstrahlung is removed, using bremsstrahlung data for the pure element.
+  The density effect correction in its collision stopping power is evaluated
+  at a reference density of 1 g/cm\ :sup:`3`.
+
+Secondary particles below their energy cutoffs are treated as deposited, as in
+transport. For a compound, the heating cross sections of its elements are
+combined according to their atom densities, which neglects the small dependence
+of bremsstrahlung yields on the surrounding material.
+
 ----------
 References
 ----------

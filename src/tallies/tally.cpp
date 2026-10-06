@@ -12,6 +12,7 @@
 #include "openmc/mgxs_interface.h"
 #include "openmc/nuclide.h"
 #include "openmc/particle.h"
+#include "openmc/photon.h"
 #include "openmc/reaction.h"
 #include "openmc/reaction_product.h"
 #include "openmc/settings.h"
@@ -647,7 +648,12 @@ void Tally::set_scores(const vector<std::string>& scores)
             break;
           }
         }
-        if (!neutron_only)
+        // Nuclide bins without density multiplication use the heating cross
+        // section instead, which supports tracklength scoring too.
+        bool from_xs =
+          !multiply_density_ && std::none_of(nuclides_.begin(), nuclides_.end(),
+                                  [](int i_nuclide) { return i_nuclide < 0; });
+        if (!neutron_only && !from_xs)
           estimator_ = TallyEstimator::COLLISION;
       }
       break;
@@ -713,6 +719,50 @@ void Tally::set_scores(const vector<std::string>& scores)
       if ((sc != SCORE_CURRENT) && (sc != SCORE_FLUX))
         fatal_error("Cannot tally scores other than 'current' or 'flux' "
                     "when using surface filters.");
+  }
+}
+
+bool Tally::photon_heating_from_xs() const
+{
+  if (!settings::photon_transport || multiply_density_ ||
+      !contains(scores_, HEATING))
+    return false;
+
+  // Only nuclide bins score from the heating cross section
+  if (std::none_of(nuclides_.begin(), nuclides_.end(),
+        [](int i_nuclide) { return i_nuclide >= 0; }))
+    return false;
+
+  // Skip tallies restricted to particles other than photons
+  for (auto i_filt : filters_) {
+    auto pf = dynamic_cast<ParticleFilter*>(model::tally_filters[i_filt].get());
+    if (pf && !contains(pf->particles(), ParticleType::photon()))
+      return false;
+  }
+  return true;
+}
+
+void Tally::init_photon_heating() const
+{
+  if (!this->photon_heating_from_xs())
+    return;
+
+  if (estimator_ == TallyEstimator::ANALOG) {
+    fatal_error(fmt::format("Tally {} scores photon heating for nuclides with "
+                            "multiply_density off, which requires a "
+                            "tracklength or collision estimator.",
+      id_));
+  }
+
+  for (int i_nuclide : nuclides_) {
+    if (i_nuclide < 0)
+      continue;
+    auto& element = *data::elements[data::nuclide_to_element[i_nuclide]];
+    if (!element.has_heating_) {
+      write_message(
+        6, "Computing photon heating cross section for {}", element.name_);
+      element.init_heating(i_nuclide);
+    }
   }
 }
 

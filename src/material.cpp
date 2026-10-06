@@ -523,7 +523,10 @@ void Material::init_thermal()
   thermal_tables_ = tables;
 }
 
-void Material::collision_stopping_power(double* s_col, bool positron)
+void collision_stopping_power(const vector<int>& element,
+  const vector<int>& nuclide, const tensor::Tensor<double>& atom_densities,
+  double material_density, const tensor::Tensor<double>& e_grid, double* s_col,
+  bool positron)
 {
   // Average electron number and average atomic weight
   double electron_density = 0.0;
@@ -540,13 +543,13 @@ void Material::collision_stopping_power(double* s_col, bool positron)
   vector<double> f;
   vector<double> e_b_sq;
 
-  for (int i = 0; i < element_.size(); ++i) {
-    const auto& elm = *data::elements[element_[i]];
-    double awr = data::nuclides[nuclide_[i]]->awr_;
+  for (int i = 0; i < element.size(); ++i) {
+    const auto& elm = *data::elements[element[i]];
+    double awr = data::nuclides[nuclide[i]]->awr_;
 
     // Get atomic density of nuclide given atom/weight percent
     double atom_density =
-      (atom_density_[0] > 0.0) ? atom_density_[i] : -atom_density_[i] / awr;
+      (atom_densities[0] > 0.0) ? atom_densities[i] : -atom_densities[i] / awr;
 
     electron_density += atom_density * elm.Z_;
     mass_density += atom_density * awr * MASS_NEUTRON;
@@ -567,7 +570,8 @@ void Material::collision_stopping_power(double* s_col, bool positron)
     f_i /= electron_density;
 
   // Get density in g/cm^3 if it is given in atom/b-cm
-  double density = (density_ < 0.0) ? -density_ : mass_density / N_AVOGADRO;
+  double density =
+    (material_density < 0.0) ? -material_density : mass_density / N_AVOGADRO;
 
   // Calculate the square of the plasma energy
   double e_p_sq =
@@ -589,8 +593,8 @@ void Material::collision_stopping_power(double* s_col, bool positron)
     BARN_PER_CM_SQ * 2.0 * PI * r_e * r_e * MASS_ELECTRON_EV * electron_density;
 
   // Loop over incident charged particle energies
-  for (int i = 0; i < data::ttb_e_grid.size(); ++i) {
-    double E = data::ttb_e_grid(i);
+  for (int i = 0; i < e_grid.size(); ++i) {
+    double E = e_grid(i);
 
     // Get the density effect correction
     double delta =
@@ -620,22 +624,24 @@ void Material::collision_stopping_power(double* s_col, bool positron)
   }
 }
 
-void Material::init_bremsstrahlung()
+unique_ptr<Bremsstrahlung> make_bremsstrahlung(const vector<int>& element,
+  const vector<int>& nuclide, const tensor::Tensor<double>& atom_densities,
+  double material_density, const tensor::Tensor<double>& e_grid)
 {
   // Create new object
-  ttb_ = make_unique<Bremsstrahlung>();
+  auto ttb_data = make_unique<Bremsstrahlung>();
 
   // Get the size of the energy grids
   auto n_k = data::ttb_k_grid.size();
-  auto n_e = data::ttb_e_grid.size();
+  auto n_e = e_grid.size();
 
   // Determine number of elements
-  int n = element_.size();
+  int n = element.size();
 
   for (int particle = 0; particle < 2; ++particle) {
     // Loop over logic twice, once for electron, once for positron
     BremsstrahlungData* ttb =
-      (particle == 0) ? &ttb_->electron : &ttb_->positron;
+      (particle == 0) ? &ttb_data->electron : &ttb_data->positron;
     bool positron = (particle == 1);
 
     // Allocate arrays for TTB data
@@ -652,19 +658,21 @@ void Material::init_bremsstrahlung()
     double sum_density = 0.0;
 
     // Get the collision stopping power of the material
-    this->collision_stopping_power(stopping_power_collision.data(), positron);
+    collision_stopping_power(element, nuclide, atom_densities, material_density,
+      e_grid, stopping_power_collision.data(), positron);
 
     // Calculate the molecular DCS and the molecular radiative stopping power
     // using Bragg's additivity rule.
     for (int i = 0; i < n; ++i) {
       // Get pointer to current element
-      const auto& elm = *data::elements[element_[i]];
-      double awr = data::nuclides[nuclide_[i]]->awr_;
+      const auto& elm = *data::elements[element[i]];
+      double awr = data::nuclides[nuclide[i]]->awr_;
 
       // Get atomic density and mass density of nuclide given atom/weight
       // percent
-      double atom_density =
-        (atom_density_[0] > 0.0) ? atom_density_[i] : -atom_density_[i] / awr;
+      double atom_density = (atom_densities[0] > 0.0)
+                              ? atom_densities[i]
+                              : -atom_densities[i] / awr;
 
       // Calculate the "equivalent" atomic number Zeq of the material
       Z_eq_sq += atom_density * elm.Z_ * elm.Z_;
@@ -687,8 +695,8 @@ void Material::init_bremsstrahlung()
     // Issy-les-Moulineaux, France (2011).
     if (positron) {
       for (int i = 0; i < n_e; ++i) {
-        double t = std::log(
-          1.0 + 1.0e6 * data::ttb_e_grid(i) / (Z_eq_sq * MASS_ELECTRON_EV));
+        double t =
+          std::log(1.0 + 1.0e6 * e_grid(i) / (Z_eq_sq * MASS_ELECTRON_EV));
         double r =
           1.0 -
           std::exp(-1.2359e-1 * t + 6.1274e-2 * std::pow(t, 2) -
@@ -709,11 +717,11 @@ void Material::init_bremsstrahlung()
     auto f = tensor::zeros<double>({n_e});
     auto z = tensor::zeros<double>({n_e});
     for (int i = 0; i < n_e - 1; ++i) {
-      double w = data::ttb_e_grid(i);
+      double w = e_grid(i);
 
       // Loop over incident particle energies
       for (int j = i; j < n_e; ++j) {
-        double e = data::ttb_e_grid(j);
+        double e = e_grid(j);
 
         // Reduced photon energy
         double k = w / e;
@@ -747,20 +755,20 @@ void Material::init_bremsstrahlung()
       // Integrate the PDF using cubic spline integration over the incident
       // particle energy
       if (n > 2) {
-        spline(n, &data::ttb_e_grid(i), &f(i), &z(i));
+        spline(n, &e_grid(i), &f(i), &z(i));
 
         double c = 0.0;
         for (int j = i; j < n_e - 1; ++j) {
-          c += spline_integrate(n, &data::ttb_e_grid(i), &f(i), &z(i),
-            data::ttb_e_grid(j), data::ttb_e_grid(j + 1));
+          c += spline_integrate(
+            n, &e_grid(i), &f(i), &z(i), e_grid(j), e_grid(j + 1));
 
           ttb->pdf(j + 1, i) = c;
         }
 
         // Integrate the last two points using trapezoidal rule in log-log space
       } else {
-        double e_l = std::log(data::ttb_e_grid(i));
-        double e_r = std::log(data::ttb_e_grid(i + 1));
+        double e_l = std::log(e_grid(i));
+        double e_r = std::log(e_grid(i + 1));
         double x_l = std::log(f(i));
         double x_r = std::log(f(i + 1));
 
@@ -780,8 +788,8 @@ void Material::init_bremsstrahlung()
       for (int i = 0; i < j; ++i) {
         // Integrate the CDF from the PDF using the fact that the PDF is linear
         // in log-log space
-        double w_l = std::log(data::ttb_e_grid(i));
-        double w_r = std::log(data::ttb_e_grid(i + 1));
+        double w_l = std::log(e_grid(i));
+        double w_r = std::log(e_grid(i + 1));
         double x_l = std::log(ttb->pdf(j, i));
         double x_r = std::log(ttb->pdf(j, i + 1));
         double beta = (x_r - x_l) / (w_r - w_l);
@@ -798,6 +806,14 @@ void Material::init_bremsstrahlung()
     ttb->yield =
       tensor::where(ttb->yield > 0.0, tensor::log(ttb->yield), -500.0);
   }
+
+  return ttb_data;
+}
+
+void Material::init_bremsstrahlung()
+{
+  ttb_ = make_bremsstrahlung(
+    element_, nuclide_, atom_density_, density_, data::ttb_e_grid);
 }
 
 void Material::init_nuclide_index()

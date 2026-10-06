@@ -195,6 +195,7 @@ struct ElementMicroXS {
   double incoherent;      //!< microscopic incoherent xs
   double photoelectric;   //!< microscopic photoelectric xs
   double pair_production; //!< microscopic pair production xs
+  double heating;         //!< microscopic heating xs in [eV-b]
 };
 
 //==============================================================================
@@ -592,6 +593,10 @@ public:
 
   // Microscopic photon cross sections
   ElementMicroXS& photon_xs(int i_element) { return photon_xs_[i_element]; }
+  const ElementMicroXS& photon_xs(int i_element) const
+  {
+    return photon_xs_[i_element];
+  }
 
   // Macroscopic cross sections
   MacroXS& macro_xs() { return macro_xs_; }

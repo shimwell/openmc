@@ -88,7 +88,10 @@ class Tally(IDManagerMixin):
     name : str
         Name of the tally
     multiply_density : bool
-        Whether reaction rates should be multiplied by atom density
+        Whether reaction rates should be multiplied by atom density. When
+        False, photon heating in nuclide bins is scored from a photon heating
+        cross section rather than from the energy balance of each collision,
+        so that it also scores where the nuclide is absent.
 
         .. versionadded:: 0.14.0
     filters : list of openmc.Filter

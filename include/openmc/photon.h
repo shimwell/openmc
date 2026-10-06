@@ -9,6 +9,7 @@
 #include "openmc/tensor.h"
 #include <hdf5.h>
 
+#include <functional>
 #include <string>
 #include <unordered_map>
 #include <utility> // for pair
@@ -56,6 +57,18 @@ public:
 
   void atomic_relaxation(int i_shell, Particle& p) const;
 
+  //! Compute the heating cross section
+  //
+  //! The heating cross section is the total cross section times the expected
+  //! energy deposited at the collision site, in [eV-b]. It is the expectation
+  //! of the energy balance that photon heating tallies score, derived from
+  //! the same interaction data and settings, so it can be scored with a
+  //! tracklength estimator and for an element that is not present.
+  //!
+  //! \param[in] i_nuclide Index in data::nuclides of an isotope of this
+  //!   element, whose atomic weight ratio is used for its bremsstrahlung data
+  void init_heating(int i_nuclide);
+
   // Data members
   std::string name_; //!< Name of element, e.g. "Zr"
   int Z_;            //!< Atomic number
@@ -69,7 +82,7 @@ public:
   tensor::Tensor<double> pair_production_total_;
   tensor::Tensor<double> pair_production_electron_;
   tensor::Tensor<double> pair_production_nuclear_;
-  tensor::Tensor<double> heating_;
+  tensor::Tensor<double> heating_; //!< Only set when has_heating_ is true
 
   // Form factors
   Tabulated1D incoherent_form_factor_;
@@ -108,6 +121,9 @@ public:
   // Whether atomic relaxation data is present
   bool has_atomic_relaxation_ {false};
 
+  // Whether the heating cross section has been computed
+  bool has_heating_ {false};
+
   // Constant data
   static constexpr int MAX_STACK_SIZE =
     7; //!< maximum possible size of atomic relaxation stack
@@ -138,6 +154,19 @@ private:
 
   //! Invert K_i using the inverse transforms of Eqs. (3.123) and (3.126)
   double invert_compton_profile_cdf(int i_shell, double c) const;
+
+  //! Expected energy deposited at the site of an incoherent scattering
+  //
+  //! \param[in] E Photon energy in [eV]
+  //! \param[in] radiated Bremsstrahlung energy radiated by a charged particle
+  //!   of a given energy, and whether it is a positron
+  //! \param[in] relaxation_escape Energy leaving the site when a vacancy in
+  //!   a given subshell relaxes
+  //! \param[in] relaxation Whether atomic relaxation is simulated
+  //! \return Energy deposited in [eV]
+  double compton_deposit(double E,
+    const std::function<double(double, bool)>& radiated,
+    const std::function<double(int)>& relaxation_escape, bool relaxation) const;
 
   //! Calculate the maximum size of the vacancy stack in atomic relaxation
   //
