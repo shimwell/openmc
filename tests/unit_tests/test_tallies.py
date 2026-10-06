@@ -1,3 +1,4 @@
+import copy
 from math import sqrt
 import numpy as np
 import pytest
@@ -220,6 +221,37 @@ def test_apply_virtual_material():
     assert tally.sum_fourth == pytest.approx(original_sum_fourth * factors**4)
     assert tally.mean == pytest.approx(original_mean * factors)
     assert tally.std_dev == pytest.approx(original_std_dev * factors)
+
+
+def test_apply_virtual_material_to_derived_tally():
+    """A derived tally with only a mean and standard deviation can be scaled,
+    for example after D1S time correction factors are summed."""
+    tally = _virtual_material_tally()
+    material = openmc.Material()
+    material.add_nuclide('Si28', 0.04)
+    material.add_nuclide('Si29', 0.01)
+    material.set_density('sum')
+
+    original_mean = tally.mean.copy()
+    original_std_dev = tally.std_dev.copy()
+
+    derived = copy.copy(tally)
+    derived._sum = None
+    derived._sum_sq = None
+    derived._mean = original_mean.copy()
+    derived._std_dev = original_std_dev.copy()
+    derived._derived = True
+
+    derived.apply_virtual_material(material)
+
+    factors = np.array([0.04, 0.01, 0.0])[np.newaxis, :, np.newaxis]
+    assert derived.mean == pytest.approx(original_mean * factors)
+    assert derived.std_dev == pytest.approx(original_std_dev * factors)
+
+    # Same answer as scaling the raw moments first
+    tally.apply_virtual_material(material)
+    assert derived.mean == pytest.approx(tally.mean)
+    assert derived.std_dev == pytest.approx(tally.std_dev)
 
 
 def test_apply_virtual_material_errors():

@@ -1527,6 +1527,11 @@ class Tally(IDManagerMixin):
         present in the material are multiplied by zero. The operation is
         performed in place and the nuclide dimension is preserved.
 
+        It can also be applied to a derived tally that only holds a mean and
+        standard deviation, such as one returned by
+        :func:`openmc.deplete.d1s.apply_time_correction` after summing over
+        parent nuclides.
+
         .. versionadded:: 0.15.4
 
         Parameters
@@ -1549,8 +1554,10 @@ class Tally(IDManagerMixin):
                              'multiply_density is True.')
 
         # Accessing sum ensures that results are read from the statepoint before
-        # inspecting nuclide bins or modifying the underlying moments
-        if self.sum is None:
+        # inspecting nuclide bins or modifying the underlying moments. A
+        # derived tally may only hold a mean and standard deviation.
+        derived_only = self.derived and self._mean is not None
+        if self.sum is None and not derived_only:
             raise ValueError('Unable to apply a virtual material since the '
                              'tally does not contain any results.')
 
@@ -1563,6 +1570,13 @@ class Tally(IDManagerMixin):
         factors = np.array(
             [densities.get(nuclide, 0.0) for nuclide in self.nuclides]
         )[np.newaxis, :, np.newaxis]
+
+        if self.sum is None:
+            # Without raw moments, scale the mean and standard deviation. The
+            # relative variance of the variance does not change with scale.
+            self._mean = self.mean * factors
+            self._std_dev = self.std_dev * factors
+            return
 
         # Scale the raw moments by the atom densities
         self._sum *= factors
