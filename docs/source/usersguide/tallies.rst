@@ -413,6 +413,14 @@ be used because a material density cannot be assigned to its constituent
 nuclides. Tally nuclides that do not occur in the virtual material are treated
 as having zero atom density.
 
+With photon transport on, the same tally also scores the photon contribution to
+the dose. Photon heating is normally scored from the energy balance of each
+collision against the element that was struck, but in nuclide bins with
+:attr:`Tally.multiply_density` set to ``False`` it is scored from a photon
+heating cross section that OpenMC computes for each element when the simulation
+starts, as described in :ref:`methods_photon_heating_xs`. Such tallies can use
+the tracklength or collision estimator but not the analog estimator.
+
 .. _usersguide_tally_normalization:
 
 ------------------------------

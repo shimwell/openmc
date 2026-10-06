@@ -376,6 +376,12 @@ double score_particle_heating(const Particle& p, const Tally& tally,
   if (p.type().is_neutron())
     return score_neutron_heating(
       p, tally, flux, rxn_bin, i_nuclide, atom_density);
+  if (p.type().is_photon() && i_nuclide >= 0 && !tally.multiply_density()) {
+    // Score from the heating cross section, as for neutrons, so that the
+    // result is per atom and the nuclide need not be present
+    const auto& micro = p.photon_xs(data::nuclide_to_element[i_nuclide]);
+    return micro.heating * atom_density * flux;
+  }
   if (i_nuclide == -1 || i_nuclide == p.event_nuclide() ||
       p.event_nuclide() == -1) {
     // For pair production and positron annihilation, we need to account for the

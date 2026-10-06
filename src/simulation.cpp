@@ -113,6 +113,13 @@ int openmc_simulation_init()
     t->init_results();
   }
 
+  // Compute the photon heating cross sections that tallies need
+  if (settings::run_CE && settings::photon_transport) {
+    for (const auto& t : model::tallies) {
+      t->init_photon_heating();
+    }
+  }
+
   // Set up material nuclide index mapping
   for (auto& mat : model::materials) {
     mat->init_nuclide_index();

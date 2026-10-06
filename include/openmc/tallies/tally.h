@@ -116,6 +116,17 @@ public:
 
   void init_results();
 
+  //! Whether photon heating is scored from the heating cross section
+  //
+  //! Photon heating is normally scored from the energy balance of each
+  //! collision. For nuclide bins without density multiplication it is
+  //! instead the heating cross section times the flux, which, like neutron
+  //! heating, also scores where the nuclide is absent.
+  bool photon_heating_from_xs() const;
+
+  //! Compute the photon heating cross sections this tally needs
+  void init_photon_heating() const;
+
   void reset();
 
   void accumulate();

@@ -212,9 +212,6 @@ private:
   //----------------------------------------------------------------------------
   // Private methods
 
-  //! Calculate the collision stopping power
-  void collision_stopping_power(double* s_col, bool positron);
-
   //! Initialize bremsstrahlung data
   void init_bremsstrahlung();
 
@@ -245,6 +242,29 @@ private:
 double sternheimer_adjustment(const vector<double>& f,
   const vector<double>& e_b_sq, double e_p_sq, double n_conduction,
   double log_I, double tol, int max_iter);
+
+//! Calculate the collision stopping power of a mixture of elements
+//
+//! \param[in] element Indices in data::elements of the constituents
+//! \param[in] nuclide Indices in data::nuclides of the constituents, used for
+//!   their atomic weight ratios
+//! \param[in] atom_densities Atom densities of the constituents in [atom/b-cm]
+//! \param[in] material_density Total density, in [atom/b-cm] if positive or
+//!   [g/cm^3] if negative
+//! \param[in] e_grid Charged particle energies in [eV]
+//! \param[out] s_col Collision stopping power at each energy in e_grid
+//! \param[in] positron Whether the charged particle is a positron
+void collision_stopping_power(const vector<int>& element,
+  const vector<int>& nuclide, const tensor::Tensor<double>& atom_densities,
+  double material_density, const tensor::Tensor<double>& e_grid, double* s_col,
+  bool positron);
+
+//! Build thick-target bremsstrahlung data for a mixture of elements
+//
+//! Arguments are as for collision_stopping_power.
+unique_ptr<Bremsstrahlung> make_bremsstrahlung(const vector<int>& element,
+  const vector<int>& nuclide, const tensor::Tensor<double>& atom_densities,
+  double material_density, const tensor::Tensor<double>& e_grid);
 
 //! Calculate density effect correction
 double density_effect(const vector<double>& f, const vector<double>& e_b_sq,
