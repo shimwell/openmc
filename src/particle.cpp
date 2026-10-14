@@ -101,6 +101,7 @@ bool Particle::create_secondary(
 
   SourceSite bank;
   bank.particle = type;
+  bank.parent_nuclide = parent_nuclide();
   bank.wgt = wgt;
   bank.r = r();
   bank.u = u;
@@ -123,6 +124,7 @@ void Particle::split(double wgt)
 {
   SourceSite bank;
   bank.particle = type();
+  bank.parent_nuclide = parent_nuclide();
   bank.wgt = wgt;
   bank.r = r();
   bank.u = u();

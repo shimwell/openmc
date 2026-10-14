@@ -14,6 +14,9 @@
 
 namespace openmc {
 
+//! Ordinary source-bank compound type; caller must close the returned type.
+hid_t h5banktype(bool memory);
+
 void load_state_point();
 
 // By passing in a filename, source bank, and list of source indices

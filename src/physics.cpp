@@ -4,6 +4,7 @@
 #include "openmc/bremsstrahlung.h"
 #include "openmc/chain.h"
 #include "openmc/constants.h"
+#include "openmc/d1s.h"
 #include "openmc/distribution_multi.h"
 #include "openmc/eigenvalue.h"
 #include "openmc/endf.h"
@@ -1249,6 +1250,13 @@ void sample_secondary_photons(Particle& p, int i_nuclide)
     double wgt = photon_wgt;
     if (settings::run_mode == RunMode::EIGENVALUE && !is_fission(rx->mt_)) {
       wgt *= simulation::keff;
+    }
+
+    // Capture at the sampled birth, before transport energy cutoffs. Neutron
+    // secondaries (including fission) continue to use the normal banks.
+    if (settings::d1s_source_write) {
+      bank_d1s_photon(p, u, E, wgt, rx->products_[i_product].parent_nuclide_);
+      continue;
     }
 
     // Create the secondary photon

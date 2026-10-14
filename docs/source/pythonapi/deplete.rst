@@ -297,14 +297,109 @@ R2S Automation
 
    R2SManager
 
-D1S Functions
--------------
+D1S Capture and Replay
+----------------------
+
+.. module:: openmc.deplete.d1s
+
+.. currentmodule:: openmc.deplete
+
+The :mod:`openmc.deplete.d1s` interface weights reaction-produced decay-photon
+births for an irradiation/cooling schedule. Despite its location in the
+depletion package, it does not evolve compositions or calculate a depletion
+inventory. See :ref:`usersguide_d1s_multi_model` for a staged example, physical
+assumptions, component mapping, backend requirements, normalization, and
+uncertainty.
+
+.. autosummary::
+    :toctree: generated
+    :nosignatures:
+    :template: myclass.rst
+
+    d1s.Cells
+    d1s.DAGMCVolumes
+    d1s.Configuration
+    d1s.Irradiation
+    d1s.Cooling
+    d1s.Simulation
+    d1s.Production
+    d1s.Observation
+    d1s.Results
+
+The main entry points are:
+
+* :meth:`d1s.Simulation.validate` checks the schedule, selectors, and model
+  settings without transport. It does not verify executable backend support.
+* ``Simulation.run(output_dir='d1s', run_kwargs=None)`` prepares production and
+  evaluates the schedule, returning :class:`d1s.Results`.
+* ``Simulation.prepare(output_dir='d1s-production', run_kwargs=None)`` returns
+  :class:`d1s.Production` with one captured bank per distinct positive-rate
+  irradiation :class:`d1s.Configuration` object.
+* :meth:`d1s.Simulation.evaluate` reuses prepared in-process production.
+  Irradiation configuration objects and the decay-data file must match.
+  Rates, durations, cooling models, and sample times may change. Prepared
+  configurations and their models must remain unchanged.
+* ``Results.get_tally(name, step, time)`` returns an independent tally copy.
+  ``name`` identifies a unique tally by name or ID. ``step`` is a step name
+  or zero-based schedule index. ``time`` must match a requested local sample
+  offset in seconds or as a ``(value, unit)`` pair.
+
+``Production.kernels[configuration].source_histories`` is the production
+normalization denominator: the total number of sampled original external
+neutron histories across all rank shards, including zero-weight histories
+rejected with the ``kill`` strategy and ranks with empty photon banks.
+Secondary and split tracks are excluded. The kernel's ``source_weight`` is the
+sum of the actual original source weights, for information only. Birth weights
+retain source sampling-importance corrections. This matches fixed-source
+normalization per initial source history and the initial neutron rate supplied
+by ``Irradiation.source_rate``. See :ref:`io_source_d1s` for the persisted
+scalars.
+
+Per-birth ``history_id`` metadata records the emitting track's particle ID
+(``p.id()``), not guaranteed original external-source ancestry when secondary
+tracks use a shared bank. This provenance limitation does not affect the
+independently accumulated ``source_histories`` count or normalization.
+
+All output directories must be new or empty. ``run_kwargs`` accepts only
+``particles``, ``threads``, ``geometry_debug``, ``tracks``, ``output``,
+``openmc_exec``, ``mpi_args``, and ``event_based``. The workflow requires
+fixed-source continuous-energy Monte Carlo and an uninitialized caller C API;
+production accepts only neutron external sources, not mixed neutron/photon
+sources. Nonzero transport needs a compatible executable. For targets
+containing DAGMC, nonzero replay preflight and zero-source
+:class:`openmc.DistribcellFilter` sizing use isolated geometry-only Python
+C API subprocesses. Zero-source unstructured-mesh tally sizing also uses an
+isolated geometry-only subprocess to obtain element counts and volumes,
+including in CSG-only targets. The shared library must support DAGMC or the
+selected mesh backend, respectively, even when the photon rate is zero. These
+subprocesses initialize neither sources nor transport and require no nuclear
+cross-section or decay-chain data. Both photon replay and the locator clear
+retained ``surf_source_read`` settings to prevent an extra external source.
+
+``Results.observations[(step_name, local_seconds)]`` provides an
+:class:`d1s.Observation`, including cumulative time, photon source rate in
+photons/s, replay-bank and raw-statepoint paths, tallies, and provenance.
+``Results.source_rates`` and ``Results.statepoint_paths`` use the same keys.
+Zero-source observations have zero tallies and ``None`` paths. Replay uses a
+unit-strength ``FileSource``, and the workflow multiplies its per-photon tally
+response by the physical photon rate exactly once. Raw statepoint files are not
+modified. Standard deviations include only photon transport uncertainty
+conditional on the captured banks, not neutron production/bank-generation
+uncertainty.
+
+D1S Helper Functions
+--------------------
+
+These lower-level helpers support time correction of parent-resolved tallies
+from a single transport configuration. They are not additional processing
+steps for :class:`d1s.Simulation` results.
 
 .. autosummary::
    :toctree: generated
    :nosignatures:
    :template: myfunction.rst
 
+   d1s.get_radionuclides
    d1s.prepare_tallies
    d1s.time_correction_factors
    d1s.apply_time_correction
