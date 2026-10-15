@@ -426,6 +426,42 @@ production. This is in-process reuse, not an on-disk restart API. Capturing and
 composing banks uses memory of order :math:`O(N)` in the number of captured
 births; it is not a bounded-memory streaming calculation.
 
+Regular-mesh animations
+~~~~~~~~~~~~~~~~~~~~~~~
+
+Two runnable examples in ``examples/d1s_moving`` separate neutron-source
+movement from movement of an activated component:
+
+* ``moving_neutron_source.py`` keeps geometry fixed and irradiates it from
+    three neutron-source positions, then observes cooling in the same geometry.
+* ``moving_activated_volume.py`` keeps the neutron source and surrounding
+    geometry fixed while a single nickel volume changes placement during
+    irradiation and cooling. The same component identity retains production
+    from every irradiation placement.
+
+Both scripts tally neutron and photon flux on an identical, stationary
+:class:`openmc.RegularMesh`, with dimensions ``(60, 40, 1)`` and a finite
+4 cm thick z slab. They export neutron-irradiation and decay-photon-cooling
+GIFs, PNG previews, and compressed NumPy arrays with times and positions.
+Matplotlib's Pillow writer is used for GIF output; Pillow is needed only for
+the examples, not the D1S API. The example README documents inputs and options.
+
+The photon flux in :class:`~openmc.deplete.d1s.Results` is already physically
+scaled. Divide each voxel's track-length tally by its volume to obtain
+photons/cm\ :sup:`2`/s, without applying the photon rate again. For the
+examples' filter ordering (mesh, photon particle), the x-y image is::
+
+        tally = results.get_tally('decay photon mesh flux', step_name, local_time)
+        mesh = tally.find_filter(openmc.MeshFilter).mesh
+        data = tally.get_reshaped_data(expand_dims=True)
+        flux_xy = data[:, :, 0, 0, 0, 0] / mesh.volumes[:, :, 0]
+        image.set_data(flux_xy.T)  # Matplotlib rows are y, columns are x
+
+Use a fixed color normalization across frames so intensity changes remain
+visible. These are slab-volume-averaged fields at static configurations, not
+continuous-motion particle tracking or a trajectory-integrated dose. Photon
+error bars remain conditional on the finite captured neutron production banks.
+
 Removal, placement, and repeated instances
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
