@@ -400,6 +400,13 @@ void statepoint_version_check(hid_t file_id)
 
 extern "C" int openmc_statepoint_load(const char* filename)
 {
+  // Capture normalization and birth metadata cannot be reconstructed from a
+  // statepoint. Guard the direct API as well as command-line restart input.
+  if (settings::d1s_source_write) {
+    set_errmsg("Statepoint restart is not supported with d1s_source_write.");
+    return OPENMC_E_INVALID_ARGUMENT;
+  }
+
   // Open file for reading
   hid_t file_id = file_open(filename, 'r', true);
 

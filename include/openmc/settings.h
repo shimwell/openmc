@@ -53,6 +53,7 @@ extern bool assume_separate;      //!< assume tallies are spatially separate?
 extern bool check_overlaps;       //!< check overlaps in geometry?
 extern bool collision_track;      //!< flag to use collision track feature?
 extern bool confidence_intervals; //!< use confidence intervals for results?
+extern bool d1s_source_write;     //!< capture decay-photon births?
 extern bool
   create_fission_neutrons; //!< create fission neutrons (fixed source)?
 extern bool create_delayed_neutrons; //!< create delayed fission neutrons?
