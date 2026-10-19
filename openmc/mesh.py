@@ -3081,6 +3081,14 @@ class UnstructuredMesh(MeshBase):
         )
         self.write_data_to_vtk(**kwargs)
 
+    def _supported_element_data(self, data: np.ndarray) -> np.ndarray:
+        """Return the values of data for elements that are written to VTK
+
+        Elements of an unsupported type are skipped when the mesh is written,
+        so their values are dropped to keep the data aligned with the cells.
+        """
+        return data[self.element_types != self._UNSUPPORTED_ELEM]
+
     def write_data_to_vtk(
         self,
         filename: PathLike | None = None,
@@ -3201,18 +3209,19 @@ class UnstructuredMesh(MeshBase):
                         f"with dimensions {self.dimension}"
                     )
 
-            if volume_normalization:
-                for name, data in datasets.items():
+            volumes = self._supported_element_data(np.asarray(self.volumes))
+
+            # add data to the mesh
+            for name, data in datasets.items():
+                data = self._supported_element_data(data)
+                if volume_normalization:
                     if np.issubdtype(data.dtype, np.integer):
                         warnings.warn(
                             f'Integer data set "{name}" will '
                             "not be volume-normalized."
                         )
-                        continue
-                    data /= self.volumes
-
-            # add data to the mesh
-            for name, data in datasets.items():
+                    else:
+                        data /= volumes
                 datasets_out.append(data)
                 arr = vtkCommonCore.vtkDoubleArray()
                 arr.SetName(name)
@@ -3304,9 +3313,11 @@ class UnstructuredMesh(MeshBase):
 
             cell_data_group = root.create_group("CellData")
 
+            volumes = self._supported_element_data(np.asarray(self.volumes))
             for name, data in datasets.items():
+                data = self._supported_element_data(data)
                 if volume_normalization:
-                    data /= self.volumes
+                    data /= volumes
                 cell_data_group.create_dataset(
                     name, data=data, dtype="float64", chunks=True
                 )

@@ -478,6 +478,48 @@ def test_umesh_from_hdf5_without_filename(run_in_tmpdir):
     assert mesh.n_elements == 1
 
 
+@pytest.mark.parametrize('filename', ['mesh.vtkhdf', 'mesh.vtk'])
+def test_umesh_vtk_skips_data_for_unsupported_elements(run_in_tmpdir, filename):
+    """Data for unsupported elements is dropped along with the elements"""
+    vtkIOLegacy = pytest.importorskip("vtkmodules.vtkIOLegacy")
+    vtkIOHDF = pytest.importorskip("vtkmodules.vtkIOHDF")
+    from vtkmodules.util.numpy_support import vtk_to_numpy
+
+    with h5py.File('mesh.h5', 'w') as f:
+        group = f.create_group('mesh 1')
+        group['type'] = np.bytes_('unstructured')
+        group['library'] = np.bytes_('moab')
+        group['volumes'] = [2.0, 5.0, 4.0]
+        group['vertices'] = np.array([
+            [0., 0., 0.], [1., 0., 0.], [0., 1., 0.], [0., 0., 1.],
+            [1., 1., 1.]])
+        group['connectivity'] = np.array([
+            [0, 1, 2, 3, -1, -1, -1, -1],
+            [0, 1, 2, 3, 4, -1, -1, -1],
+            [1, 2, 3, 4, -1, -1, -1, -1]])
+        # the middle element is of an unsupported type
+        group['element_types'] = [0, -1, 0]
+        mesh = openmc.MeshBase.from_hdf5(group)
+
+    flux = np.array([2.0, 99.0, 8.0])
+    with pytest.warns(UserWarning, match='1 elements were not written'):
+        mesh.write_data_to_vtk(filename=filename, datasets={'flux': flux})
+
+    # the input data is not modified by the volume normalization
+    np.testing.assert_array_equal(flux, [2.0, 99.0, 8.0])
+
+    if filename.endswith('.vtkhdf'):
+        reader = vtkIOHDF.vtkHDFReader()
+    else:
+        reader = vtkIOLegacy.vtkUnstructuredGridReader()
+    reader.SetFileName(filename)
+    reader.Update()
+    grid = reader.GetOutput()
+    assert grid.GetNumberOfCells() == 2
+    written = vtk_to_numpy(grid.GetCellData().GetArray('flux'))
+    np.testing.assert_allclose(written, [1.0, 2.0])
+
+
 @pytest.fixture(scope='module')
 def simple_umesh(request):
     """Fixture returning UnstructuredMesh with all attributes"""
