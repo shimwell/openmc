@@ -51,4 +51,3 @@ fi
 
 # Build and install OpenMC
 python tools/ci/gha-install.py
-

@@ -57,6 +57,18 @@ def install(omp=False, mpi=False, phdf5=False, dagmc=False, xdg=False,
     # Enable strict FP for cross-platform reproducibility in CI
     cmake_cmd.append('-DOPENMC_ENABLE_STRICT_FP=on')
 
+    # Build and install the Python package with the same CMake options. The
+    # prefix paths go through the environment because cmake.args is split on
+    # semicolons.
+    cmake_args = [a for a in cmake_cmd[1:]
+                  if not a.startswith('-DCMAKE_PREFIX_PATH=')]
+    env = os.environ.copy()
+    if prefix_paths:
+        env['CMAKE_PREFIX_PATH'] = os.pathsep.join(prefix_paths)
+    pip_suffix = '--config-settings=cmake.args=' + ';'.join(cmake_args)
+    subprocess.check_call(
+        ['pip', '-v', 'install', os.path.abspath('..') + '[test,vtk,ci,desc]', pip_suffix], env=env)
+
     # Build and install
     cmake_cmd.append('..')
     print(' '.join(cmake_cmd))
