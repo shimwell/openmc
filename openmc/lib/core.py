@@ -2,6 +2,7 @@ from contextlib import contextmanager
 from ctypes import (c_bool, c_int, c_int32, c_int64, c_double, c_char_p,
                     c_char, POINTER, Structure, c_void_p, create_string_buffer,
                     c_uint64, c_size_t)
+import io
 import sys
 import os
 from pathlib import Path
@@ -795,26 +796,46 @@ def quiet_dll(output=True):
 
     if output:
         yield
-    else:
+        return
+
+    # Redirecting the output needs a real file descriptor behind sys.stdout.
+    # In a Jupyter notebook sys.stdout is an ipykernel OutStream, which raises
+    # io.UnsupportedOperation from fileno() unless the kernel happens to be
+    # capturing output at the file descriptor level. Suppressing the output is
+    # only cosmetic, so fall back to leaving it alone rather than failing.
+    try:
+        stdout_fileno = sys.stdout.fileno()
+    except (AttributeError, OSError, io.UnsupportedOperation):
+        yield
+        return
+
+    with _redirect_stdout_to_devnull(stdout_fileno):
+        yield
+
+
+@contextmanager
+def _redirect_stdout_to_devnull(stdout_fileno):
+    """Sends anything written to the stdout file descriptor to devnull"""
+
+    sys.stdout.flush()
+    # Save the initial file descriptor states
+    initial_stdout = sys.stdout
+    initial_stdout_fno = os.dup(stdout_fileno)
+    # Get a garbage descriptor so we can throw away output
+    devnull = os.open(os.devnull, os.O_WRONLY)
+
+    # Get the current stdout stream and make a duplicate of it
+    new_stdout = os.dup(1)
+    # Copy the garbage output to the stdout stream
+    os.dup2(devnull, 1)
+    os.close(devnull)
+    # Now point stdout to the re-defined stdout
+    sys.stdout = os.fdopen(new_stdout, 'w')
+
+    try:
+        yield
+    finally:
+        # Now we just clean up after ourselves and reset the streams
+        sys.stdout = initial_stdout
         sys.stdout.flush()
-        # Save the initial file descriptor states
-        initial_stdout = sys.stdout
-        initial_stdout_fno = os.dup(sys.stdout.fileno())
-        # Get a garbage descriptor so we can throw away output
-        devnull = os.open(os.devnull, os.O_WRONLY)
-
-        # Get the current stdout stream and make a duplicate of it
-        new_stdout = os.dup(1)
-        # Copy the garbage output to the stdout stream
-        os.dup2(devnull, 1)
-        os.close(devnull)
-        # Now point stdout to the re-defined stdout
-        sys.stdout = os.fdopen(new_stdout, 'w')
-
-        try:
-            yield
-        finally:
-            # Now we just clean up after ourselves and reset the streams
-            sys.stdout = initial_stdout
-            sys.stdout.flush()
-            os.dup2(initial_stdout_fno, 1)
+        os.dup2(initial_stdout_fno, 1)
