@@ -16,6 +16,10 @@ from openmc.data import half_life
 from .abc import _normalize_timesteps
 from .chain import Chain, _get_chain
 from ..checkvalue import PathLike
+from ._d1s import (
+    Cells, DAGMCVolumes, Configuration, Irradiation, Cooling,
+    Simulation, Production, Observation, Results,
+)
 
 
 def get_radionuclides(model: openmc.Model, chain_file: PathLike | Chain | None = None) -> list[str]:

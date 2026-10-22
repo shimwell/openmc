@@ -4,6 +4,7 @@
 #include "openmc/capi.h"
 #include "openmc/collision_track.h"
 #include "openmc/container_util.h"
+#include "openmc/d1s.h"
 #include "openmc/eigenvalue.h"
 #include "openmc/error.h"
 #include "openmc/event.h"
@@ -82,6 +83,9 @@ int openmc_simulation_init()
   // Skip if simulation has already been initialized
   if (simulation::initialized)
     return 0;
+
+  validate_d1s_settings();
+  reset_d1s_source();
 
   // Initialize nuclear data (energy limits, log grid)
   if (settings::run_CE) {
@@ -181,6 +185,9 @@ int openmc_simulation_finalize()
   // Stop active batch timer and start finalization timer
   simulation::time_active.stop();
   simulation::time_finalize.start();
+
+  if (settings::d1s_source_write)
+    write_d1s_source();
 
   // Clear material nuclide mapping
   for (auto& mat : model::materials) {
@@ -736,6 +743,17 @@ void initialize_particle_track(
 
   // set particle history start weight
   p.wgt_born() = p.wgt();
+
+  if (!is_secondary && settings::d1s_source_write) {
+    if (!p.type().is_neutron()) {
+      fatal_error(fmt::format("d1s_source_write requires neutron-only external "
+                              "sources (history {}).",
+        p.id()));
+    }
+    // Count every initial history, including zero-weight kill rejections,
+    // before weight windows can split or roulette the source particle.
+    accumulate_d1s_source(p.wgt_born());
+  }
 
   // Reset pulse_height_storage
   std::fill(p.pht_storage().begin(), p.pht_storage().end(), 0);

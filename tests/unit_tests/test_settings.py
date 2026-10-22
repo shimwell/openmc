@@ -8,6 +8,21 @@ import openmc.lib
 import openmc.stats
 
 
+def test_d1s_source_write():
+    settings = openmc.Settings()
+    assert settings.d1s_source_write is None
+    assert settings.to_xml_element().find('d1s_source_write') is None
+    for value in (True, False):
+        settings.d1s_source_write = value
+        element = settings.to_xml_element()
+        assert element.findtext('d1s_source_write') == str(value).lower()
+        restored = openmc.Settings.from_xml_element(element)
+        assert restored.d1s_source_write is value
+    for value in (1, 'true', None):
+        with pytest.raises(TypeError):
+            settings.d1s_source_write = value
+
+
 def test_export_to_xml(run_in_tmpdir):
 
     tmp_properties_file = 'properties_test.h5'
