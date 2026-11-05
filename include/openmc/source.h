@@ -187,7 +187,8 @@ protected:
   SourceSite sample(uint64_t* seed) const override;
 
 private:
-  vector<SourceSite> sites_; //!< Source sites
+  vector<SourceSite> sites_;    //!< Source sites
+  vector<double> sampling_cdf_; //!< Optional weighted, unit-particle sampling
 };
 
 //==============================================================================
