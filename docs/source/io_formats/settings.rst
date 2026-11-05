@@ -227,6 +227,38 @@ time.
 
     *Default*: Infinity
 
+.. _io_settings_d1s_source_write:
+
+--------------------------------
+``<d1s_source_write>`` Element
+--------------------------------
+
+The ``<d1s_source_write>`` element accepts ``true`` or ``false``. When true,
+sampled reaction-produced decay-photon births are captured instead of
+transported. Capture occurs before photon transport energy cutoffs; neutron
+transport, including neutron secondaries, continues normally. This is the
+production stage of :ref:`staged D1S <usersguide_d1s_multi_model>`, not a
+depletion calculation or a photon response calculation.
+
+Requires ``<use_decay_photons>true</use_decay_photons>``,
+``<photon_transport>true</photon_transport>``, continuous-energy fixed-source
+Monte Carlo, and appropriate reaction/decay chain data. Eigenvalue, multigroup,
+random-ray, statepoint-restart, and particle-restart capture are not supported.
+The Python setting is :attr:`openmc.Settings.d1s_source_write`; the executable
+must also implement the capture backend.
+
+At the end of transport, each MPI rank writes ``d1s_source.<rank>.h5`` in the
+output directory, including ranks with no captured photons. The files contain
+ordinary source-bank records, separate parent/geometry/history metadata, and
+the rank-local initial neutron history count. Sum every rank's
+``source_histories`` when normalizing production, including zero-weight
+kill-rejected histories, not the number or sum of photon birth weights.
+See :ref:`io_source_d1s` for the schema. All births remain in memory until
+writing; memory use is :math:`O(N)` in the number of captured births on a rank.
+There is no capture buffer-size or streaming-output option.
+
+  *Default*: false
+
 ----------------------------
 ``<delayed_photon_scaling>``
 ----------------------------
@@ -1718,7 +1750,11 @@ in the problem and is specified using a :ref:`mesh_element`.
 
 The ``<use_decay_photons>`` element indicates whether to produce decay photons
 from neutron reactions instead of prompt photons. This is used in conjunction
-with the direct 1-step method for shutdown dose rate calculations.
+with the direct 1-step method for shutdown dose rate calculations. It does not
+evolve material compositions. Enable
+:ref:`io_settings_d1s_source_write` to capture the sampled births rather than
+transport them in the same model. Irradiation/cooling time factors and physical
+source-rate normalization are separate from this setting.
 
   *Default*: False
 
