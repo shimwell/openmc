@@ -379,6 +379,12 @@ class Settings:
         site (UFS) method.
     use_decay_photons : bool
         Produce decay photons from neutron reactions instead of prompt
+    d1s_source_write : bool
+        Capture sampled decay-photon births instead of transporting them. Requires
+        ``use_decay_photons``, ``photon_transport``, and continuous-energy
+        fixed-source Monte Carlo transport without a restart. Each rank writes
+        a source bank with emitting leaf-cell metadata and original source-weight
+        normalization. Storage grows with the number of captured births.
     verbosity : int
         Verbosity during simulation between 1 and 10. Verbosity levels are
         described in :ref:`verbosity`.
@@ -510,6 +516,7 @@ class Settings:
         self._max_tracks = None
         self._max_secondaries = None
         self._use_decay_photons = None
+        self._d1s_source_write = None
 
         self._random_ray = {}
 
@@ -1489,6 +1496,15 @@ class Settings:
         self._use_decay_photons = value
 
     @property
+    def d1s_source_write(self) -> bool | None:
+        return self._d1s_source_write
+
+    @d1s_source_write.setter
+    def d1s_source_write(self, value):
+        cv.check_type('D1S source write', value, bool)
+        self._d1s_source_write = value
+
+    @property
     def source_rejection_fraction(self) -> float:
         return self._source_rejection_fraction
 
@@ -1877,6 +1893,11 @@ class Settings:
         if self._use_decay_photons is not None:
             element = ET.SubElement(root, "use_decay_photons")
             element.text = str(self._use_decay_photons).lower()
+
+    def _create_d1s_source_write_subelement(self, root):
+        if self._d1s_source_write is not None:
+            element = ET.SubElement(root, "d1s_source_write")
+            element.text = str(self._d1s_source_write).lower()
 
     def _create_resonance_scattering_subelement(self, root):
         res = self.resonance_scattering
@@ -2576,6 +2597,11 @@ class Settings:
         if text is not None:
             self.use_decay_photons = text in ('true', '1')
 
+    def _d1s_source_write_from_xml_element(self, root):
+        text = get_text(root, 'd1s_source_write')
+        if text is not None:
+            self.d1s_source_write = text in ('true', '1')
+
     def _source_rejection_fraction_from_xml_element(self, root):
         text = get_text(root, 'source_rejection_fraction')
         if text is not None:
@@ -2661,6 +2687,7 @@ class Settings:
         self._create_max_secondaries_subelement(element)
         self._create_random_ray_subelement(element, mesh_memo)
         self._create_use_decay_photons_subelement(element)
+        self._create_d1s_source_write_subelement(element)
         self._create_source_rejection_fraction_subelement(element)
         self._create_free_gas_threshold_subelement(element)
 
@@ -2779,6 +2806,7 @@ class Settings:
         settings._max_secondaries_from_xml_element(elem)
         settings._random_ray_from_xml_element(elem, meshes)
         settings._use_decay_photons_from_xml_element(elem)
+        settings._d1s_source_write_from_xml_element(elem)
         settings._source_rejection_fraction_from_xml_element(elem)
         settings._free_gas_threshold_from_xml_element(elem)
 

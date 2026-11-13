@@ -19,6 +19,7 @@
 #include "openmc/bank.h"
 #include "openmc/capi.h"
 #include "openmc/cell.h"
+#include "openmc/chain.h"
 #include "openmc/constants.h"
 #include "openmc/container_util.h"
 #include "openmc/error.h"
@@ -506,6 +507,9 @@ FileSource::FileSource(const std::string& path)
 
 void FileSource::load_sites_from_file(const std::string& path)
 {
+  sites_.clear();
+  sampling_cdf_.clear();
+
   // If MCPL file, use the dedicated file reader
   if (ends_with(path, ".mcpl") || ends_with(path, ".mcpl.gz")) {
     sites_ = mcpl_source_sites(path);
@@ -527,12 +531,151 @@ void FileSource::load_sites_from_file(const std::string& path)
       fatal_error("Specified starting source file not a source file type.");
     }
 
+    // Validate the bank rank before read_source_bank reads into its buffer.
+    hid_t bank = open_dataset(file_id, "source_bank");
+    auto bank_shape = object_shape(bank);
+    close_dataset(bank);
+    if (bank_shape.size() != 1) {
+      fatal_error("FileSource source_bank must be one-dimensional.");
+    }
+
     // Read in the source particles
     read_source_bank(file_id, sites_, false);
+
+    // Ordinary source files omit parent tags. A D1S bank stores them separately
+    // by name, since chain indices are not stable between models. Chain data
+    // is loaded before settings/sources in both XML initialization paths.
+    bool has_names = object_exists(file_id, "parent_names");
+    bool has_parents = object_exists(file_id, "parent_nuclide");
+    if (has_names != has_parents) {
+      fatal_error("FileSource requires both parent_names and parent_nuclide "
+                  "when either dataset is present.");
+    }
+
+    auto open_vector = [&](const char* name, hsize_t size) {
+      hid_t dataset = open_dataset(file_id, name);
+      auto shape = object_shape(dataset);
+      if (shape.size() != 1 || shape[0] != size) {
+        fatal_error(fmt::format("FileSource {} must be a one-dimensional "
+                                "array with {} entries.",
+          name, size));
+      }
+      return dataset;
+    };
+
+    if (has_names) {
+      hid_t names_dataset = open_dataset(file_id, "parent_names");
+      auto shape = object_shape(names_dataset);
+      if (shape.size() != 1)
+        fatal_error("FileSource parent_names must be one-dimensional.");
+      hid_t string_type = H5Dget_type(names_dataset);
+      if (H5Tget_class(string_type) != H5T_STRING)
+        fatal_error("FileSource parent_names must contain strings.");
+
+      // Accept both the fixed-width strings written by capture and variable-
+      // length strings that may be produced by Python source composition.
+      vector<std::string> names(shape[0]);
+      if (!names.empty()) {
+        if (H5Tis_variable_str(string_type) > 0) {
+          vector<char*> strings(names.size(), nullptr);
+          if (H5Dread(names_dataset, string_type, H5S_ALL, H5S_ALL, H5P_DEFAULT,
+                strings.data()) < 0)
+            fatal_error("Could not read FileSource parent_names.");
+          for (size_t i = 0; i < names.size(); ++i)
+            names[i] = strings[i] ? strings[i] : "";
+          hid_t space = H5Dget_space(names_dataset);
+          H5Dvlen_reclaim(string_type, space, H5P_DEFAULT, strings.data());
+          H5Sclose(space);
+        } else {
+          size_t width = H5Tget_size(string_type);
+          vector<char> strings(names.size() * width);
+          if (H5Dread(names_dataset, string_type, H5S_ALL, H5S_ALL, H5P_DEFAULT,
+                strings.data()) < 0)
+            fatal_error("Could not read FileSource parent_names.");
+          for (size_t i = 0; i < names.size(); ++i) {
+            const char* start = strings.data() + i * width;
+            names[i].assign(start, std::find(start, start + width, '\0'));
+            if (H5Tget_strpad(string_type) == H5T_STR_SPACEPAD) {
+              auto end = names[i].find_last_not_of(' ');
+              names[i].erase(end == std::string::npos ? 0 : end + 1);
+            }
+          }
+        }
+      }
+      H5Tclose(string_type);
+      close_dataset(names_dataset);
+
+      vector<int> parent_map;
+      parent_map.reserve(names.size());
+      for (const auto& name : names) {
+        auto it = data::chain_nuclide_map.find(name);
+        if (it == data::chain_nuclide_map.end()) {
+          fatal_error(fmt::format("FileSource decay parent '{}' is not in the "
+                                  "loaded chain. Set OPENMC_CHAIN_FILE to a "
+                                  "chain containing the source parents.",
+            name));
+        }
+        parent_map.push_back(it->second);
+      }
+
+      hid_t parents_dataset = open_vector("parent_nuclide", sites_.size());
+      hid_t parent_type = H5Dget_type(parents_dataset);
+      if (H5Tget_class(parent_type) != H5T_INTEGER)
+        fatal_error("FileSource parent_nuclide must contain integer indices.");
+      H5Tclose(parent_type);
+      vector<int64_t> parents;
+      read_dataset(parents_dataset, parents);
+      close_dataset(parents_dataset);
+      for (size_t i = 0; i < sites_.size(); ++i) {
+        if (parents[i] < 0 || parents[i] >= parent_map.size()) {
+          fatal_error(
+            "FileSource parent_nuclide index is outside parent_names.");
+        }
+        sites_[i].parent_nuclide = parent_map[parents[i]];
+      }
+    }
+
+    if (object_exists(file_id, "sampling_weights")) {
+      hid_t dataset = open_vector("sampling_weights", sites_.size());
+      hid_t type = H5Dget_type(dataset);
+      if (H5Tget_class(type) != H5T_FLOAT)
+        fatal_error("FileSource sampling_weights must contain "
+                    "floating-point values.");
+      H5Tclose(type);
+      vector<double> weights;
+      read_dataset(dataset, weights);
+      close_dataset(dataset);
+
+      double max_weight = 0.0;
+      for (double weight : weights) {
+        if (!std::isfinite(weight) || weight < 0.0) {
+          fatal_error("FileSource sampling_weights must be finite and "
+                      "nonnegative.");
+        }
+        max_weight = std::max(max_weight, weight);
+      }
+      if (max_weight == 0.0)
+        fatal_error("FileSource sampling_weights must have a positive sum.");
+
+      // Scale before summing to avoid overflow for large physical rates.
+      long double total = 0.0L;
+      for (double weight : weights)
+        total += static_cast<long double>(weight) / max_weight;
+      long double cumulative = 0.0L;
+      sampling_cdf_.reserve(weights.size());
+      for (double weight : weights) {
+        cumulative += static_cast<long double>(weight) / max_weight;
+        sampling_cdf_.push_back(static_cast<double>(cumulative / total));
+      }
+      sampling_cdf_.back() = 1.0;
+    }
 
     // Close file
     file_close(file_id);
   }
+
+  if (sites_.empty())
+    fatal_error("FileSource cannot sample an empty source bank.");
 
   // Make sure particles in source file have valid types. If any particle is a
   // photon, electron, or positron, enable photon transport so that the
@@ -549,9 +692,18 @@ void FileSource::load_sites_from_file(const std::string& path)
 
 SourceSite FileSource::sample(uint64_t* seed) const
 {
-  // Sample a particle randomly from list
-  size_t i_site = sites_.size() * prn(seed);
+  // Preserve uniform sampling and stored site weights for ordinary files.
+  // Weighted replay represents the emission distribution with unit particles;
+  // absolute physical source-rate scaling is performed by the caller.
+  double xi = prn(seed);
+  size_t i_site =
+    sampling_cdf_.empty()
+      ? static_cast<size_t>(sites_.size() * xi)
+      : std::upper_bound(sampling_cdf_.begin(), sampling_cdf_.end(), xi) -
+          sampling_cdf_.begin();
   SourceSite site = sites_[i_site];
+  if (!sampling_cdf_.empty())
+    site.wgt = 1.0;
 
   // Surface source files store unsigned surface IDs. If the ID refers to a CSG
   // surface containing the source site, determine the signed half-space from

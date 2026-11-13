@@ -15,6 +15,7 @@
 #include "openmc/collision_track.h"
 #include "openmc/constants.h"
 #include "openmc/container_util.h"
+#include "openmc/d1s.h"
 #include "openmc/distribution.h"
 #include "openmc/distribution_multi.h"
 #include "openmc/distribution_spatial.h"
@@ -53,6 +54,7 @@ bool cmfd_run {false};
 bool confidence_intervals {false};
 bool create_delayed_neutrons {true};
 bool create_fission_neutrons {true};
+bool d1s_source_write {false};
 bool delayed_photon_scaling {true};
 bool entropy_on {false};
 bool event_based {false};
@@ -1347,6 +1349,11 @@ void read_settings_xml(pugi::xml_node root)
     settings::use_decay_photons =
       get_node_value_bool(root, "use_decay_photons");
   }
+
+  if (check_for_node(root, "d1s_source_write")) {
+    settings::d1s_source_write = get_node_value_bool(root, "d1s_source_write");
+  }
+  validate_d1s_settings();
 
   // If weight windows are on, also enable shared secondary bank (unless
   // explicitly disabled by user).

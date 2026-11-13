@@ -7,6 +7,7 @@
 #include "openmc/collision_track.h"
 #include "openmc/constants.h"
 #include "openmc/cross_sections.h"
+#include "openmc/d1s.h"
 #include "openmc/dagmc.h"
 #include "openmc/eigenvalue.h"
 #include "openmc/event.h"
@@ -56,6 +57,7 @@ void free_memory()
   free_memory_mesh();
   free_memory_tally();
   free_memory_bank();
+  free_memory_d1s();
   free_memory_plot();
   free_memory_weight_windows();
   if (mpi::master) {
@@ -92,6 +94,7 @@ int openmc_finalize()
   settings::create_delayed_neutrons = true;
   settings::electron_treatment = ElectronTreatment::LED;
   settings::delayed_photon_scaling = true;
+  settings::d1s_source_write = false;
   settings::energy_cutoff = {0.0, 1000.0, 0.0, 0.0};
   settings::time_cutoff = {INFTY, INFTY, INFTY, INFTY};
   settings::entropy_on = false;

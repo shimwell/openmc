@@ -1,0 +1,1 @@
+"""Analytic multi-configuration D1S integration regressions."""
