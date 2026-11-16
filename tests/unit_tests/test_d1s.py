@@ -154,3 +154,55 @@ def test_apply_time_correction(run_in_tmpdir):
     # The summed tally is derived, so sum/sum_sq are None
     assert result_summed.sum is None
     assert result_summed.sum_sq is None
+
+
+def test_parent_nuclide_kept_by_split_and_secondary_photons(run_in_tmpdir):
+    """Photons split by weight windows, and photons created by decay photons,
+    keep the parent nuclide of the decay photon they came from.
+
+    Every photon in a D1S simulation descends from a decay photon, so a photon
+    tally filtered on all parent nuclides must match the same tally without
+    the filter.
+    """
+    mat = openmc.Material()
+    mat.add_element('Ni', 1.0)
+    mat.set_density('g/cm3', 8.9)
+    sphere = openmc.Sphere(r=10.0, boundary_type='vacuum')
+    cell = openmc.Cell(fill=mat, region=-sphere)
+    model = openmc.Model()
+    model.geometry = openmc.Geometry([cell])
+    model.settings.run_mode = 'fixed source'
+    model.settings.batches = 3
+    model.settings.particles = 200
+    model.settings.photon_transport = True
+    model.settings.use_decay_photons = True
+    model.settings.source = openmc.IndependentSource(
+        energy=openmc.stats.Discrete([14.1e6], [1.0]))
+
+    # Weight windows low enough that photons are split
+    mesh = openmc.RegularMesh()
+    mesh.lower_left = (-10.0, -10.0, -10.0)
+    mesh.upper_right = (10.0, 10.0, 10.0)
+    mesh.dimension = (1, 1, 1)
+    model.settings.weight_windows = [openmc.WeightWindows(
+        mesh, lower_ww_bounds=[1.0e-4], upper_bound_ratio=5.0,
+        particle_type='photon', max_split=10)]
+
+    nuclides = d1s.get_radionuclides(model, CHAIN_PATH)
+    photon = openmc.ParticleFilter('photon')
+    all_photons = openmc.Tally()
+    all_photons.filters = [photon]
+    all_photons.scores = ['flux', 'heating']
+    by_parent = openmc.Tally()
+    by_parent.filters = [photon, openmc.ParentNuclideFilter(nuclides)]
+    by_parent.scores = ['flux', 'heating']
+    model.tallies = [all_photons, by_parent]
+
+    with openmc.config.patch('chain_file', CHAIN_PATH):
+        output_path = model.run()
+    with openmc.StatePoint(output_path) as sp:
+        total = sp.tallies[all_photons.id].mean.reshape(-1)
+        summed = sp.tallies[by_parent.id].mean.reshape(len(nuclides), -1).sum(axis=0)
+
+    assert np.all(total > 0.0)
+    assert summed == pytest.approx(total, rel=1e-10)
